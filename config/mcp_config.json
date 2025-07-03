@@ -1,0 +1,51 @@
+{
+  "servers": {
+    "speech_to_text": {
+      "command": "python",
+      "args": ["services/speech_to_text/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    },
+    "screen_capture": {
+      "command": "python", 
+      "args": ["services/screen_capture/mcp_screenshot_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    },
+    "mouse_control": {
+      "command": "python",
+      "args": ["services/mouse_control/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    },
+    "screen_detector": {
+      "command": "python",
+      "args": ["services/screen_detector/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    },
+    "ollama_agent": {
+      "command": "python",
+      "args": ["services/ollama_agent/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  },
+  "resources": {
+    "kiosk_data": {
+      "uri": "file://config/kiosk_data.json",
+      "description": "Kiosk screen and element definitions"
+    }
+  },
+  "orchestrator": {
+    "response_timeout": 5000,
+    "retry_attempts": 3,
+    "health_check_interval": 30,
+    "log_level": "INFO"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "screens": {
+    "home": {
+      "name": "Home Screen",
+      "description": "Main kiosk home screen",
+      "detection_criteria": {
+        "title_text": "Welcome",
+        "elements": ["start_button", "menu_button"]
+      },
+      "elements": [
+        {
+          "id": "start_button",
+          "name": "Start Button",
+          "coordinates": {"x": 400, "y": 300},
+          "size": {"width": 200, "height": 60},
+          "voice_commands": ["start", "begin", "get started"],
+          "conditions": ["always_visible"],
+          "action": "click",
+          "next_screen": "main_menu"
+        },
+        {
+          "id": "menu_button", 
+          "name": "Menu Button",
+          "coordinates": {"x": 650, "y": 300},
+          "size": {"width": 150, "height": 60},
+          "voice_commands": ["menu", "options", "settings"],
+          "conditions": ["always_visible"],
+          "action": "click",
+          "next_screen": "settings"
+        }
+      ]
+    },
+    "main_menu": {
+      "name": "Main Menu",
+      "description": "Primary navigation menu",
+      "detection_criteria": {
+        "title_text": "Main Menu",
+        "elements": ["option1", "option2", "back_button"]
+      },
+      "elements": [
+        {
+          "id": "option1",
+          "name": "Option 1",
+          "coordinates": {"x": 300, "y": 200},
+          "size": {"width": 180, "height": 50},
+          "voice_commands": ["option one", "first option"],
+          "conditions": ["always_visible"],
+          "action": "click",
+          "next_screen": "detail1"
+        },
+        {
+          "id": "option2",
+          "name": "Option 2", 
+          "coordinates": {"x": 300, "y": 280},
+          "size": {"width": 180, "height": 50},
+          "voice_commands": ["option two", "second option"],
+          "conditions": ["always_visible"],
+          "action": "click",
+          "next_screen": "detail2"
+        },
+        {
+          "id": "back_button",
+          "name": "Back",
+          "coordinates": {"x": 50, "y": 50},
+          "size": {"width": 100, "height": 40},
+          "voice_commands": ["back", "return", "go back"],
+          "conditions": ["always_visible"],
+          "action": "click",
+          "next_screen": "home"
+        }
+      ]
+    }
+  },
+  "global_commands": {
+    "help": {
+      "voice_commands": ["help", "what can I do", "commands"],
+      "action": "show_help",
+      "description": "Show available voice commands"
+    },
+    "go_home": {
+      "voice_commands": ["go home", "home", "main screen"],
+      "action": "navigate_home",
+      "description": "Return to home screen"
+    }
+  },
+  "settings": {
+    "voice_confidence_threshold": 0.8,
+    "screen_detection_confidence": 0.85,
+    "click_validation_enabled": true,
+    "fallback_mode": "manual_selection"
+  }
+}
