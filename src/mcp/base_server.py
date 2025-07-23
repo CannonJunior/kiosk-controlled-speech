@@ -70,12 +70,18 @@ class BaseMCPServer(ABC):
         """Read resource content by URI (optional)"""
         raise NotImplementedError(f"Resource {uri} not found")
     
-    async def start(self, host: str = "localhost", port: int = 8080):
+    async def start(self):
         """Start the MCP server"""
         self.health.status = ServiceStatus.STARTING
         try:
-            await self.server.run(host=host, port=port)
-            self.health.status = ServiceStatus.RUNNING
+            from mcp.server.stdio import stdio_server
+            async with stdio_server() as (read_stream, write_stream):
+                self.health.status = ServiceStatus.RUNNING
+                await self.server.run(
+                    read_stream, 
+                    write_stream, 
+                    self.server.create_initialization_options()
+                )
         except Exception as e:
             self.health.status = ServiceStatus.ERROR
             self.health.error_message = str(e)

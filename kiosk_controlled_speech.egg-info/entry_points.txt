@@ -1,0 +1,2 @@
+[console_scripts]
+kiosk-orchestrator = src.orchestrator.main:app

@@ -5,7 +5,7 @@ from dataclasses import dataclass, asdict
 import aiofiles
 from pathlib import Path
 
-from mcp.client import Client
+from mcp import ClientSession, stdio_client, StdioServerParameters
 from mcp.types import Tool, Resource
 
 
@@ -29,7 +29,7 @@ class OrchestrationConfig:
 class MCPOrchestrator:
     def __init__(self, config_path: str):
         self.config_path = Path(config_path)
-        self.clients: Dict[str, Client] = {}
+        self.clients: Dict[str, ClientSession] = {}
         self.server_configs: Dict[str, ServerConfig] = {}
         self.orchestration_config = OrchestrationConfig()
         self.running = False
@@ -63,13 +63,14 @@ class MCPOrchestrator:
                 continue
                 
             try:
-                client = Client()
-                await client.connect(
+                server_params = StdioServerParameters(
                     command=config.command,
                     args=config.args,
                     env=config.env
                 )
-                self.clients[name] = client
+                session_result = await stdio_client(server_params)
+                session, read, write = session_result
+                self.clients[name] = session
                 print(f"Started MCP server: {name}")
                 
             except Exception as e:
@@ -81,7 +82,7 @@ class MCPOrchestrator:
         
         for name, client in self.clients.items():
             try:
-                await client.disconnect()
+                await client.close()
                 print(f"Stopped MCP server: {name}")
             except Exception as e:
                 print(f"Error stopping MCP server {name}: {e}")

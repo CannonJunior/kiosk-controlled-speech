@@ -13,6 +13,8 @@ from rich.table import Table
 import time
 
 from src.mcp.client import MCPOrchestrator
+import sys
+sys.path.append('.')
 from src.data_manager.kiosk_data import KioskDataManager
 
 

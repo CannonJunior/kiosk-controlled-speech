@@ -6,7 +6,7 @@ from pathlib import Path
 
 from mcp.types import Tool, Resource
 from src.mcp.base_server import BaseMCPServer, MCPToolError, create_tool_response
-from .kiosk_data import KioskDataManager, KioskScreen, KioskElement
+from kiosk_data import KioskDataManager, KioskScreen, KioskElement
 
 
 class KioskDataMCPServer(BaseMCPServer):

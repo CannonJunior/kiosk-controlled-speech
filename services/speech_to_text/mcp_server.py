@@ -6,7 +6,7 @@ import queue
 from typing import Any, Dict, List, Optional
 import numpy as np
 import sounddevice as sd
-import whisper
+from faster_whisper import WhisperModel
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
@@ -135,7 +135,7 @@ class SpeechToTextServer(BaseMCPServer):
         model_name = arguments.get("model", self.model_name)
         if self.model is None or model_name != self.model_name:
             self.model_name = model_name
-            self.model = whisper.load_model(model_name)
+            self.model = WhisperModel(model_name)
         
         # Set language
         self.language = arguments.get("language", "en")
@@ -175,16 +175,19 @@ class SpeechToTextServer(BaseMCPServer):
             
             # Load model if needed
             if self.model is None:
-                self.model = whisper.load_model(self.model_name)
+                self.model = WhisperModel(self.model_name)
             
             # Transcribe
             language = arguments.get("language", self.language)
-            result = self.model.transcribe(audio_array, language=language)
+            segments, info = self.model.transcribe(audio_array, language=language)
+            
+            # Combine all segments into text
+            text = " ".join(segment.text for segment in segments)
             
             return create_tool_response(True, {
-                "text": result["text"].strip(),
-                "language": result["language"],
-                "confidence": result.get("confidence", 0.0)
+                "text": text.strip(),
+                "language": info.language,
+                "confidence": info.language_probability
             })
             
         except Exception as e:
@@ -279,8 +282,8 @@ class SpeechToTextServer(BaseMCPServer):
                 return
             
             # Transcribe audio
-            result = self.model.transcribe(audio_data, language=self.language)
-            text = result["text"].strip()
+            segments, info = self.model.transcribe(audio_data, language=self.language)
+            text = " ".join(segment.text for segment in segments).strip()
             
             if text:
                 # Emit transcription event (in real implementation, this would
