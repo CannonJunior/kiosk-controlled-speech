@@ -8,11 +8,15 @@ kiosk_controlled_speech.egg-info/requires.txt
 kiosk_controlled_speech.egg-info/top_level.txt
 services/__init__.py
 services/mouse_control/mcp_server.py
+services/mouse_control/mcp_server_broken.py
 services/ollama_agent/mcp_server.py
 services/screen_capture/mcp_screenshot_server.py
+services/screen_capture/mcp_server.py
 services/screen_capture/test_screenshot.py
 services/screen_detector/mcp_server.py
+services/screen_detector/mcp_server_old.py
 services/speech_to_text/mcp_server.py
+services/speech_to_text/mcp_server_fastmcp.py
 src/__init__.py
 src/data_manager/__init__.py
 src/data_manager/kiosk_data.py

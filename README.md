@@ -53,15 +53,14 @@ cd kiosk-project
 # Install uv if not already installed
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install dependencies
-uv install
+# Initialize project and install dependencies
+uv sync
 ```
 
-3. **Activate the uv environment:**
+3. **Dependencies are managed automatically:**
 ```bash
-# Dependencies are already installed via pyproject.toml
-# Activate the environment for running commands
-source .venv/bin/activate
+# With uv, dependencies are automatically managed
+# No need to manually activate environments - use 'uv run' prefix
 ```
 
 4. **Service dependencies are managed via pyproject.toml:**
@@ -93,13 +92,13 @@ uv run python test_fastmcp_services.py
 2. **Test individual FastMCP services:**
 ```bash
 # Test mouse control service
-timeout 5 python services/mouse_control/mcp_server.py
+timeout 5 uv run python services/mouse_control/mcp_server.py
 
 # Test screen detector service
-timeout 5 python services/screen_detector/mcp_server.py
+timeout 5 uv run python services/screen_detector/mcp_server.py
 
 # Test speech-to-text service
-timeout 5 python services/speech_to_text/mcp_server_fastmcp.py
+timeout 5 uv run python services/speech_to_text/mcp_server_fastmcp.py
 ```
 
 3. **Start the full system:**
@@ -118,7 +117,7 @@ Each service can be tested independently using FastMCP's built-in capabilities:
 
 ```bash
 # Test mouse control tools
-python -c "
+uv run python -c "
 import asyncio
 from fastmcp import Client
 
@@ -132,7 +131,7 @@ asyncio.run(test_mouse())
 "
 
 # Test screen detector tools
-python -c "
+uv run python -c "
 import asyncio
 from fastmcp import Client
 
@@ -217,7 +216,7 @@ kiosk-controlled-speech/
 
 2. **Test screen detection**:
 ```bash
-python -m src.orchestrator.main test-command "navigate to new screen"
+uv run python -m src.orchestrator.main test-command "navigate to new screen"
 ```
 
 ### Adding Voice Commands
@@ -258,7 +257,7 @@ The system now uses FastMCP with discrete service lifespans. Each service expose
 **Testing:**
 ```bash
 # Test speech service
-python -c "
+uv run python -c "
 import asyncio
 from fastmcp import Client
 
@@ -281,7 +280,7 @@ asyncio.run(test_speech())
 **Testing:**
 ```bash
 # Test screen capture
-python -c "
+uv run python -c "
 import asyncio
 from fastmcp import Client
 
@@ -308,7 +307,7 @@ asyncio.run(test_capture())
 **Testing:**
 ```bash
 # Test mouse control (returns mock data for safety)
-python -c "
+uv run python -c "
 import asyncio
 import json
 from fastmcp import Client
@@ -337,7 +336,7 @@ asyncio.run(test_mouse())
 **Testing:**
 ```bash
 # Test screen detection
-python -c "
+uv run python -c "
 import asyncio
 import json
 from fastmcp import Client
@@ -376,7 +375,7 @@ ollama pull qwen2.5:1.5b  # Or your preferred model
 **Testing:**
 ```bash
 # Test Ollama agent (requires Ollama running)
-python -c "
+uv run python -c "
 import asyncio
 from fastmcp import Client
 
@@ -397,7 +396,7 @@ asyncio.run(test_ollama())
 
 1. **Audio not working in WSL**:
    - Ensure PulseAudio is configured: `export PULSE_RUNTIME_PATH="/mnt/wslg/runtime/PulseAudio"`
-   - Test with: `python -c "import sounddevice; print(sounddevice.query_devices())"`
+   - Test with: `uv run python -c "import sounddevice; print(sounddevice.query_devices())"`
 
 2. **Screenshot capture fails**:
    - Verify WSL can access Windows desktop: `powershell.exe Get-Process`
@@ -418,7 +417,7 @@ asyncio.run(test_ollama())
 Enable verbose logging:
 ```bash
 export LOG_LEVEL=DEBUG
-python -m src.orchestrator.main start
+uv run python -m src.orchestrator.main start
 ```
 
 ### Health Checks
@@ -428,13 +427,13 @@ Monitor FastMCP service health:
 # Test all services individually using uv
 
 # Quick service tests
-timeout 3 python services/mouse_control/mcp_server.py || echo "Mouse service OK"
-timeout 3 python services/screen_detector/mcp_server.py || echo "Screen detector OK"
-timeout 3 python services/screen_capture/mcp_server.py || echo "Screen capture OK"
-timeout 3 python services/speech_to_text/mcp_server_fastmcp.py || echo "Speech service OK"
+timeout 3 uv run python services/mouse_control/mcp_server.py || echo "Mouse service OK"
+timeout 3 uv run python services/screen_detector/mcp_server.py || echo "Screen detector OK"
+timeout 3 uv run python services/screen_capture/mcp_server.py || echo "Screen capture OK"
+timeout 3 uv run python services/speech_to_text/mcp_server_fastmcp.py || echo "Speech service OK"
 
 # Test full system integration
-python -c "
+uv run python -c "
 import asyncio
 import json
 from fastmcp import Client
@@ -467,10 +466,10 @@ asyncio.run(health_check())
 Enable FastMCP debugging:
 ```bash
 # Run individual service with verbose output
-FASTMCP_DEBUG=1 python services/mouse_control/mcp_server.py
+FASTMCP_DEBUG=1 uv run python services/mouse_control/mcp_server.py
 
 # Check tool definitions
-python -c "
+uv run python -c "
 import asyncio
 from fastmcp import Client
 
@@ -504,7 +503,7 @@ The system tracks:
 
 1. **Fork the repository**
 2. **Create a feature branch**: `git checkout -b feature/new-feature`
-3. **Make changes and test**: `python scripts/test_system.py`
+3. **Make changes and test**: `uv run python scripts/test_system.py`
 4. **Submit a pull request**
 
 ### Development Guidelines
