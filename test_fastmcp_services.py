@@ -204,7 +204,7 @@ if __name__ == "__main__":
     # Check if we're in the virtual environment
     if not hasattr(sys, 'real_prefix') and not (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
         print("⚠️  Warning: Virtual environment not detected.")
-        print("   Please run: source venv/bin/activate")
+        print("   Please run: source .venv/bin/activate or use 'uv run python test_fastmcp_services.py'")
         print()
     
     print("FastMCP Services Test")

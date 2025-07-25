@@ -48,26 +48,26 @@ git clone <repository-url>
 cd kiosk-project
 ```
 
-2. **Create and activate virtual environment:**
+2. **Install dependencies using uv:**
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows WSL
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies
+uv install
 ```
 
-3. **Install FastMCP and dependencies:**
+3. **Activate the uv environment:**
 ```bash
-pip install fastmcp
-pip install httpx pynput pywin32  # Additional service dependencies
+# Dependencies are already installed via pyproject.toml
+# Activate the environment for running commands
+source .venv/bin/activate
 ```
 
-4. **Install service-specific dependencies:**
+4. **Service dependencies are managed via pyproject.toml:**
 ```bash
-# For each service directory
-cd services/mouse_control && pip install -r requirements.txt
-cd ../ollama_agent && pip install -r requirements.txt
-cd ../screen_capture && pip install -r requirements.txt
-cd ../screen_detector && pip install -r requirements.txt
-cd ../speech_to_text && pip install -r requirements.txt
+# All dependencies including service-specific ones are in pyproject.toml
+# Run any additional service setup if needed
 ```
 
 ### Configuration
@@ -86,11 +86,8 @@ cd ../speech_to_text && pip install -r requirements.txt
 
 1. **Quick test of all FastMCP services:**
 ```bash
-# Activate virtual environment first
-source venv/bin/activate
-
-# Run comprehensive service test
-python test_fastmcp_services.py
+# Run comprehensive service test using uv
+uv run python test_fastmcp_services.py
 ```
 
 2. **Test individual FastMCP services:**
@@ -107,14 +104,12 @@ timeout 5 python services/speech_to_text/mcp_server_fastmcp.py
 
 3. **Start the full system:**
 ```bash
-source venv/bin/activate
-python -m src.orchestrator.main start
+uv run python -m src.orchestrator.main start
 ```
 
 4. **Test individual commands:**
 ```bash
-source venv/bin/activate
-python -m src.orchestrator.main test-command "click start button"
+uv run python -m src.orchestrator.main test-command "click start button"
 ```
 
 ### Testing FastMCP Services
@@ -430,8 +425,7 @@ python -m src.orchestrator.main start
 
 Monitor FastMCP service health:
 ```bash
-# Test all services individually
-source venv/bin/activate
+# Test all services individually using uv
 
 # Quick service tests
 timeout 3 python services/mouse_control/mcp_server.py || echo "Mouse service OK"
