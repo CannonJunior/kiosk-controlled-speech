@@ -1,18 +1,25 @@
 # Kiosk Controlled Speech System
 
-A voice-controlled interface system for Pandasuite kiosks using the Model Context Protocol (MCP) framework. This system enables natural language voice commands to control kiosk interactions on Windows through WSL.
+A voice-controlled interface system for Pandasuite kiosks using the FastMCP framework. This system enables natural language voice commands to control kiosk interactions on Windows through WSL with discrete service lifespans.
 
 ## Architecture Overview
 
-The system consists of multiple MCP-based microservices:
+The system uses **FastMCP** with discrete service lifespans instead of continuously running services:
 
-- **Speech-to-Text Service**: Real-time voice recognition using OpenAI Whisper
+- **Speech-to-Text Service**: Real-time voice recognition using FastMCP
 - **Screen Capture Service**: Windows desktop capture from WSL
 - **Mouse Control Service**: Windows mouse automation from WSL  
 - **Screen Detector Service**: Computer vision-based screen state detection
 - **Ollama Agent Service**: Natural language command processing
 - **Data Manager Service**: Kiosk configuration and element management
-- **Main Orchestrator**: Coordinates all services and manages system state
+- **Main Orchestrator**: Coordinates all services using FastMCP Client pattern
+
+### New Architecture Benefits
+
+- **Discrete Lifespans**: Services start/stop on-demand rather than running continuously
+- **Better Resource Management**: No persistent connections to maintain
+- **Simplified Deployment**: Uses FastMCP's battle-tested patterns
+- **Improved Error Handling**: FastMCP manages connection lifecycle automatically
 
 ## Features
 
@@ -38,25 +45,29 @@ The system consists of multiple MCP-based microservices:
 1. **Clone and setup the project:**
 ```bash
 git clone <repository-url>
-cd kiosk-controlled-speech
+cd kiosk-project
 ```
 
-2. **Setup WSL environment:**
+2. **Create and activate virtual environment:**
 ```bash
-chmod +x scripts/setup_wsl.sh
-./scripts/setup_wsl.sh
+python -m venv venv
+source venv/bin/activate  # On Windows WSL
 ```
 
-3. **Install Python dependencies:**
+3. **Install FastMCP and dependencies:**
 ```bash
-pip install -e .
-pip install -e ".[dev]"
+pip install fastmcp
+pip install httpx pynput pywin32  # Additional service dependencies
 ```
 
-4. **Configure environment:**
+4. **Install service-specific dependencies:**
 ```bash
-cp .env.example .env
-# Edit .env with your specific configuration
+# For each service directory
+cd services/mouse_control && pip install -r requirements.txt
+cd ../ollama_agent && pip install -r requirements.txt
+cd ../screen_capture && pip install -r requirements.txt
+cd ../screen_detector && pip install -r requirements.txt
+cd ../speech_to_text && pip install -r requirements.txt
 ```
 
 ### Configuration
@@ -73,19 +84,71 @@ cp .env.example .env
 
 ### Running the System
 
-1. **Test the system:**
+1. **Quick test of all FastMCP services:**
 ```bash
-python scripts/test_system.py
+# Activate virtual environment first
+source venv/bin/activate
+
+# Run comprehensive service test
+python test_fastmcp_services.py
 ```
 
-2. **Start the full system:**
+2. **Test individual FastMCP services:**
 ```bash
+# Test mouse control service
+timeout 5 python services/mouse_control/mcp_server.py
+
+# Test screen detector service
+timeout 5 python services/screen_detector/mcp_server.py
+
+# Test speech-to-text service
+timeout 5 python services/speech_to_text/mcp_server_fastmcp.py
+```
+
+3. **Start the full system:**
+```bash
+source venv/bin/activate
 python -m src.orchestrator.main start
 ```
 
-3. **Test individual commands:**
+4. **Test individual commands:**
 ```bash
+source venv/bin/activate
 python -m src.orchestrator.main test-command "click start button"
+```
+
+### Testing FastMCP Services
+
+Each service can be tested independently using FastMCP's built-in capabilities:
+
+```bash
+# Test mouse control tools
+python -c "
+import asyncio
+from fastmcp import Client
+
+async def test_mouse():
+    config = {'mcpServers': {'mouse_control': {'command': 'python', 'args': ['services/mouse_control/mcp_server.py']}}}
+    async with Client(config) as client:
+        result = await client.call_tool('mouse_control_click', {'x': 100, 'y': 200})
+        print('Mouse click result:', result)
+
+asyncio.run(test_mouse())
+"
+
+# Test screen detector tools
+python -c "
+import asyncio
+from fastmcp import Client
+
+async def test_detector():
+    config = {'mcpServers': {'screen_detector': {'command': 'python', 'args': ['services/screen_detector/mcp_server.py']}}}
+    async with Client(config) as client:
+        tools = await client.list_tools()
+        print('Available tools:', [t.name for t in tools])
+
+asyncio.run(test_detector())
+"
 ```
 
 ## Usage
@@ -168,60 +231,170 @@ python -m src.orchestrator.main test-command "navigate to new screen"
 2. **Global commands**: Add to `global_commands` section
 3. **Context-aware commands**: Handled automatically by Ollama agent
 
+### FastMCP Tool Naming Convention
+
+FastMCP tools use their function names directly:
+
+- Mouse control service tools: `click`, `move_to`, `get_position`, `drag`, `scroll`, `configure`
+- Screen detector tools: `detect_current_screen`, `analyze_screen_elements`
+- Speech service tools: `start_listening`, `stop_listening`, `get_status`, `process_audio_data`
+- Screen capture tools: `take_screenshot`, `get_screen_info`
+
+When multiple services are used together, tool names must be unique across all services to avoid conflicts.
+
 ### Performance Tuning
 
 - **Speech Recognition**: Adjust `WHISPER_MODEL` and `SPEECH_LANGUAGE` in `.env`
 - **Screen Detection**: Tune confidence thresholds in kiosk data
 - **Response Time**: Configure `MAX_RESPONSE_TIME_MS` and Ollama parameters
 
-## MCP Services
+## FastMCP Services
+
+The system now uses FastMCP with discrete service lifespans. Each service exposes tools that are called on-demand.
 
 ### Speech-to-Text Service
 
-**Tools:**
+**FastMCP Tools:**
 - `start_listening`: Begin continuous speech recognition
 - `stop_listening`: Stop speech recognition  
-- `transcribe_audio`: Process audio data
-- `get_audio_devices`: List available input devices
+- `process_audio_data`: Process audio data
+- `get_status`: Get current recognition status
+
+**Testing:**
+```bash
+# Test speech service
+python -c "
+import asyncio
+from fastmcp import Client
+
+async def test_speech():
+    config = {'mcpServers': {'speech_to_text': {'command': 'python', 'args': ['services/speech_to_text/mcp_server_fastmcp.py']}}}
+    async with Client(config) as client:
+        result = await client.call_tool('start_listening')
+        print('Speech recognition started:', result.content[0].text)
+
+asyncio.run(test_speech())
+"
+```
 
 ### Screen Capture Service
 
-**Tools:**
+**FastMCP Tools:**
 - `take_screenshot`: Full desktop capture
-- `take_screenshot_region`: Capture specific region
-- `save_screenshot`: Save to file
+- `get_screen_info`: Get screen dimensions and info
+
+**Testing:**
+```bash
+# Test screen capture
+python -c "
+import asyncio
+from fastmcp import Client
+
+async def test_capture():
+    config = {'mcpServers': {'screen_capture': {'command': 'python', 'args': ['services/screen_capture/mcp_server.py']}}}
+    async with Client(config) as client:
+        result = await client.call_tool('take_screenshot')
+        print('Screenshot taken:', result.content[0].text)
+
+asyncio.run(test_capture())
+"
+```
 
 ### Mouse Control Service
 
-**Tools:**
+**FastMCP Tools:**
 - `click`: Perform mouse click at coordinates
 - `move_to`: Move cursor to position
 - `drag`: Drag between positions
 - `scroll`: Scroll at position
+- `get_position`: Get current cursor position
+- `configure`: Configure mouse settings
+
+**Testing:**
+```bash
+# Test mouse control (returns mock data for safety)
+python -c "
+import asyncio
+import json
+from fastmcp import Client
+
+async def test_mouse():
+    config = {'mcpServers': {'mouse_control': {'command': 'python', 'args': ['services/mouse_control/mcp_server.py']}}}
+    async with Client(config) as client:
+        # List available tools
+        tools = await client.list_tools()
+        print('Mouse tools:', [t.name for t in tools])
+        
+        # Test click (mock implementation)
+        result = await client.call_tool('click', {'x': 100, 'y': 200})
+        print('Click result:', json.loads(result.content[0].text))
+
+asyncio.run(test_mouse())
+"
+```
 
 ### Screen Detector Service
 
-**Tools:**
+**FastMCP Tools:**
 - `detect_current_screen`: Identify current screen
-- `detect_visible_elements`: Find clickable elements
-- `validate_element_location`: Verify element position
-- `find_text_elements`: OCR-based text detection
+- `analyze_screen_elements`: Find clickable elements
+
+**Testing:**
+```bash
+# Test screen detection
+python -c "
+import asyncio
+import json
+from fastmcp import Client
+
+async def test_detector():
+    config = {'mcpServers': {'screen_detector': {'command': 'python', 'args': ['services/screen_detector/mcp_server.py']}}}
+    async with Client(config) as client:
+        # Test screen detection with mock data
+        result = await client.call_tool('detect_current_screen', {
+            'screenshot_data': 'mock_base64_data',
+            'screen_definitions': {'home': {'name': 'Home Screen'}}
+        })
+        data = json.loads(result.content[0].text)
+        print('Detected screen:', data['detected_screen'])
+
+asyncio.run(test_detector())
+"
+```
 
 ### Ollama Agent Service
 
-**Tools:**
+**FastMCP Tools:**
 - `process_voice_command`: Convert speech to actions
 - `generate_help_response`: Contextual help
 - `analyze_intent`: Intent classification
-- `suggest_alternatives`: Command suggestions
+- `health_check`: Check Ollama connectivity
 
-### Data Manager Service
+**Prerequisites:**
+```bash
+# Install and start Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+ollama serve &
+ollama pull qwen2.5:1.5b  # Or your preferred model
+```
 
-**Tools:**
-- `get_screen`: Retrieve screen configuration
-- `find_elements_by_voice`: Search by voice command
-- `update_element_coordinates`: Modify element positions
-- `validate_data`: Check configuration integrity
+**Testing:**
+```bash
+# Test Ollama agent (requires Ollama running)
+python -c "
+import asyncio
+from fastmcp import Client
+
+async def test_ollama():
+    config = {'mcpServers': {'ollama_agent': {'command': 'python', 'args': ['services/ollama_agent/mcp_server.py']}}}
+    async with Client(config) as client:
+        # Check Ollama health
+        health = await client.call_tool('health_check')
+        print('Ollama health:', health.content[0].text)
+
+asyncio.run(test_ollama())
+"
+```
 
 ## Troubleshooting
 
@@ -255,23 +428,66 @@ python -m src.orchestrator.main start
 
 ### Health Checks
 
-Monitor service health:
+Monitor FastMCP service health:
 ```bash
-# Check all services
-python scripts/test_system.py
+# Test all services individually
+source venv/bin/activate
 
-# Check specific service
+# Quick service tests
+timeout 3 python services/mouse_control/mcp_server.py || echo "Mouse service OK"
+timeout 3 python services/screen_detector/mcp_server.py || echo "Screen detector OK"
+timeout 3 python services/screen_capture/mcp_server.py || echo "Screen capture OK"
+timeout 3 python services/speech_to_text/mcp_server_fastmcp.py || echo "Speech service OK"
+
+# Test full system integration
 python -c "
 import asyncio
-from src.mcp.client import MCPOrchestrator
-async def check():
-    orch = MCPOrchestrator('config/mcp_config.json')
-    await orch.load_config()
-    await orch.start_servers()
-    health = await orch.health_check()
-    print(health)
-    await orch.stop_servers()
-asyncio.run(check())
+import json
+from fastmcp import Client
+
+async def health_check():
+    config = {
+        'mcpServers': {
+            'mouse_control': {'command': 'python', 'args': ['services/mouse_control/mcp_server.py']},
+            'screen_detector': {'command': 'python', 'args': ['services/screen_detector/mcp_server.py']},
+            'screen_capture': {'command': 'python', 'args': ['services/screen_capture/mcp_server.py']}
+        }
+    }
+    
+    async with Client(config) as client:
+        # List tools from all servers
+        tools = await client.list_tools()
+        print(f'Total tools available: {len(tools)}')
+        
+        # Test a simple tool call
+        result = await client.call_tool('get_position')
+        data = json.loads(result.content[0].text)
+        print('Mouse position test:', data)
+
+asyncio.run(health_check())
+"
+```
+
+### FastMCP Debugging
+
+Enable FastMCP debugging:
+```bash
+# Run individual service with verbose output
+FASTMCP_DEBUG=1 python services/mouse_control/mcp_server.py
+
+# Check tool definitions
+python -c "
+import asyncio
+from fastmcp import Client
+
+async def debug_tools():
+    config = {'mcpServers': {'mouse_control': {'command': 'python', 'args': ['services/mouse_control/mcp_server.py']}}}
+    async with Client(config) as client:
+        tools = await client.list_tools()
+        for tool in tools:
+            print(f'Tool: {tool.name} - {tool.description}')
+
+asyncio.run(debug_tools())
 "
 ```
 

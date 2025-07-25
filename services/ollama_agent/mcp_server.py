@@ -5,23 +5,23 @@ from typing import Any, Dict, List, Optional
 import httpx
 from dataclasses import dataclass
 
-from mcp.types import Tool
-from src.mcp.base_server import BaseMCPServer, MCPToolError, create_tool_response
+from fastmcp import FastMCP
+
+mcp = FastMCP("Ollama Agent Server")
 
 
 @dataclass
 class OllamaConfig:
     host: str = "localhost"
     port: int = 11434
-    model: str = "llama3.1"
+    model: str = "qwen2.5:1.5b"
     timeout: int = 30
     temperature: float = 0.1
     max_tokens: int = 512
 
 
-class OllamaAgentServer(BaseMCPServer):
+class OllamaAgentServer:
     def __init__(self, config: OllamaConfig = None):
-        super().__init__("ollama_agent", "Process natural language commands using Ollama")
         
         self.config = config or OllamaConfig()
         self.base_url = f"http://{self.config.host}:{self.config.port}"
@@ -306,11 +306,11 @@ Convert this voice command to a specific action. Respond with ONLY a valid JSON 
             return result.get("response", "").strip()
             
         except httpx.TimeoutException:
-            raise MCPToolError("Ollama request timed out")
+            raise Exception("Ollama request timed out")
         except httpx.HTTPError as e:
-            raise MCPToolError(f"Ollama API error: {e}")
+            raise Exception(f"Ollama API error: {e}")
         except Exception as e:
-            raise MCPToolError(f"Failed to call Ollama: {e}")
+            raise Exception(f"Failed to call Ollama: {e}")
     
     async def _fallback_command_parsing(self, voice_text: str, 
                                       current_screen: Dict[str, Any]) -> Dict[str, Any]:
@@ -529,12 +529,5 @@ Convert this voice command to a specific action. Respond with ONLY a valid JSON 
             return create_tool_response(False, error=f"Health check failed: {e}")
 
 
-async def main():
-    """Main function to run the Ollama agent MCP server"""
-    config = OllamaConfig()
-    server = OllamaAgentServer(config)
-    await server.start()
-
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    mcp.run()

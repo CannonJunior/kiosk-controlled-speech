@@ -2,6 +2,8 @@
 import asyncio
 import signal
 import sys
+import os
+import json
 from pathlib import Path
 from typing import Dict, Any, Optional
 import typer
@@ -12,8 +14,7 @@ from rich.live import Live
 from rich.table import Table
 import time
 
-from src.mcp.client import MCPOrchestrator
-import sys
+from fastmcp import Client
 sys.path.append('.')
 from src.data_manager.kiosk_data import KioskDataManager
 
@@ -24,8 +25,10 @@ console = Console()
 
 class KioskOrchestrator:
     def __init__(self, config_path: str = "config/mcp_config.json"):
-        self.mcp_orchestrator = MCPOrchestrator(config_path)
+        self.config_path = config_path
         self.data_manager = KioskDataManager("config/kiosk_data.json")
+        self.mcp_client = None
+        self.mcp_config = None
         
         # State management
         self.current_screen_id: Optional[str] = None
@@ -51,17 +54,13 @@ class KioskOrchestrator:
         
         try:
             # Load configuration and data
-            await self.mcp_orchestrator.load_config()
+            await self._load_mcp_config()
             await self.data_manager.load_data()
             
-            # Start MCP servers
-            console.print("🔧 Starting MCP servers...")
-            await self.mcp_orchestrator.start_servers()
-            
-            # Perform health checks
-            console.print("🏥 Performing health checks...")
-            health_status = await self.mcp_orchestrator.health_check()
-            self._display_health_status(health_status)
+            # Initialize MCP client with context manager
+            console.print("🔧 Initializing MCP services...")
+            self.mcp_client = Client(self.mcp_config)
+            await self.mcp_client.__aenter__()
             
             # Initialize system state
             await self._initialize_system()
@@ -88,8 +87,12 @@ class KioskOrchestrator:
         if self.is_listening:
             await self._stop_listening()
         
-        # Stop MCP servers
-        await self.mcp_orchestrator.stop_servers()
+        # Cleanup MCP client
+        if self.mcp_client:
+            try:
+                await self.mcp_client.__aexit__(None, None, None)
+            except Exception as e:
+                console.print(f"⚠️  MCP client cleanup error: {e}", style="yellow")
         
         # Display final metrics
         self._display_final_metrics()
@@ -131,8 +134,8 @@ class KioskOrchestrator:
         """Update current screen state"""
         try:
             # Take screenshot
-            screenshot_result = await self.mcp_orchestrator.call_tool(
-                "screen_capture", "take_screenshot"
+            screenshot_result = await self.mcp_client.call_tool(
+                "screen_capture_take_screenshot"
             )
             
             if screenshot_result.get("success"):
@@ -147,8 +150,8 @@ class KioskOrchestrator:
                 }
                 
                 # Detect current screen
-                detection_result = await self.mcp_orchestrator.call_tool(
-                    "screen_detector", "detect_current_screen", {
+                detection_result = await self.mcp_client.call_tool(
+                    "screen_detector_detect_current_screen", {
                         "screenshot_data": screenshot_data,
                         "screen_definitions": screen_definitions
                     }
@@ -166,8 +169,8 @@ class KioskOrchestrator:
     async def _start_listening(self):
         """Start speech recognition"""
         try:
-            result = await self.mcp_orchestrator.call_tool(
-                "speech_to_text", "start_listening"
+            result = await self.mcp_client.call_tool(
+                "speech_to_text_start_listening"
             )
             
             if result.get("success"):
@@ -182,8 +185,8 @@ class KioskOrchestrator:
     async def _stop_listening(self):
         """Stop speech recognition"""
         try:
-            await self.mcp_orchestrator.call_tool(
-                "speech_to_text", "stop_listening"
+            await self.mcp_client.call_tool(
+                "speech_to_text_stop_listening"
             )
             self.is_listening = False
             console.print("🔇 Voice recognition stopped")
@@ -222,8 +225,8 @@ class KioskOrchestrator:
                 return await self._execute_global_command(global_command, voice_text)
             
             # Process command with Ollama agent
-            command_result = await self.mcp_orchestrator.call_tool(
-                "ollama_agent", "process_voice_command", {
+            command_result = await self.mcp_client.call_tool(
+                "ollama_agent_process_voice_command", {
                     "voice_text": voice_text,
                     "current_screen": current_screen,
                     "context": {
@@ -303,8 +306,8 @@ class KioskOrchestrator:
                 }
             
             # Execute mouse click
-            click_result = await self.mcp_orchestrator.call_tool(
-                "mouse_control", "click", {
+            click_result = await self.mcp_client.call_tool(
+                "mouse_control_click", {
                     "x": coordinates["x"],
                     "y": coordinates["y"],
                     "element_id": element_id
@@ -350,8 +353,8 @@ class KioskOrchestrator:
                     current_screen = screen_obj.to_dict()
             
             if current_screen:
-                help_result = await self.mcp_orchestrator.call_tool(
-                    "ollama_agent", "generate_help_response", {
+                help_result = await self.mcp_client.call_tool(
+                    "ollama_agent_generate_help_response", {
                         "current_screen": current_screen
                     }
                 )
@@ -405,19 +408,27 @@ class KioskOrchestrator:
             "error": f"Unknown global command: {action}"
         }
     
-    def _display_health_status(self, health_status: Dict[str, Dict[str, Any]]):
-        """Display health status of all services"""
-        table = Table(title="Service Health Status")
-        table.add_column("Service", style="cyan")
-        table.add_column("Status", style="green")
-        table.add_column("Details", style="white")
+    async def _load_mcp_config(self):
+        """Load MCP configuration"""
+        with open(self.config_path, 'r') as f:
+            config_data = json.load(f)
         
-        for service_name, status in health_status.items():
-            status_text = "✅ Healthy" if status.get("status") == "healthy" else "❌ Unhealthy"
-            details = status.get("error", "OK")
-            table.add_row(service_name, status_text, details)
+        # Convert to FastMCP Client format
+        self.mcp_config = {
+            "mcpServers": {}
+        }
         
-        console.print(table)
+        for name, server_data in config_data.get("servers", {}).items():
+            if server_data.get("enabled", True):
+                self.mcp_config["mcpServers"][name] = {
+                    "command": server_data["command"],
+                    "args": server_data["args"]
+                }
+                
+                # Add environment variables if present
+                if "env" in server_data:
+                    for key, value in server_data["env"].items():
+                        os.environ[key] = value
     
     def _create_status_display(self) -> Panel:
         """Create live status display"""
@@ -498,9 +509,10 @@ def test_command(
         
         try:
             # Quick initialization
-            await orchestrator.mcp_orchestrator.load_config()
+            await orchestrator._load_mcp_config()
             await orchestrator.data_manager.load_data()
-            await orchestrator.mcp_orchestrator.start_servers()
+            orchestrator.mcp_client = Client(orchestrator.mcp_config)
+            await orchestrator.mcp_client.__aenter__()
             
             # Test command
             console.print(f"Testing command: '{command}'")
@@ -515,7 +527,11 @@ def test_command(
                 console.print(f"Error: {result.get('error')}")
             
         finally:
-            await orchestrator.mcp_orchestrator.stop_servers()
+            if orchestrator.mcp_client:
+                try:
+                    await orchestrator.mcp_client.__aexit__(None, None, None)
+                except Exception:
+                    pass
     
     asyncio.run(test())
 

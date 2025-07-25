@@ -188,7 +188,7 @@ async def test_integration():
             print("   🎉 System is READY for deployment!")
             print("\n   Next steps:")
             print("   1. Install Ollama: curl -fsSL https://ollama.com/install.sh | sh")
-            print("   2. Pull a model: ollama pull llama3.2")
+            print("   2. Pull a model: ollama pull qwen2.5:1.5b")
             print("   3. Start system: python src/orchestrator/main.py start")
             print("   4. Test command: python src/orchestrator/main.py test-command 'start'")
         elif readiness_percentage >= 60:

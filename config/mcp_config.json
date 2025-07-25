@@ -2,14 +2,14 @@
   "servers": {
     "speech_to_text": {
       "command": "python",
-      "args": ["services/speech_to_text/mcp_server.py"],
+      "args": ["services/speech_to_text/mcp_server_fastmcp.py"],
       "env": {
         "PYTHONPATH": "."
       }
     },
     "screen_capture": {
       "command": "python", 
-      "args": ["services/screen_capture/mcp_screenshot_server.py"],
+      "args": ["services/screen_capture/mcp_server.py"],
       "env": {
         "PYTHONPATH": "."
       }

@@ -30,6 +30,7 @@ class MCPOrchestrator:
     def __init__(self, config_path: str):
         self.config_path = Path(config_path)
         self.clients: Dict[str, ClientSession] = {}
+        self.client_contexts: Dict[str, Any] = {}
         self.server_configs: Dict[str, ServerConfig] = {}
         self.orchestration_config = OrchestrationConfig()
         self.running = False
@@ -68,9 +69,11 @@ class MCPOrchestrator:
                     args=config.args,
                     env=config.env
                 )
-                session_result = await stdio_client(server_params)
-                session, read, write = session_result
+                context = stdio_client(server_params)
+                read_stream, write_stream = await context.__aenter__()
+                session = ClientSession(read_stream, write_stream)
                 self.clients[name] = session
+                self.client_contexts[name] = context
                 print(f"Started MCP server: {name}")
                 
             except Exception as e:
@@ -80,10 +83,22 @@ class MCPOrchestrator:
         """Stop all MCP servers"""
         self.running = False
         
-        for name, client in self.clients.items():
+        # Stop servers sequentially and handle errors gracefully
+        for name in list(self.clients.keys()):
             try:
-                await client.close()
-                print(f"Stopped MCP server: {name}")
+                if name in self.client_contexts:
+                    context = self.client_contexts[name]
+                    try:
+                        # Try normal exit first
+                        await context.__aexit__(None, None, None)
+                        print(f"Stopped MCP server: {name}")
+                    except (RuntimeError, asyncio.CancelledError, Exception) as e:
+                        if "cancel scope" in str(e) or isinstance(e, asyncio.CancelledError):
+                            # Handle asyncio/anyio cancellation issues by suppressing the error
+                            print(f"Stopped MCP server: {name} (cancellation handled)")
+                        else:
+                            print(f"Error stopping MCP server {name}: {e}")
+                    del self.client_contexts[name]
             except Exception as e:
                 print(f"Error stopping MCP server {name}: {e}")
         
@@ -164,7 +179,7 @@ class MCPOrchestrator:
                 # Basic connectivity check
                 await asyncio.wait_for(
                     self.clients[server_name].list_tools(),
-                    timeout=5.0
+                    timeout=10.0
                 )
                 return {server_name: {"status": "healthy", "timestamp": asyncio.get_event_loop().time()}}
             except Exception as e:
@@ -173,7 +188,7 @@ class MCPOrchestrator:
         health_status = {}
         for name, client in self.clients.items():
             try:
-                await asyncio.wait_for(client.list_tools(), timeout=5.0)
+                await asyncio.wait_for(client.list_tools(), timeout=10.0)
                 health_status[name] = {"status": "healthy", "timestamp": asyncio.get_event_loop().time()}
             except Exception as e:
                 health_status[name] = {"status": "unhealthy", "error": str(e)}

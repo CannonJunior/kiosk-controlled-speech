@@ -150,7 +150,7 @@ The system consists of multiple components communicating through the Model Conte
 
 ### 6. Ollama Command Agent (MCP Server)
 **Location**: WSL
-**Technology**: Ollama with Llama 3.1 or similar model
+**Technology**: Ollama with Qwen2.5:1.5b model
 **Responsibilities**:
 - Process natural language commands
 - Map speech text to actionable instructions
