@@ -19,6 +19,21 @@ sys.path.append('.')
 from src.data_manager.kiosk_data import KioskDataManager
 
 
+def parse_tool_result(result):
+    """Parse FastMCP tool result"""
+    if result.is_error:
+        return {"error": "Tool call failed"}
+    
+    if result.content and len(result.content) > 0:
+        text_content = result.content[0].text
+        try:
+            return json.loads(text_content)
+        except json.JSONDecodeError:
+            return {"raw_text": text_content}
+    
+    return {"no_content": True}
+
+
 app = typer.Typer(name="kiosk-orchestrator")
 console = Console()
 
@@ -29,12 +44,16 @@ class KioskOrchestrator:
         self.data_manager = KioskDataManager("config/kiosk_data.json")
         self.mcp_client = None
         self.mcp_config = None
+        self.orchestrator_config = None
         
         # State management
         self.current_screen_id: Optional[str] = None
         self.last_screenshot_data: Optional[str] = None
         self.is_listening = False
         self.running = False
+        
+        # Timing management
+        self.last_screen_update = 0
         
         # Performance metrics
         self.metrics = {
@@ -109,11 +128,16 @@ class KioskOrchestrator:
     
     async def _main_loop(self):
         """Main orchestration loop"""
-        with Live(self._create_status_display(), refresh_per_second=1) as live:
+        # Get configurable refresh rates
+        display_config = self.orchestrator_config.get("status_display", {})
+        refresh_rate = display_config.get("refresh_per_second", 0.2)
+        loop_interval = display_config.get("main_loop_interval", 2.0)
+        
+        with Live(self._create_status_display(), refresh_per_second=refresh_rate) as live:
             while self.running:
                 try:
-                    # Update screen state periodically
-                    await self._update_screen_state()
+                    # Update screen state periodically (less frequently)
+                    await self._update_screen_state_if_needed()
                     
                     # Process any queued voice commands
                     await self._process_pending_commands()
@@ -121,8 +145,8 @@ class KioskOrchestrator:
                     # Update display
                     live.update(self._create_status_display())
                     
-                    # Sleep briefly
-                    await asyncio.sleep(0.5)
+                    # Sleep for configured interval
+                    await asyncio.sleep(loop_interval)
                     
                 except KeyboardInterrupt:
                     break
@@ -130,13 +154,26 @@ class KioskOrchestrator:
                     console.print(f"⚠️  Loop error: {e}", style="yellow")
                     await asyncio.sleep(1)
     
+    async def _update_screen_state_if_needed(self):
+        """Update current screen state only if enough time has passed"""
+        display_config = self.orchestrator_config.get("status_display", {})
+        update_interval = display_config.get("screen_update_interval", 5.0)
+        
+        current_time = time.time()
+        if current_time - self.last_screen_update < update_interval:
+            return
+        
+        await self._update_screen_state()
+        self.last_screen_update = current_time
+    
     async def _update_screen_state(self):
         """Update current screen state"""
         try:
             # Take screenshot
-            screenshot_result = await self.mcp_client.call_tool(
+            screenshot_result_raw = await self.mcp_client.call_tool(
                 "screen_capture_take_screenshot"
             )
+            screenshot_result = parse_tool_result(screenshot_result_raw)
             
             if screenshot_result.get("success"):
                 screenshot_data = screenshot_result["data"]["data"]  # Base64 image data
@@ -150,12 +187,13 @@ class KioskOrchestrator:
                 }
                 
                 # Detect current screen
-                detection_result = await self.mcp_client.call_tool(
+                detection_result_raw = await self.mcp_client.call_tool(
                     "screen_detector_detect_current_screen", {
                         "screenshot_data": screenshot_data,
                         "screen_definitions": screen_definitions
                     }
                 )
+                detection_result = parse_tool_result(detection_result_raw)
                 
                 if detection_result.get("success"):
                     detected_screen = detection_result["data"].get("detected_screen")
@@ -169,9 +207,10 @@ class KioskOrchestrator:
     async def _start_listening(self):
         """Start speech recognition"""
         try:
-            result = await self.mcp_client.call_tool(
+            result_raw = await self.mcp_client.call_tool(
                 "speech_to_text_start_listening"
             )
+            result = parse_tool_result(result_raw)
             
             if result.get("success"):
                 self.is_listening = True
@@ -225,7 +264,7 @@ class KioskOrchestrator:
                 return await self._execute_global_command(global_command, voice_text)
             
             # Process command with Ollama agent
-            command_result = await self.mcp_client.call_tool(
+            command_result_raw = await self.mcp_client.call_tool(
                 "ollama_agent_process_voice_command", {
                     "voice_text": voice_text,
                     "current_screen": current_screen,
@@ -236,6 +275,7 @@ class KioskOrchestrator:
                     }
                 }
             )
+            command_result = parse_tool_result(command_result_raw)
             
             if not command_result.get("success"):
                 self.metrics["failed_actions"] += 1
@@ -306,13 +346,14 @@ class KioskOrchestrator:
                 }
             
             # Execute mouse click
-            click_result = await self.mcp_client.call_tool(
+            click_result_raw = await self.mcp_client.call_tool(
                 "mouse_control_click", {
                     "x": coordinates["x"],
                     "y": coordinates["y"],
                     "element_id": element_id
                 }
             )
+            click_result = parse_tool_result(click_result_raw)
             
             if click_result.get("success"):
                 console.print(f"🖱️  Clicked {element_id} at ({coordinates['x']}, {coordinates['y']})")
@@ -353,11 +394,12 @@ class KioskOrchestrator:
                     current_screen = screen_obj.to_dict()
             
             if current_screen:
-                help_result = await self.mcp_client.call_tool(
+                help_result_raw = await self.mcp_client.call_tool(
                     "ollama_agent_generate_help_response", {
                         "current_screen": current_screen
                     }
                 )
+                help_result = parse_tool_result(help_result_raw)
                 
                 if help_result.get("success"):
                     help_text = help_result["data"].get("help_text", "No help available")
@@ -412,6 +454,9 @@ class KioskOrchestrator:
         """Load MCP configuration"""
         with open(self.config_path, 'r') as f:
             config_data = json.load(f)
+        
+        # Store orchestrator configuration
+        self.orchestrator_config = config_data.get("orchestrator", {})
         
         # Convert to FastMCP Client format
         self.mcp_config = {

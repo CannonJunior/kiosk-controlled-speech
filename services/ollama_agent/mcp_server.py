@@ -6,6 +6,8 @@ import httpx
 from dataclasses import dataclass
 
 from fastmcp import FastMCP
+from mcp.types import Tool
+from src.mcp.base_server import MCPToolError, create_tool_response
 
 mcp = FastMCP("Ollama Agent Server")
 

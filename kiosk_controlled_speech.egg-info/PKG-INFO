@@ -30,6 +30,9 @@ Requires-Dist: pynput
 Requires-Dist: aiofiles
 Requires-Dist: httpx
 Requires-Dist: websockets
+Requires-Dist: fastmcp>=2.10.6
+Requires-Dist: speechrecognition>=3.14.3
+Requires-Dist: pydub>=0.25.1
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: pytest-asyncio; extra == "dev"
@@ -127,19 +130,19 @@ uv sync
 1. **Quick test of all FastMCP services:**
 ```bash
 # Run comprehensive service test using uv
-uv run python test_fastmcp_services.py
+uv run test_fastmcp_services.py
 ```
 
 2. **Test individual FastMCP services:**
 ```bash
 # Test mouse control service
-timeout 5 uv run python services/mouse_control/mcp_server.py
+timeout 5 uv run services/mouse_control/mcp_server.py
 
 # Test screen detector service
-timeout 5 uv run python services/screen_detector/mcp_server.py
+timeout 5 uv run services/screen_detector/mcp_server.py
 
 # Test speech-to-text service
-timeout 5 uv run python services/speech_to_text/mcp_server_fastmcp.py
+timeout 5 uv run services/speech_to_text/mcp_server_fastmcp.py
 ```
 
 3. **Start the full system:**

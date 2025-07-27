@@ -46,6 +46,11 @@
     "response_timeout": 5000,
     "retry_attempts": 3,
     "health_check_interval": 30,
-    "log_level": "INFO"
+    "log_level": "INFO",
+    "status_display": {
+      "refresh_per_second": 0.2,
+      "main_loop_interval": 2.0,
+      "screen_update_interval": 5.0
+    }
   }
 }

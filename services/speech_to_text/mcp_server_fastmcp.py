@@ -19,6 +19,7 @@ async def start_listening():
     """Start speech recognition"""
     try:
         speech_state.is_listening = True
+        print("🎤 Speech recognition started - listening for microphone input")
         return {
             "success": True,
             "status": "listening",
@@ -32,6 +33,7 @@ async def stop_listening():
     """Stop speech recognition"""
     try:
         speech_state.is_listening = False
+        print("🔇 Speech recognition stopped - no longer listening for microphone input")
         return {
             "success": True, 
             "status": "stopped",
@@ -52,11 +54,14 @@ async def get_status():
 async def process_audio_data(audio_data: str):
     """Process audio data and return transcribed text"""
     # Placeholder implementation - would integrate with speech recognition service
-    return {
+    print("🎤 Processing microphone audio data for transcription")
+    result = {
         "success": True,
         "transcribed_text": "mock transcribed text",
         "confidence": 0.85
     }
+    print(f"✅ Audio transcribed: '{result['transcribed_text']}'")
+    return result
 
 if __name__ == "__main__":
     mcp.run()

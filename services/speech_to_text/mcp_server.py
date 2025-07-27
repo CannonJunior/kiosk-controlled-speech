@@ -91,6 +91,25 @@ class SpeechToTextServer(BaseMCPServer):
                 }
             ),
             Tool(
+                name="transcribe_file",
+                description="Transcribe audio file to text",
+                inputSchema={
+                    "type": "object", 
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to audio file (WAV, MP3, etc.)"
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "Speech language code", 
+                            "default": "en"
+                        }
+                    },
+                    "required": ["file_path"]
+                }
+            ),
+            Tool(
                 name="get_audio_devices",
                 description="List available audio input devices",
                 inputSchema={
@@ -105,6 +124,29 @@ class SpeechToTextServer(BaseMCPServer):
                     "type": "object",
                     "properties": {}
                 }
+            ),
+            Tool(
+                name="record_and_transcribe",
+                description="Record audio from microphone and transcribe it to text",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "duration": {
+                            "type": "number",
+                            "description": "Recording duration in seconds",
+                            "default": 5
+                        },
+                        "output_file": {
+                            "type": "string",
+                            "description": "Output audio file path (optional, auto-generated if not provided)"
+                        },
+                        "language": {
+                            "type": "string",
+                            "description": "Speech language code",
+                            "default": "en"
+                        }
+                    }
+                }
             )
         ]
     
@@ -116,10 +158,14 @@ class SpeechToTextServer(BaseMCPServer):
                 return await self._stop_listening()
             elif name == "transcribe_audio":
                 return await self._transcribe_audio(arguments)
+            elif name == "transcribe_file":
+                return await self._transcribe_file(arguments)
             elif name == "get_audio_devices":
                 return await self._get_audio_devices()
             elif name == "get_status":
                 return await self._get_status()
+            elif name == "record_and_transcribe":
+                return await self._record_and_transcribe(arguments)
             else:
                 raise MCPToolError(f"Unknown tool: {name}")
                 
@@ -193,6 +239,136 @@ class SpeechToTextServer(BaseMCPServer):
         except Exception as e:
             return create_tool_response(False, error=f"Transcription failed: {e}")
     
+    async def _record_and_transcribe(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Record audio from microphone and transcribe it"""
+        import wave
+        import tempfile
+        import os
+        from datetime import datetime
+        
+        duration = arguments.get("duration", 5)  # Default 5 seconds
+        output_file = arguments.get("output_file", None)
+        
+        try:
+            # Create temporary file if no output file specified
+            if output_file is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_file = f"recorded_audio_{timestamp}.wav"
+            
+            print(f"Recording audio for {duration} seconds...")
+            
+            # Try different approaches for device detection
+            input_device = None
+            
+            try:
+                devices = sd.query_devices()
+                for i, device in enumerate(devices):
+                    if device['max_input_channels'] > 0:
+                        input_device = i
+                        break
+            except Exception as e:
+                print(f"Device query failed: {e}")
+            
+            # If no devices found, try various fallback options
+            if input_device is None:
+                # Try common device indices
+                for test_device in [0, 1, 2, None]:
+                    try:
+                        # Test recording with this device
+                        test_audio = sd.rec(
+                            int(0.1 * self.sample_rate),  # 0.1 second test
+                            samplerate=self.sample_rate,
+                            channels=1,
+                            dtype=np.float32,
+                            device=test_device
+                        )
+                        sd.wait()
+                        input_device = test_device
+                        print(f"Using device {input_device}")
+                        break
+                    except Exception as e:
+                        print(f"Device {test_device} failed: {e}")
+                        continue
+            
+            if input_device is None:
+                raise Exception("No working audio input device found")
+            
+            # Record audio with working device
+            recorded_audio = sd.rec(
+                int(duration * self.sample_rate),
+                samplerate=self.sample_rate,
+                channels=1,
+                dtype=np.float32,
+                device=input_device
+            )
+            sd.wait()  # Wait for recording to complete
+            
+            # Save to WAV file
+            with wave.open(output_file, 'wb') as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)  # 16-bit
+                wav_file.setframerate(self.sample_rate)
+                
+                # Convert float32 to int16
+                audio_int16 = (recorded_audio * 32767).astype(np.int16)
+                wav_file.writeframes(audio_int16.tobytes())
+            
+            print(f"Audio saved to: {output_file}")
+            
+            # Load model if needed
+            if self.model is None:
+                self.model = WhisperModel(self.model_name)
+            
+            # Transcribe the recorded audio
+            language = arguments.get("language", self.language)
+            segments, info = self.model.transcribe(recorded_audio.flatten(), language=language)
+            
+            # Combine all segments into text
+            text = " ".join(segment.text for segment in segments)
+            
+            return create_tool_response(True, {
+                "text": text.strip(),
+                "language": info.language,
+                "confidence": info.language_probability,
+                "audio_file": output_file,
+                "duration": duration
+            })
+            
+        except Exception as e:
+            return create_tool_response(False, error=f"Recording and transcription failed: {e}")
+    
+    async def _transcribe_file(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Transcribe audio file to text"""
+        import os
+        
+        file_path = arguments.get("file_path")
+        language = arguments.get("language", self.language)
+        
+        try:
+            # Validate file exists
+            if not os.path.exists(file_path):
+                return create_tool_response(False, error=f"Audio file not found: {file_path}")
+            
+            # Load model if needed
+            if self.model is None:
+                self.model = WhisperModel(self.model_name)
+            
+            # Transcribe the audio file
+            segments, info = self.model.transcribe(file_path, language=language)
+            
+            # Combine all segments into text
+            text = " ".join(segment.text for segment in segments)
+            
+            return create_tool_response(True, {
+                "text": text.strip(),
+                "language": info.language,
+                "confidence": info.language_probability,
+                "file_path": file_path
+            })
+            
+        except Exception as e:
+            return create_tool_response(False, error=f"File transcription failed: {e}")
+    
     async def _get_audio_devices(self) -> Dict[str, Any]:
         """Get list of available audio input devices"""
         try:
@@ -234,6 +410,7 @@ class SpeechToTextServer(BaseMCPServer):
             
             # Simple voice activity detection
             if np.max(np.abs(audio_data)) > self.vad_threshold:
+                print(f"🎤 Microphone input detected - Audio level: {np.max(np.abs(audio_data)):.3f}")
                 self.audio_queue.put(audio_data.copy())
         
         try:
@@ -257,6 +434,7 @@ class SpeechToTextServer(BaseMCPServer):
                         
                         # Process when we have enough audio
                         if len(audio_buffer) >= 3:  # ~3 seconds
+                            print(f"🔊 Processing audio chunk ({len(audio_buffer)} chunks, ~{len(audio_buffer)}s)")
                             audio_array = np.concatenate(audio_buffer)
                             self._process_audio_chunk(audio_array)
                             audio_buffer.clear()
@@ -267,6 +445,7 @@ class SpeechToTextServer(BaseMCPServer):
                             silence_start = asyncio.get_event_loop().time()
                         elif asyncio.get_event_loop().time() - silence_start > self.silence_timeout:
                             if audio_buffer:
+                                print(f"🔊 Processing audio on silence timeout ({len(audio_buffer)} chunks)")
                                 audio_array = np.concatenate(audio_buffer)
                                 self._process_audio_chunk(audio_array)
                                 audio_buffer.clear()
@@ -288,7 +467,7 @@ class SpeechToTextServer(BaseMCPServer):
             if text:
                 # Emit transcription event (in real implementation, this would
                 # be sent to the orchestrator or event system)
-                print(f"Transcribed: {text}")
+                print(f"✅ Speech transcribed: '{text}'")
                 
         except Exception as e:
             print(f"Transcription error: {e}")
