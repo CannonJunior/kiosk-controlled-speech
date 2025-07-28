@@ -14,12 +14,45 @@ class KioskSpeechChat {
         this.audioStream = null;
         this.audioChunks = [];
         
-        // Settings
+        // Voice Activity Detection
+        this.vadAnalyser = null;
+        this.vadDataArray = null;
+        this.lastVoiceTime = 0;
+        this.vadCheckInterval = null;
+        this.recordingStartTime = 0;
+        this.speechDetected = false;
+        this.consecutiveSilenceCount = 0;
+        
+        // Dictation state (manual control)
+        this.isDictationListening = false;
+        
+        // Screenshot management
+        this.screenshots = [];
+        this.screenshotCount = 0;
+        this.currentScreenshot = null;
+        
+        // Settings (will be loaded from config)
         this.settings = {
             autoSendVoice: true,
             voiceThreshold: 0.5,
-            selectedMicrophone: null
+            selectedMicrophone: null,
+            // VAD settings will be loaded from server config
+            vadEnabled: true,
+            vadSensitivity: 0.002,
+            silenceTimeout: 800,
+            speechStartDelay: 300,
+            consecutiveSilenceThreshold: 3,
+            checkInterval: 100,
+            dynamicTimeout: {
+                enabled: true,
+                trigger_after_ms: 1500,
+                reduction_factor: 0.6,
+                minimum_timeout_ms: 600
+            }
         };
+        
+        // Configuration loaded from server
+        this.vadConfig = null;
         
         // Browser and URL detection
         this.detectBrowserAndURL();
@@ -27,6 +60,7 @@ class KioskSpeechChat {
         // Initialize components
         this.initializeElements();
         this.initializeEventListeners();
+        this.loadVADConfig();
         this.loadSettings();
         this.connectWebSocket();
         this.initializeAudio();
@@ -56,6 +90,50 @@ class KioskSpeechChat {
         }
     }
     
+    async loadVADConfig() {
+        try {
+            const response = await fetch('/api/vad-config');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.vadConfig = data.config;
+                
+                // Update default settings from config
+                const defaults = data.config.client_defaults;
+                Object.assign(this.settings, {
+                    vadEnabled: defaults.vadEnabled,
+                    vadSensitivity: defaults.vadSensitivity,
+                    silenceTimeout: defaults.silenceTimeout,
+                    speechStartDelay: defaults.speechStartDelay,
+                    consecutiveSilenceThreshold: defaults.consecutiveSilenceThreshold,
+                    checkInterval: defaults.checkInterval,
+                    dynamicTimeout: defaults.dynamicTimeout
+                });
+                
+                // Update UI ranges from config
+                const uiSettings = data.config.ui_settings;
+                if (uiSettings.timeoutRange) {
+                    const range = uiSettings.timeoutRange;
+                    const timeoutSlider = document.getElementById('silenceTimeout');
+                    if (timeoutSlider) {
+                        timeoutSlider.min = range.min;
+                        timeoutSlider.max = range.max;
+                        timeoutSlider.step = range.step;
+                        timeoutSlider.value = range.default;
+                    }
+                }
+                
+                console.log('VAD configuration loaded from server:', this.vadConfig);
+            } else {
+                console.warn('Failed to load VAD config from server:', data.error);
+                console.log('Using fallback configuration');
+            }
+        } catch (error) {
+            console.error('Error loading VAD configuration:', error);
+            console.log('Using default hardcoded configuration');
+        }
+    }
+    
     generateClientId() {
         return 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     }
@@ -72,12 +150,46 @@ class KioskSpeechChat {
             processingIndicator: document.getElementById('processingIndicator'),
             settingsToggle: document.getElementById('settingsToggle'),
             settingsPanel: document.getElementById('settingsPanel'),
+            vadSidebar: document.getElementById('vadSidebar'),
+            sidebarToggle: document.getElementById('sidebarToggle'),
+            dictationButton: document.getElementById('dictationButton'),
             microphoneSelect: document.getElementById('microphoneSelect'),
             autoSendVoice: document.getElementById('autoSendVoice'),
             voiceThreshold: document.getElementById('voiceThreshold'),
+            vadEnabled: document.getElementById('vadEnabled'),
+            silenceTimeout: document.getElementById('silenceTimeout'),
+            silenceTimeoutValue: document.getElementById('silenceTimeoutValue'),
+            vadSensitivity: document.getElementById('vadSensitivity'),
+            vadSensitivityValue: document.getElementById('vadSensitivityValue'),
+            speechStartDelay: document.getElementById('speechStartDelay'),
+            speechStartDelayValue: document.getElementById('speechStartDelayValue'),
+            consecutiveSilenceThreshold: document.getElementById('consecutiveSilenceThreshold'),
+            consecutiveSilenceThresholdValue: document.getElementById('consecutiveSilenceThresholdValue'),
+            checkInterval: document.getElementById('checkInterval'),
+            checkIntervalValue: document.getElementById('checkIntervalValue'),
+            dynamicTimeoutEnabled: document.getElementById('dynamicTimeoutEnabled'),
+            dynamicTimeoutTrigger: document.getElementById('dynamicTimeoutTrigger'),
+            dynamicTimeoutTriggerValue: document.getElementById('dynamicTimeoutTriggerValue'),
+            dynamicTimeoutReduction: document.getElementById('dynamicTimeoutReduction'),
+            dynamicTimeoutReductionValue: document.getElementById('dynamicTimeoutReductionValue'),
+            dynamicTimeoutMinimum: document.getElementById('dynamicTimeoutMinimum'),
+            dynamicTimeoutMinimumValue: document.getElementById('dynamicTimeoutMinimumValue'),
             errorModal: document.getElementById('errorModal'),
             errorMessage: document.getElementById('errorMessage'),
-            errorClose: document.getElementById('errorClose')
+            errorClose: document.getElementById('errorClose'),
+            // Screenshot elements
+            screenshotSidebar: document.getElementById('screenshotSidebar'),
+            screenshotToggle: document.getElementById('screenshotToggle'),
+            takeScreenshotButton: document.getElementById('takeScreenshotButton'),
+            screenshotCount: document.getElementById('screenshotCount'),
+            screenshotGallery: document.getElementById('screenshotGallery'),
+            screenshotModal: document.getElementById('screenshotModal'),
+            modalBackdrop: document.getElementById('modalBackdrop'),
+            modalClose: document.getElementById('modalClose'),
+            modalTitle: document.getElementById('modalTitle'),
+            modalImage: document.getElementById('modalImage'),
+            downloadScreenshot: document.getElementById('downloadScreenshot'),
+            deleteScreenshot: document.getElementById('deleteScreenshot')
         };
     }
     
@@ -104,6 +216,43 @@ class KioskSpeechChat {
             this.toggleSettings();
         });
         
+        // Sidebar toggle
+        this.elements.sidebarToggle.addEventListener('click', () => {
+            this.toggleSidebar();
+        });
+        
+        // Dictation button (manual start/stop listening)
+        this.elements.dictationButton.addEventListener('click', () => {
+            this.toggleDictationListening();
+        });
+        
+        // Screenshot panel toggle
+        this.elements.screenshotToggle.addEventListener('click', () => {
+            this.toggleScreenshotSidebar();
+        });
+        
+        // Take screenshot button
+        this.elements.takeScreenshotButton.addEventListener('click', () => {
+            this.takeScreenshot();
+        });
+        
+        // Screenshot modal event listeners
+        this.elements.modalClose.addEventListener('click', () => {
+            this.closeScreenshotModal();
+        });
+        
+        this.elements.modalBackdrop.addEventListener('click', () => {
+            this.closeScreenshotModal();
+        });
+        
+        this.elements.downloadScreenshot.addEventListener('click', () => {
+            this.downloadCurrentScreenshot();
+        });
+        
+        this.elements.deleteScreenshot.addEventListener('click', () => {
+            this.deleteCurrentScreenshot();
+        });
+        
         // Settings changes
         this.elements.autoSendVoice.addEventListener('change', () => {
             this.settings.autoSendVoice = this.elements.autoSendVoice.checked;
@@ -119,6 +268,67 @@ class KioskSpeechChat {
             this.settings.selectedMicrophone = this.elements.microphoneSelect.value;
             this.saveSettings();
             this.initializeAudio();
+        });
+        
+        // VAD settings
+        this.elements.vadEnabled.addEventListener('change', () => {
+            this.settings.vadEnabled = this.elements.vadEnabled.checked;
+            this.saveSettings();
+        });
+        
+        this.elements.silenceTimeout.addEventListener('input', () => {
+            this.settings.silenceTimeout = parseFloat(this.elements.silenceTimeout.value) * 1000; // Convert to ms
+            this.elements.silenceTimeoutValue.textContent = this.elements.silenceTimeout.value + 's';
+            this.saveSettings();
+        });
+        
+        // VAD Settings Event Listeners
+        this.elements.vadSensitivity.addEventListener('input', () => {
+            this.settings.vadSensitivity = parseFloat(this.elements.vadSensitivity.value);
+            this.elements.vadSensitivityValue.textContent = this.settings.vadSensitivity.toFixed(3);
+            this.saveSettings();
+        });
+        
+        this.elements.speechStartDelay.addEventListener('input', () => {
+            this.settings.speechStartDelay = parseInt(this.elements.speechStartDelay.value);
+            this.elements.speechStartDelayValue.textContent = this.settings.speechStartDelay + 'ms';
+            this.saveSettings();
+        });
+        
+        this.elements.consecutiveSilenceThreshold.addEventListener('input', () => {
+            this.settings.consecutiveSilenceThreshold = parseInt(this.elements.consecutiveSilenceThreshold.value);
+            this.elements.consecutiveSilenceThresholdValue.textContent = this.settings.consecutiveSilenceThreshold;
+            this.saveSettings();
+        });
+        
+        this.elements.checkInterval.addEventListener('input', () => {
+            this.settings.checkInterval = parseInt(this.elements.checkInterval.value);
+            this.elements.checkIntervalValue.textContent = this.settings.checkInterval + 'ms';
+            this.saveSettings();
+        });
+        
+        // Dynamic Timeout Settings Event Listeners
+        this.elements.dynamicTimeoutEnabled.addEventListener('change', () => {
+            this.settings.dynamicTimeout.enabled = this.elements.dynamicTimeoutEnabled.checked;
+            this.saveSettings();
+        });
+        
+        this.elements.dynamicTimeoutTrigger.addEventListener('input', () => {
+            this.settings.dynamicTimeout.trigger_after_ms = parseInt(this.elements.dynamicTimeoutTrigger.value);
+            this.elements.dynamicTimeoutTriggerValue.textContent = this.settings.dynamicTimeout.trigger_after_ms + 'ms';
+            this.saveSettings();
+        });
+        
+        this.elements.dynamicTimeoutReduction.addEventListener('input', () => {
+            this.settings.dynamicTimeout.reduction_factor = parseFloat(this.elements.dynamicTimeoutReduction.value);
+            this.elements.dynamicTimeoutReductionValue.textContent = this.settings.dynamicTimeout.reduction_factor.toFixed(1);
+            this.saveSettings();
+        });
+        
+        this.elements.dynamicTimeoutMinimum.addEventListener('input', () => {
+            this.settings.dynamicTimeout.minimum_timeout_ms = parseInt(this.elements.dynamicTimeoutMinimum.value);
+            this.elements.dynamicTimeoutMinimumValue.textContent = this.settings.dynamicTimeout.minimum_timeout_ms + 'ms';
+            this.saveSettings();
         });
         
         // Error modal close
@@ -465,7 +675,7 @@ class KioskSpeechChat {
         }
     }
     
-    async startRecording() {
+    async startRecording(disableVAD = null) {
         try {
             // Check WebSocket connection
             if (!this.isConnected) {
@@ -509,6 +719,11 @@ class KioskSpeechChat {
                 this.audioStream = await navigator.mediaDevices.getUserMedia(constraints);
             }
             
+            // Set up Voice Activity Detection (only if enabled and not explicitly disabled)
+            if (this.settings.vadEnabled && disableVAD !== false) {
+                this.setupVAD();
+            }
+            
             // Create MediaRecorder
             this.mediaRecorder = new MediaRecorder(this.audioStream, {
                 mimeType: 'audio/webm;codecs=opus'
@@ -523,22 +738,36 @@ class KioskSpeechChat {
             };
             
             this.mediaRecorder.onstop = () => {
+                this.cleanupVAD();
                 this.processRecordedAudio();
             };
             
             // Start recording
             this.mediaRecorder.start();
             this.isRecording = true;
+            this.recordingStartTime = Date.now();
+            this.lastVoiceTime = Date.now();
+            this.speechDetected = false;
+            this.consecutiveSilenceCount = 0;
             this.updateRecordingUI(true);
             
-            console.log('Recording started');
+            console.log('Recording started with VAD enabled:', this.settings.vadEnabled, 'Grace period:', this.settings.speechStartDelay + 'ms');
             
-            // Auto-stop after 30 seconds
+            // Show appropriate message based on VAD status
+            if (this.settings.vadEnabled && disableVAD !== false) {
+                this.addMessage('system', `🎤 Recording started - speak naturally, auto-stop after ${this.settings.silenceTimeout/1000}s silence`);
+            } else if (disableVAD === false) {
+                this.addMessage('system', '🎤 Dictation mode - click the dictation button again to stop and process');
+            }
+            
+            // Fallback timeout (longer for dictation mode, shorter for VAD mode)
+            const fallbackTimeout = (disableVAD === false) ? 60000 : 30000; // 60s for dictation, 30s for VAD
             setTimeout(() => {
                 if (this.isRecording) {
+                    console.log('Fallback timeout reached');
                     this.stopRecording();
                 }
-            }, 30000);
+            }, fallbackTimeout);
             
         } catch (error) {
             console.error('Error starting recording:', error);
@@ -559,6 +788,116 @@ class KioskSpeechChat {
             
             this.showError(errorMessage);
         }
+    }
+    
+    setupVAD() {
+        try {
+            // Create audio context and analyser for VAD
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(this.audioStream);
+            this.vadAnalyser = audioContext.createAnalyser();
+            
+            // Configure analyser for VAD
+            this.vadAnalyser.fftSize = 512;
+            this.vadAnalyser.smoothingTimeConstant = 0.8;
+            source.connect(this.vadAnalyser);
+            
+            // Create data array for audio analysis
+            this.vadDataArray = new Float32Array(this.vadAnalyser.frequencyBinCount);
+            
+            // Start VAD monitoring
+            this.startVADMonitoring();
+            
+            console.log('VAD setup complete');
+        } catch (error) {
+            console.error('VAD setup failed:', error);
+            this.settings.vadEnabled = false;
+        }
+    }
+    
+    startVADMonitoring() {
+        this.vadCheckInterval = setInterval(() => {
+            if (!this.isRecording || !this.vadAnalyser) return;
+            
+            const now = Date.now();
+            const recordingDuration = now - this.recordingStartTime;
+            
+            // Grace period - don't apply VAD for the first second to allow user to start speaking
+            if (recordingDuration < this.settings.speechStartDelay) {
+                return;
+            }
+            
+            // Get audio data
+            this.vadAnalyser.getFloatFrequencyData(this.vadDataArray);
+            
+            // Calculate RMS energy for more accurate voice detection
+            let sum = 0;
+            let validSamples = 0;
+            for (let i = 0; i < this.vadDataArray.length; i++) {
+                if (this.vadDataArray[i] > -Infinity) {
+                    const linear = Math.pow(10, this.vadDataArray[i] / 20);
+                    sum += linear * linear;
+                    validSamples++;
+                }
+            }
+            
+            const rmsLevel = validSamples > 0 ? Math.sqrt(sum / validSamples) : 0;
+            
+            // Voice detection with hysteresis (different thresholds for start/stop)
+            const isVoiceDetected = rmsLevel > this.settings.vadSensitivity;
+            
+            if (isVoiceDetected) {
+                this.lastVoiceTime = now;
+                this.consecutiveSilenceCount = 0;
+                
+                if (!this.speechDetected) {
+                    this.speechDetected = true;
+                    console.log('🗣️ Speech started! RMS level:', rmsLevel.toFixed(6));
+                }
+            } else {
+                this.consecutiveSilenceCount++;
+                
+                // Only stop if we've detected speech before AND we have some consistent silence
+                if (this.speechDetected && this.consecutiveSilenceCount >= this.settings.consecutiveSilenceThreshold) {
+                    const silenceDuration = now - this.lastVoiceTime;
+                    
+                    // Dynamic timeout - shorter if we've been recording for a while
+                    const recordingTime = now - this.recordingStartTime;
+                    let effectiveTimeout = this.settings.silenceTimeout;
+                    
+                    // Apply dynamic timeout if enabled
+                    const dynamicConfig = this.settings.dynamicTimeout;
+                    if (dynamicConfig.enabled && recordingTime > dynamicConfig.trigger_after_ms) {
+                        effectiveTimeout = Math.max(
+                            dynamicConfig.minimum_timeout_ms,
+                            this.settings.silenceTimeout * dynamicConfig.reduction_factor
+                        );
+                    }
+                    
+                    if (silenceDuration > effectiveTimeout) {
+                        console.log(`🔇 VAD: Silence for ${silenceDuration}ms after speech (timeout: ${effectiveTimeout}ms), stopping recording`);
+                        this.stopRecording();
+                    }
+                }
+            }
+            
+            // Debug logging (reduced frequency)
+            if (Math.random() < 0.1) { // Only log 10% of the time
+                console.log(`VAD: RMS=${rmsLevel.toFixed(6)}, Speech=${this.speechDetected}, Silence=${this.consecutiveSilenceCount}, Duration=${Math.round(recordingDuration/1000)}s`);
+            }
+        }, this.settings.checkInterval); // Use configured check interval
+    }
+    
+    cleanupVAD() {
+        if (this.vadCheckInterval) {
+            clearInterval(this.vadCheckInterval);
+            this.vadCheckInterval = null;
+        }
+        this.vadAnalyser = null;
+        this.vadDataArray = null;
+        this.speechDetected = false;
+        this.consecutiveSilenceCount = 0;
+        this.recordingStartTime = 0;
     }
     
     stopRecording() {
@@ -718,6 +1057,51 @@ class KioskSpeechChat {
         panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
     
+    toggleSidebar() {
+        this.elements.vadSidebar.classList.toggle('collapsed');
+        
+        // Save sidebar state to localStorage
+        const isCollapsed = this.elements.vadSidebar.classList.contains('collapsed');
+        localStorage.setItem('vadSidebarCollapsed', isCollapsed.toString());
+    }
+    
+    async toggleDictationListening() {
+        if (this.isDictationListening) {
+            this.stopDictationListening();
+        } else {
+            await this.startDictationListening();
+        }
+    }
+    
+    async startDictationListening() {
+        try {
+            // Use the same recording logic as voice button but disable VAD for manual control
+            await this.startRecording(false); // false = disable VAD for manual control
+            
+            this.isDictationListening = true;
+            this.elements.dictationButton.classList.add('active');
+            this.elements.dictationButton.title = 'Stop listening';
+            
+            console.log('Dictation listening started - manual control mode');
+            
+        } catch (error) {
+            console.error('Error starting dictation listening:', error);
+            this.showError('Failed to start dictation. Please try again.');
+        }
+    }
+    
+    stopDictationListening() {
+        if (this.isRecording) {
+            this.stopRecording();
+        }
+        
+        this.isDictationListening = false;
+        this.elements.dictationButton.classList.remove('active');
+        this.elements.dictationButton.title = 'Dictation - Click to start/stop listening';
+        
+        console.log('Dictation listening stopped');
+    }
+    
     showError(message) {
         this.elements.errorMessage.textContent = message;
         this.elements.errorModal.style.display = 'flex';
@@ -744,6 +1128,17 @@ class KioskSpeechChat {
     
     loadSettings() {
         try {
+            // Load sidebar states
+            const vadSidebarCollapsed = localStorage.getItem('vadSidebarCollapsed');
+            if (vadSidebarCollapsed === 'true') {
+                this.elements.vadSidebar.classList.add('collapsed');
+            }
+            
+            const screenshotSidebarCollapsed = localStorage.getItem('screenshotSidebarCollapsed');
+            if (screenshotSidebarCollapsed === 'true') {
+                this.elements.screenshotSidebar.classList.add('collapsed');
+            }
+            
             const savedSettings = localStorage.getItem('kioskSpeechSettings');
             if (savedSettings) {
                 const settings = JSON.parse(savedSettings);
@@ -752,9 +1147,203 @@ class KioskSpeechChat {
                 // Apply settings to UI
                 this.elements.autoSendVoice.checked = this.settings.autoSendVoice;
                 this.elements.voiceThreshold.value = this.settings.voiceThreshold;
+                this.elements.vadEnabled.checked = this.settings.vadEnabled;
+                this.elements.silenceTimeout.value = this.settings.silenceTimeout / 1000; // Convert from ms
+                this.elements.silenceTimeoutValue.textContent = (this.settings.silenceTimeout / 1000) + 's';
+                
+                // VAD Settings
+                this.elements.vadSensitivity.value = this.settings.vadSensitivity;
+                this.elements.vadSensitivityValue.textContent = this.settings.vadSensitivity.toFixed(3);
+                this.elements.speechStartDelay.value = this.settings.speechStartDelay;
+                this.elements.speechStartDelayValue.textContent = this.settings.speechStartDelay + 'ms';
+                this.elements.consecutiveSilenceThreshold.value = this.settings.consecutiveSilenceThreshold;
+                this.elements.consecutiveSilenceThresholdValue.textContent = this.settings.consecutiveSilenceThreshold;
+                this.elements.checkInterval.value = this.settings.checkInterval;
+                this.elements.checkIntervalValue.textContent = this.settings.checkInterval + 'ms';
+                
+                // Dynamic Timeout Settings
+                this.elements.dynamicTimeoutEnabled.checked = this.settings.dynamicTimeout.enabled;
+                this.elements.dynamicTimeoutTrigger.value = this.settings.dynamicTimeout.trigger_after_ms;
+                this.elements.dynamicTimeoutTriggerValue.textContent = this.settings.dynamicTimeout.trigger_after_ms + 'ms';
+                this.elements.dynamicTimeoutReduction.value = this.settings.dynamicTimeout.reduction_factor;
+                this.elements.dynamicTimeoutReductionValue.textContent = this.settings.dynamicTimeout.reduction_factor.toFixed(1);
+                this.elements.dynamicTimeoutMinimum.value = this.settings.dynamicTimeout.minimum_timeout_ms;
+                this.elements.dynamicTimeoutMinimumValue.textContent = this.settings.dynamicTimeout.minimum_timeout_ms + 'ms';
             }
         } catch (error) {
             console.error('Error loading settings:', error);
+        }
+    }
+    
+    // Screenshot functionality
+    toggleScreenshotSidebar() {
+        this.elements.screenshotSidebar.classList.toggle('collapsed');
+        
+        // Save sidebar state to localStorage
+        const isCollapsed = this.elements.screenshotSidebar.classList.contains('collapsed');
+        localStorage.setItem('screenshotSidebarCollapsed', isCollapsed.toString());
+    }
+    
+    async takeScreenshot() {
+        try {
+            // Disable button during screenshot
+            this.elements.takeScreenshotButton.disabled = true;
+            this.elements.takeScreenshotButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Taking...</span>';
+            
+            // Call the MCP screenshot tool
+            const response = await this.callMCPTool('screen_capture_take_screenshot', {});
+            
+            if (response.success && response.data.screenshot_path) {
+                // Create screenshot object
+                const screenshot = {
+                    id: Date.now().toString(),
+                    timestamp: new Date().toISOString(),
+                    path: response.data.screenshot_path,
+                    filename: response.data.filename || `screenshot_${Date.now()}.png`,
+                    size: response.data.size || 'Unknown size'
+                };
+                
+                // Add to screenshots array
+                this.screenshots.push(screenshot);
+                this.screenshotCount++;
+                
+                // Update UI
+                this.updateScreenshotCount();
+                this.addScreenshotToGallery(screenshot);
+                
+                console.log('Screenshot taken successfully:', screenshot);
+                
+            } else {
+                throw new Error(response.error || 'Failed to take screenshot');
+            }
+            
+        } catch (error) {
+            console.error('Error taking screenshot:', error);
+            this.showError('Failed to take screenshot: ' + error.message);
+        } finally {
+            // Re-enable button
+            this.elements.takeScreenshotButton.disabled = false;
+            this.elements.takeScreenshotButton.innerHTML = '<i class="fas fa-camera"></i><span>Take Screenshot</span>';
+        }
+    }
+    
+    async callMCPTool(toolName, parameters) {
+        try {
+            const response = await fetch('/api/mcp-tool', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tool: toolName,
+                    parameters: parameters
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('MCP tool call failed:', error);
+            throw error;
+        }
+    }
+    
+    updateScreenshotCount() {
+        this.elements.screenshotCount.textContent = this.screenshotCount;
+    }
+    
+    addScreenshotToGallery(screenshot) {
+        // Remove empty state if this is the first screenshot
+        if (this.screenshotCount === 1) {
+            this.elements.screenshotGallery.innerHTML = '';
+        }
+        
+        // Create thumbnail element
+        const thumbnail = document.createElement('div');
+        thumbnail.className = 'screenshot-thumbnail';
+        thumbnail.dataset.screenshotId = screenshot.id;
+        
+        thumbnail.innerHTML = `
+            <img src="/api/screenshot/${screenshot.filename}" alt="Screenshot ${screenshot.id}" loading="lazy">
+            <div class="thumbnail-overlay">
+                <span>View</span>
+            </div>
+        `;
+        
+        // Add click event to open modal
+        thumbnail.addEventListener('click', () => {
+            this.openScreenshotModal(screenshot);
+        });
+        
+        // Add to gallery (newest first)
+        this.elements.screenshotGallery.insertBefore(thumbnail, this.elements.screenshotGallery.firstChild);
+    }
+    
+    openScreenshotModal(screenshot) {
+        this.currentScreenshot = screenshot;
+        this.elements.modalTitle.textContent = `Screenshot - ${new Date(screenshot.timestamp).toLocaleString()}`;
+        this.elements.modalImage.src = `/api/screenshot/${screenshot.filename}`;
+        this.elements.screenshotModal.style.display = 'flex';
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+    }
+    
+    closeScreenshotModal() {
+        this.elements.screenshotModal.style.display = 'none';
+        this.currentScreenshot = null;
+        
+        // Restore body scroll
+        document.body.style.overflow = '';
+    }
+    
+    downloadCurrentScreenshot() {
+        if (!this.currentScreenshot) return;
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.href = `/api/screenshot/${this.currentScreenshot.filename}`;
+        link.download = this.currentScreenshot.filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+    
+    deleteCurrentScreenshot() {
+        if (!this.currentScreenshot) return;
+        
+        if (confirm('Are you sure you want to delete this screenshot?')) {
+            // Remove from array
+            this.screenshots = this.screenshots.filter(s => s.id !== this.currentScreenshot.id);
+            this.screenshotCount--;
+            
+            // Remove from gallery
+            const thumbnail = this.elements.screenshotGallery.querySelector(`[data-screenshot-id="${this.currentScreenshot.id}"]`);
+            if (thumbnail) {
+                thumbnail.remove();
+            }
+            
+            // Update count
+            this.updateScreenshotCount();
+            
+            // Show empty state if no screenshots left
+            if (this.screenshotCount === 0) {
+                this.elements.screenshotGallery.innerHTML = `
+                    <div class="gallery-empty">
+                        <i class="fas fa-camera"></i>
+                        <p>No screenshots yet</p>
+                        <p>Click "Take Screenshot" to start</p>
+                    </div>
+                `;
+            }
+            
+            // Close modal
+            this.closeScreenshotModal();
+            
+            console.log('Screenshot deleted:', this.currentScreenshot.filename);
         }
     }
     

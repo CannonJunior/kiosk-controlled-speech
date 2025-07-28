@@ -25,6 +25,7 @@ import sys
 sys.path.append('..')
 from fastmcp import Client
 from web_app.error_recovery import error_recovery
+from web_app.vad_config import get_vad_config
 
 # Setup logging
 logging.basicConfig(
@@ -364,8 +365,36 @@ async def get_troubleshooting_page():
     html_file = Path("web_app/static/troubleshooting.html")
     if html_file.exists():
         return FileResponse(html_file)
-    else:
-        return HTMLResponse("<h1>Troubleshooting page not found</h1>")
+
+@app.get("/api/vad-config")
+async def get_vad_configuration():
+    """Get VAD configuration for the web client"""
+    try:
+        config = get_vad_config()
+        return {
+            "success": True,
+            "config": {
+                "client_defaults": config.get_client_defaults(),
+                "ui_settings": config.get_ui_settings()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to load VAD configuration: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "config": {
+                "client_defaults": {
+                    "vadEnabled": True,
+                    "vadSensitivity": 0.003,
+                    "silenceTimeout": 2500,
+                    "speechStartDelay": 800
+                },
+                "ui_settings": {
+                    "timeoutRange": {"min": 1.5, "max": 6.0, "step": 0.5, "default": 2.5}
+                }
+            }
+        }
 
 @app.get("/health")
 async def health_check():

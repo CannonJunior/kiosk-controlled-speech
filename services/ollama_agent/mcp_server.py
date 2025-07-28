@@ -25,6 +25,9 @@ class OllamaConfig:
     max_tokens: int = 512
 
 
+# Initialize global instance
+ollama_server = None
+
 class OllamaAgentServer:
     def __init__(self, config: OllamaConfig = None):
         
@@ -533,6 +536,38 @@ Convert this voice command to a specific action. Respond with ONLY a valid JSON 
         except Exception as e:
             return create_tool_response(False, error=f"Health check failed: {e}")
 
+
+# Initialize the global server instance
+ollama_server = OllamaAgentServer()
+
+@mcp.tool()
+async def process_voice_command(voice_text: str, current_screen: dict, context: dict = None):
+    """Process natural language voice command and return action"""
+    if context is None:
+        context = {}
+    
+    arguments = {
+        "voice_text": voice_text,
+        "current_screen": current_screen,
+        "context": context
+    }
+    
+    return await ollama_server._process_voice_command(arguments)
+
+@mcp.tool()
+async def generate_help_response():
+    """Generate helpful response for voice commands"""
+    return await ollama_server._generate_help_response({})
+
+@mcp.tool()
+async def analyze_intent(voice_text: str):
+    """Analyze user intent from voice command"""
+    return await ollama_server._analyze_intent({"voice_text": voice_text})
+
+@mcp.tool()
+async def check_ollama_health():
+    """Check Ollama service health and model availability"""
+    return await ollama_server._check_ollama_health({})
 
 if __name__ == "__main__":
     mcp.run()

@@ -15,29 +15,47 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.mcp.base_server import BaseMCPServer, MCPToolError, create_tool_response
 
+# Load VAD configuration
+import json
+def load_vad_config():
+    config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'vad_config.json')
+    try:
+        with open(config_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Warning: Could not load VAD config from {config_path}: {e}")
+        return {}
+
 
 class SpeechToTextServer(BaseMCPServer):
     def __init__(self):
         super().__init__("speech_to_text", "Convert speech input to text commands")
         
-        # Audio configuration
-        self.sample_rate = 16000
-        self.chunk_duration = 1.0  # seconds
+        # Load configuration
+        self.vad_config = load_vad_config()
+        speech_config = self.vad_config.get('speech_service', {})
+        audio_config = speech_config.get('audio', {})
+        vad_config = speech_config.get('vad', {})
+        model_config = speech_config.get('model', {})
+        
+        # Audio configuration from config
+        self.sample_rate = audio_config.get('sample_rate', 16000)
+        self.chunk_duration = audio_config.get('chunk_duration_seconds', 1.0)
         self.chunk_size = int(self.sample_rate * self.chunk_duration)
         
-        # Whisper model
+        # Whisper model from config
         self.model = None
-        self.model_name = "base"
-        self.language = "en"
+        self.model_name = model_config.get('name', 'base')
+        self.language = model_config.get('language', 'en')
         
         # Audio processing
         self.audio_queue = queue.Queue()
         self.is_recording = False
         self.audio_thread = None
         
-        # Voice activity detection
-        self.vad_threshold = 0.01
-        self.silence_timeout = 2.0  # seconds
+        # Voice activity detection from config
+        self.vad_threshold = vad_config.get('threshold', 0.01)
+        self.silence_timeout = vad_config.get('silence_timeout_seconds', 2.0)
         
     async def get_tools(self) -> List[Tool]:
         return [
@@ -340,33 +358,103 @@ class SpeechToTextServer(BaseMCPServer):
         except Exception as e:
             return create_tool_response(False, error=f"Recording and transcription failed: {e}")
     
+    def _apply_vad_preprocessing(self, audio_file_path: str) -> str:
+        """Apply Voice Activity Detection preprocessing to remove silence"""
+        import soundfile as sf
+        import tempfile
+        
+        try:
+            # Read audio file
+            audio_data, sample_rate = sf.read(audio_file_path)
+            
+            # Convert to mono if stereo
+            if len(audio_data.shape) > 1:
+                audio_data = np.mean(audio_data, axis=1)
+            
+            # Resample to 16kHz if needed
+            if sample_rate != 16000:
+                from scipy import signal
+                audio_data = signal.resample(audio_data, int(len(audio_data) * 16000 / sample_rate))
+                sample_rate = 16000
+            
+            # Apply VAD - remove silent segments
+            processed_audio = self._remove_silence(audio_data, sample_rate)
+            
+            # Save processed audio to temporary file
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+                sf.write(temp_file.name, processed_audio, sample_rate)
+                return temp_file.name
+                
+        except Exception as e:
+            print(f"VAD preprocessing failed: {e}")
+            return audio_file_path  # Return original file if preprocessing fails
+    
+    def _remove_silence(self, audio_data: np.ndarray, sample_rate: int, 
+                       frame_duration: float = 0.02, silence_threshold: float = 0.01) -> np.ndarray:
+        """Remove silent segments from audio using simple energy-based VAD"""
+        
+        frame_size = int(sample_rate * frame_duration)
+        frames = []
+        
+        # Process audio in frames
+        for i in range(0, len(audio_data) - frame_size, frame_size):
+            frame = audio_data[i:i + frame_size]
+            
+            # Calculate frame energy (RMS)
+            energy = np.sqrt(np.mean(frame ** 2))
+            
+            # Keep frame if energy is above threshold
+            if energy > silence_threshold:
+                frames.append(frame)
+        
+        # Concatenate non-silent frames
+        if frames:
+            return np.concatenate(frames)
+        else:
+            # Return original if no speech detected
+            return audio_data
+
     async def _transcribe_file(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Transcribe audio file to text"""
+        """Transcribe audio file to text with VAD preprocessing"""
         import os
         
         file_path = arguments.get("file_path")
         language = arguments.get("language", self.language)
+        apply_vad = arguments.get("apply_vad", True)
         
         try:
             # Validate file exists
             if not os.path.exists(file_path):
                 return create_tool_response(False, error=f"Audio file not found: {file_path}")
             
+            # Apply VAD preprocessing if requested
+            processed_file = file_path
+            if apply_vad:
+                processed_file = self._apply_vad_preprocessing(file_path)
+            
             # Load model if needed
             if self.model is None:
                 self.model = WhisperModel(self.model_name)
             
-            # Transcribe the audio file
-            segments, info = self.model.transcribe(file_path, language=language)
+            # Transcribe the processed audio file
+            segments, info = self.model.transcribe(processed_file, language=language)
             
             # Combine all segments into text
             text = " ".join(segment.text for segment in segments)
+            
+            # Clean up temporary VAD file if created
+            if processed_file != file_path:
+                try:
+                    os.unlink(processed_file)
+                except:
+                    pass
             
             return create_tool_response(True, {
                 "text": text.strip(),
                 "language": info.language,
                 "confidence": info.language_probability,
-                "file_path": file_path
+                "file_path": file_path,
+                "vad_applied": apply_vad
             })
             
         except Exception as e:

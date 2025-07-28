@@ -1,0 +1,55 @@
+{
+  "client_vad": {
+    "description": "Client-side Voice Activity Detection settings for web browser",
+    "enabled": true,
+    "sensitivity": 0.002,
+    "silence_timeout_ms": 800,
+    "speech_start_delay_ms": 300,
+    "consecutive_silence_threshold": 3,
+    "check_interval_ms": 100,
+    "dynamic_timeout": {
+      "enabled": true,
+      "trigger_after_ms": 1500,
+      "reduction_factor": 0.6,
+      "minimum_timeout_ms": 600
+    },
+    "ui_settings": {
+      "timeout_range": {
+        "min_seconds": 1.5,
+        "max_seconds": 6.0,
+        "step": 0.5,
+        "default": 2.5
+      }
+    },
+    "debugging": {
+      "log_frequency": 0.1,
+      "verbose_logging": false
+    }
+  },
+  "server_vad": {
+    "description": "Server-side Voice Activity Detection for audio preprocessing",
+    "enabled": true,
+    "frame_duration_ms": 10,
+    "silence_threshold": 0.02,
+    "preprocessing": {
+      "target_sample_rate": 16000,
+      "force_mono": true,
+      "remove_silence": true
+    }
+  },
+  "speech_service": {
+    "description": "Speech-to-text service configuration",
+    "model": {
+      "name": "base",
+      "language": "en"
+    },
+    "audio": {
+      "sample_rate": 16000,
+      "chunk_duration_seconds": 0.5
+    },
+    "vad": {
+      "threshold": 0.02,
+      "silence_timeout_seconds": 1.0
+    }
+  }
+}
