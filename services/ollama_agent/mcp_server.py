@@ -7,6 +7,9 @@ from dataclasses import dataclass
 
 from fastmcp import FastMCP
 from mcp.types import Tool
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.mcp.base_server import MCPToolError, create_tool_response
 
 mcp = FastMCP("Ollama Agent Server")

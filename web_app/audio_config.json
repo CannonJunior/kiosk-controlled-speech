@@ -1,0 +1,51 @@
+{
+  "audio_processing": {
+    "sample_rate": 16000,
+    "channels": 1,
+    "bit_depth": 16,
+    "chunk_duration_ms": 1000,
+    "max_recording_duration": 30,
+    "silence_threshold": 0.01,
+    "echo_cancellation": true,
+    "noise_suppression": true,
+    "auto_gain_control": true
+  },
+  "streaming": {
+    "websocket_chunk_size": 8192,
+    "compression_enabled": true,
+    "compression_level": 6,
+    "buffer_size": 4096,
+    "send_interval_ms": 100
+  },
+  "processing": {
+    "parallel_processing": true,
+    "max_concurrent_transcriptions": 3,
+    "transcription_timeout": 15,
+    "cache_transcriptions": true,
+    "cache_duration": 300
+  },
+  "optimization": {
+    "use_web_worker": true,
+    "preload_models": false,
+    "batch_audio_chunks": true,
+    "adaptive_quality": true,
+    "low_latency_mode": true
+  },
+  "quality_settings": {
+    "high_quality": {
+      "sample_rate": 48000,
+      "bit_depth": 24,
+      "compression_level": 9
+    },
+    "balanced": {
+      "sample_rate": 22050,
+      "bit_depth": 16,
+      "compression_level": 6
+    },
+    "low_latency": {
+      "sample_rate": 16000,
+      "bit_depth": 16,
+      "compression_level": 3
+    }
+  }
+}

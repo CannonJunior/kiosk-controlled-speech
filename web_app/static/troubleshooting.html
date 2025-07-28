@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 Microphone Troubleshooting - Kiosk Speech</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .troubleshooting-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .issue-section {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+            background: #f8f9fa;
+            border-radius: 0 5px 5px 0;
+        }
+        .solution-steps {
+            list-style: none;
+            padding: 0;
+        }
+        .solution-steps li {
+            margin: 10px 0;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            border-left: 3px solid #2196f3;
+        }
+        .test-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        .test-button:hover {
+            background: #218838;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-pass { background: #28a745; }
+        .status-fail { background: #dc3545; }
+        .status-unknown { background: #6c757d; }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #667eea;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="troubleshooting-container">
+        <a href="/" class="back-link">
+            <i class="fas fa-arrow-left"></i> Back to Chat Interface
+        </a>
+        
+        <h1><i class="fas fa-tools"></i> Microphone Troubleshooting</h1>
+        
+        <div class="issue-section">
+            <h2><i class="fas fa-microphone-slash"></i> Quick Tests</h2>
+            <p>Let's run some quick tests to diagnose the issue:</p>
+            
+            <button class="test-button" onclick="testBrowserSupport()">
+                <i class="fas fa-globe"></i> Test Browser Support
+            </button>
+            <button class="test-button" onclick="testPermissions()">
+                <i class="fas fa-shield-alt"></i> Test Permissions
+            </button>
+            <button class="test-button" onclick="testMicrophone()">
+                <i class="fas fa-microphone"></i> Test Microphone
+            </button>
+            <button class="test-button" onclick="testConnection()">
+                <i class="fas fa-wifi"></i> Test Server Connection
+            </button>
+            
+            <div id="testResults" style="margin-top: 20px;"></div>
+        </div>
+
+        <div class="issue-section">
+            <h2><i class="fas fa-exclamation-triangle"></i> Common Issues & Solutions</h2>
+            
+            <h3>1. "Microphone access not supported" Error</h3>
+            <p><strong>Cause:</strong> Browser security restrictions when not using HTTPS or localhost.</p>
+            <ul class="solution-steps">
+                <li><strong>Option A:</strong> Access via localhost: <code>http://localhost:8000</code></li>
+                <li><strong>Option B:</strong> Use HTTPS version: Run <code>./start_web_app_https.sh</code> and access <code>https://localhost:8443</code></li>
+                <li><strong>Option C:</strong> Add WSL IP to browser's secure origins (advanced)</li>
+            </ul>
+
+            <h3>2. "Permission Denied" Error</h3>
+            <p><strong>Cause:</strong> Browser has blocked microphone access.</p>
+            <ul class="solution-steps">
+                <li>Click the microphone icon in your browser's address bar</li>
+                <li>Select "Allow" for microphone permissions</li>
+                <li>Refresh the page if needed</li>
+                <li><strong>Chrome:</strong> Go to chrome://settings/content/microphone and check settings</li>
+                <li><strong>Firefox:</strong> Go to about:preferences#privacy and check permissions</li>
+            </ul>
+
+            <h3>3. "No microphone found" Error</h3>
+            <p><strong>Cause:</strong> System doesn't detect any audio input devices.</p>
+            <ul class="solution-steps">
+                <li>Check that your microphone is properly connected</li>
+                <li>Verify microphone works in other applications</li>
+                <li>Check Windows audio settings and ensure microphone is not muted</li>
+                <li>Try restarting your browser</li>
+            </ul>
+
+            <h3>4. Recording works but no transcription</h3>
+            <p><strong>Cause:</strong> Connection to WSL speech processing service failed.</p>
+            <ul class="solution-steps">
+                <li>Check that the web server is running in WSL</li>
+                <li>Verify MCP services are running: Check startup logs</li>
+                <li>Test WebSocket connection using browser developer tools</li>
+                <li>Check Windows firewall is not blocking port 8000</li>
+            </ul>
+        </div>
+
+        <div class="issue-section">
+            <h2><i class="fas fa-cog"></i> Advanced Solutions</h2>
+            
+            <h3>Windows Firewall Configuration</h3>
+            <p>If accessing from Windows browser to WSL, configure firewall:</p>
+            <pre><code>New-NetFirewallRule -DisplayName "WSL Port 8000" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow</code></pre>
+            
+            <h3>Port Forwarding (Alternative)</h3>
+            <p>Set up port forwarding from Windows to WSL:</p>
+            <pre><code>netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=[WSL_IP]</code></pre>
+            
+            <h3>Browser Flags (Chrome)</h3>
+            <p>For development, you can enable insecure origins:</p>
+            <pre><code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code></pre>
+            <p>Add your WSL IP (e.g., http://172.18.95.41:8000) and restart Chrome.</p>
+        </div>
+
+        <div class="issue-section">
+            <h2><i class="fas fa-info-circle"></i> System Information</h2>
+            <div id="systemInfo">
+                <p>Loading system information...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let testResults = document.getElementById('testResults');
+        let systemInfo = document.getElementById('systemInfo');
+
+        function addResult(test, status, message) {
+            const statusClass = status === 'pass' ? 'status-pass' : status === 'fail' ? 'status-fail' : 'status-unknown';
+            testResults.innerHTML += `
+                <div style="margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                    <span class="status-indicator ${statusClass}"></span>
+                    <strong>${test}:</strong> ${message}
+                </div>
+            `;
+        }
+
+        function testBrowserSupport() {
+            testResults.innerHTML = '<h3>Running Tests...</h3>';
+            
+            // Test getUserMedia support
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                addResult('getUserMedia API', 'pass', 'Supported');
+            } else {
+                addResult('getUserMedia API', 'fail', 'Not supported - use HTTPS or localhost');
+            }
+
+            // Test WebSocket support
+            if (window.WebSocket) {
+                addResult('WebSocket API', 'pass', 'Supported');
+            } else {
+                addResult('WebSocket API', 'fail', 'Not supported - update browser');
+            }
+
+            // Test MediaRecorder support
+            if (window.MediaRecorder) {
+                addResult('MediaRecorder API', 'pass', 'Supported');
+            } else {
+                addResult('MediaRecorder API', 'fail', 'Not supported - update browser');
+            }
+
+            // Test HTTPS
+            if (location.protocol === 'https:') {
+                addResult('HTTPS', 'pass', 'Using secure connection');
+            } else if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+                addResult('HTTPS', 'pass', 'Using localhost (secure context)');
+            } else {
+                addResult('HTTPS', 'fail', 'Not using HTTPS - microphone may be blocked');
+            }
+        }
+
+        async function testPermissions() {
+            try {
+                if (navigator.permissions) {
+                    const result = await navigator.permissions.query({ name: 'microphone' });
+                    if (result.state === 'granted') {
+                        addResult('Microphone Permission', 'pass', 'Granted');
+                    } else if (result.state === 'prompt') {
+                        addResult('Microphone Permission', 'unknown', 'Will prompt when needed');
+                    } else {
+                        addResult('Microphone Permission', 'fail', 'Denied - check browser settings');
+                    }
+                } else {
+                    addResult('Permissions API', 'unknown', 'Not available - will test during recording');
+                }
+            } catch (error) {
+                addResult('Permission Test', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        async function testMicrophone() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                addResult('Microphone Access', 'pass', 'Successfully accessed microphone');
+                
+                // Get audio devices
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const microphones = devices.filter(device => device.kind === 'audioinput');
+                addResult('Audio Devices', 'pass', `Found ${microphones.length} microphone(s)`);
+                
+                // Stop the stream
+                stream.getTracks().forEach(track => track.stop());
+                
+            } catch (error) {
+                let message = error.message;
+                if (error.name === 'NotAllowedError') {
+                    message = 'Permission denied - allow microphone access';
+                } else if (error.name === 'NotFoundError') {
+                    message = 'No microphone found - check hardware';
+                } else if (error.name === 'NotSupportedError') {
+                    message = 'Not supported - use HTTPS or localhost';
+                }
+                addResult('Microphone Test', 'fail', message);
+            }
+        }
+
+        async function testConnection() {
+            try {
+                const response = await fetch('/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('Server Connection', 'pass', `Connected - ${data.active_connections} active connections`);
+                    addResult('MCP Services', 'pass', 'Speech and Ollama services running');
+                } else {
+                    addResult('Server Connection', 'fail', `HTTP ${response.status}`);
+                }
+            } catch (error) {
+                addResult('Server Connection', 'fail', `Cannot connect: ${error.message}`);
+            }
+
+            // Test WebSocket
+            try {
+                const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/test`);
+                ws.onopen = () => {
+                    addResult('WebSocket Connection', 'pass', 'Successfully connected');
+                    ws.close();
+                };
+                ws.onerror = () => {
+                    addResult('WebSocket Connection', 'fail', 'Cannot establish WebSocket connection');
+                };
+            } catch (error) {
+                addResult('WebSocket Test', 'fail', `Error: ${error.message}`);
+            }
+        }
+
+        // Load system information
+        function loadSystemInfo() {
+            const info = {
+                'User Agent': navigator.userAgent,
+                'Platform': navigator.platform,
+                'Language': navigator.language,
+                'Online': navigator.onLine ? 'Yes' : 'No',
+                'Protocol': location.protocol,
+                'Host': location.host,
+                'Browser Supports getUserMedia': !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+                'Browser Supports WebSocket': !!window.WebSocket,
+                'Browser Supports MediaRecorder': !!window.MediaRecorder
+            };
+
+            let html = '<table style="width: 100%; border-collapse: collapse;">';
+            for (const [key, value] of Object.entries(info)) {
+                html += `<tr><td style="padding: 5px; border: 1px solid #ddd; font-weight: bold;">${key}</td><td style="padding: 5px; border: 1px solid #ddd;">${value}</td></tr>`;
+            }
+            html += '</table>';
+            
+            systemInfo.innerHTML = html;
+        }
+
+        // Load system info on page load
+        loadSystemInfo();
+
+        // Auto-run basic tests
+        setTimeout(testBrowserSupport, 1000);
+    </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
   "servers": {
     "speech_to_text": {
       "command": "python",
-      "args": ["services/speech_to_text/mcp_server_fastmcp.py"],
+      "args": ["services/speech_to_text/mcp_server.py"],
       "env": {
         "PYTHONPATH": "."
       }

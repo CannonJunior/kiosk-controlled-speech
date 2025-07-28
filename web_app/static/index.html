@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎤 Kiosk Speech Chat</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1><i class="fas fa-microphone"></i> Kiosk Speech Chat</h1>
+                <div class="connection-status" id="connectionStatus">
+                    <i class="fas fa-circle"></i>
+                    <span>Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Chat Area -->
+        <main class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+                <div class="welcome-message">
+                    <div class="message-content">
+                        <i class="fas fa-robot"></i>
+                        <p>Welcome to Kiosk Speech Chat! 🎤</p>
+                        <p>You can type messages or use voice input by clicking the microphone button.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice Recording Indicator -->
+            <div class="recording-indicator" id="recordingIndicator" style="display: none;">
+                <div class="recording-animation">
+                    <i class="fas fa-microphone"></i>
+                    <span>Listening...</span>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Type your message or use voice input..." 
+                        autocomplete="off"
+                    >
+                    <button id="voiceButton" class="voice-button" title="Voice Input">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <button id="sendButton" class="send-button" title="Send Message">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel" style="display: none;">
+            <div class="settings-content">
+                <h3><i class="fas fa-cog"></i> Settings</h3>
+                <div class="setting-group">
+                    <label for="microphoneSelect">Microphone:</label>
+                    <select id="microphoneSelect">
+                        <option value="">Select microphone...</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="autoSendVoice">Auto-send voice messages:</label>
+                    <input type="checkbox" id="autoSendVoice" checked>
+                </div>
+                <div class="setting-group">
+                    <label for="voiceThreshold">Voice sensitivity:</label>
+                    <input type="range" id="voiceThreshold" min="0.1" max="1.0" step="0.1" value="0.5">
+                </div>
+                <div class="setting-group">
+                    <button id="testMicButton" class="test-button" style="background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin: 5px 0;">
+                        <i class="fas fa-microphone-alt"></i> Test Microphone Access
+                    </button>
+                </div>
+                <div class="setting-group">
+                    <a href="/troubleshooting" target="_blank" style="color: #667eea; text-decoration: none;">
+                        <i class="fas fa-tools"></i> Microphone Troubleshooting
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Button -->
+        <button class="settings-toggle" id="settingsToggle" title="Settings">
+            <i class="fas fa-cog"></i>
+        </button>
+
+        <!-- Audio Processing Indicator -->
+        <div class="processing-indicator" id="processingIndicator" style="display: none;">
+            <div class="spinner"></div>
+            <span>Processing audio...</span>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div class="error-modal" id="errorModal" style="display: none;">
+        <div class="error-content">
+            <div class="error-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <h3>Connection Error</h3>
+            <p id="errorMessage">Unable to connect to the server.</p>
+            <button id="errorClose" class="error-button">Close</button>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

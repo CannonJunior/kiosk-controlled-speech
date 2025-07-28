@@ -10,6 +10,9 @@ from faster_whisper import WhisperModel
 from pathlib import Path
 
 from mcp.types import Tool, TextContent
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 from src.mcp.base_server import BaseMCPServer, MCPToolError, create_tool_response
 
 
