@@ -594,6 +594,135 @@ async def get_vad_configuration():
             }
         }
 
+@app.get("/api/kiosk-data")
+async def get_kiosk_data():
+    """Get kiosk data configuration for the web client"""
+    try:
+        # Try to load kiosk_data.json from config directory
+        config_paths = [
+            Path("../config/kiosk_data.json"),
+            Path("config/kiosk_data.json"),
+            Path("./config/kiosk_data.json")
+        ]
+        
+        kiosk_data = None
+        for config_path in config_paths:
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    kiosk_data = json.load(f)
+                logger.info(f"Loaded kiosk data from {config_path}")
+                break
+        
+        if not kiosk_data:
+            raise FileNotFoundError("Could not find kiosk_data.json in any expected location")
+        
+        return {
+            "success": True,
+            "data": kiosk_data
+        }
+    except Exception as e:
+        logger.error(f"Failed to load kiosk data: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "data": None
+        }
+
+@app.post("/api/kiosk-data")
+async def save_kiosk_data(request: Request):
+    """Save coordinate updates to kiosk_data.json"""
+    try:
+        data = await request.json()
+        updates = data.get("updates", {})
+        
+        if not updates:
+            raise ValueError("No updates provided")
+        
+        # Find the kiosk_data.json file
+        config_paths = [
+            Path("../config/kiosk_data.json"),
+            Path("config/kiosk_data.json"),
+            Path("./config/kiosk_data.json")
+        ]
+        
+        config_path = None
+        for path in config_paths:
+            if path.exists():
+                config_path = path
+                break
+        
+        if not config_path:
+            raise FileNotFoundError("Could not find kiosk_data.json file")
+        
+        # Create backup before modifying
+        backup_path = config_path.with_suffix('.json.backup')
+        import shutil
+        shutil.copy2(config_path, backup_path)
+        logger.info(f"Created backup at {backup_path}")
+        
+        # Load current data
+        with open(config_path, 'r') as f:
+            kiosk_data = json.load(f)
+        
+        # Apply updates
+        updated_elements = []
+        for update_key, update_info in updates.items():
+            screen_name = update_info["screen"]
+            element_id = update_info["elementId"]
+            new_coords = update_info["newCoordinates"]
+            
+            # Validate screen exists
+            if screen_name not in kiosk_data.get("screens", {}):
+                raise ValueError(f"Screen '{screen_name}' not found in kiosk data")
+            
+            # Find and update element
+            screen_data = kiosk_data["screens"][screen_name]
+            element_found = False
+            
+            for element in screen_data.get("elements", []):
+                if element.get("id") == element_id:
+                    # Update coordinates
+                    if "coordinates" not in element:
+                        element["coordinates"] = {}
+                    
+                    old_coords = element["coordinates"].copy()
+                    element["coordinates"]["x"] = new_coords["x"]
+                    element["coordinates"]["y"] = new_coords["y"]
+                    
+                    updated_elements.append({
+                        "screen": screen_name,
+                        "element": element_id,
+                        "element_name": element.get("name", element_id),
+                        "old_coordinates": old_coords,
+                        "new_coordinates": new_coords
+                    })
+                    
+                    element_found = True
+                    break
+            
+            if not element_found:
+                raise ValueError(f"Element '{element_id}' not found in screen '{screen_name}'")
+        
+        # Write updated data back to file
+        with open(config_path, 'w') as f:
+            json.dump(kiosk_data, f, indent=2)
+        
+        logger.info(f"Successfully updated {len(updated_elements)} elements in {config_path}")
+        
+        return {
+            "success": True,
+            "message": f"Successfully updated {len(updated_elements)} element(s)",
+            "updated_elements": updated_elements,
+            "backup_path": str(backup_path)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to save kiosk data: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""

@@ -18,6 +18,32 @@
                 </span>
             </div>
             <div class="navbar-center">
+                <div class="drawing-mode-selector">
+                    <i class="fas fa-draw-polygon"></i>
+                    <label for="drawingMode">Draw:</label>
+                    <select id="drawingMode" class="drawing-dropdown">
+                        <option value="none">None</option>
+                        <option value="rectangle">Rectangle</option>
+                    </select>
+                </div>
+                <button id="saveButton" class="save-button" disabled>
+                    <i class="fas fa-save"></i>
+                    <span>Save</span>
+                </button>
+                <div class="button-group">
+                    <div class="group-dropdown group-dropdown-left">
+                        <i class="fas fa-desktop"></i>
+                        <select id="screen" class="group-select">
+                            <option value="">Screen</option>
+                        </select>
+                    </div>
+                    <div class="group-dropdown group-dropdown-right">
+                        <i class="fas fa-cube"></i>
+                        <select id="element" class="group-select">
+                            <option value="">Element</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="mouse-position-display">
                     <i class="fas fa-mouse-pointer"></i>
                     <span class="mouse-coords">
@@ -35,6 +61,9 @@
             </div>
         </div>
     </nav>
+
+    <!-- Drawing Rectangle Overlay -->
+    <div class="drawing-rectangle" id="drawingRectangle"></div>
 
     <div class="app-container">
         <!-- VAD Sidebar Panel -->

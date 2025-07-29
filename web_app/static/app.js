@@ -31,6 +31,13 @@ class KioskSpeechChat {
         this.screenshotCount = 0;
         this.currentScreenshot = null;
         
+        // Drawing functionality
+        this.drawingMode = 'none';
+        this.isDrawing = false;
+        this.rectangleStart = null;
+        this.drawnShapes = [];
+        this.drawingModeJustChanged = false;
+        
         // Settings (will be loaded from config)
         this.settings = {
             autoSendVoice: true,
@@ -53,6 +60,9 @@ class KioskSpeechChat {
         
         // Configuration loaded from server
         this.vadConfig = null;
+        this.kioskData = null;
+        this.pendingUpdates = {}; // Track coordinate updates before saving
+        this.lastRectangleCoords = null; // Store last drawn rectangle coordinates
         
         // Browser and URL detection
         this.detectBrowserAndURL();
@@ -62,6 +72,7 @@ class KioskSpeechChat {
         this.initializeEventListeners();
         this.initializeNavbar();
         this.loadVADConfig();
+        this.loadKioskData();
         this.loadSettings();
         this.connectWebSocket();
         this.initializeAudio();
@@ -135,6 +146,25 @@ class KioskSpeechChat {
         }
     }
     
+    async loadKioskData() {
+        try {
+            const response = await fetch('/api/kiosk-data');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.kioskData = data.data;
+                console.log('Kiosk data loaded from server:', this.kioskData);
+                
+                // Initialize the dropdowns
+                this.initializeScreenDropdown();
+            } else {
+                console.warn('Failed to load kiosk data from server:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading kiosk data:', error);
+        }
+    }
+    
     generateClientId() {
         return 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     }
@@ -147,6 +177,11 @@ class KioskSpeechChat {
             mouseX: document.getElementById('mouseX'),
             mouseY: document.getElementById('mouseY'),
             currentTime: document.getElementById('currentTime'),
+            drawingMode: document.getElementById('drawingMode'),
+            drawingRectangle: document.getElementById('drawingRectangle'),
+            saveButton: document.getElementById('saveButton'),
+            screenDropdown: document.getElementById('screen'),
+            elementDropdown: document.getElementById('element'),
             
             connectionStatus: document.getElementById('connectionStatus'),
             chatMessages: document.getElementById('chatMessages'),
@@ -229,6 +264,12 @@ class KioskSpeechChat {
         
         // Also track mouse position from MCP server periodically
         this.startMousePositionPolling();
+        
+        // Initialize drawing functionality
+        this.initializeDrawing();
+        
+        // Initialize keyboard shortcuts
+        this.initializeKeyboardShortcuts();
     }
     
     updateMousePosition(x, y) {
@@ -275,6 +316,455 @@ class KioskSpeechChat {
         setInterval(pollMousePosition, 2000);
     }
     
+    initializeDrawing() {
+        // Handle drawing mode changes
+        if (this.elements.drawingMode) {
+            this.elements.drawingMode.addEventListener('change', (e) => {
+                this.setDrawingMode(e.target.value);
+            });
+        }
+        
+        // Handle mouse events for drawing
+        document.addEventListener('click', (e) => {
+            if (this.drawingMode !== 'none') {
+                this.handleDrawingClick(e);
+            }
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (this.drawingMode === 'rectangle' && this.isDrawing) {
+                this.updateRectangleDrawing(e);
+            }
+        });
+    }
+    
+    setDrawingMode(mode) {
+        this.drawingMode = mode;
+        this.drawingModeJustChanged = true;
+        
+        if (mode === 'none') {
+            document.body.classList.remove('drawing-mode');
+            this.cancelCurrentDrawing();
+        } else {
+            document.body.classList.add('drawing-mode');
+        }
+        
+        // Add brief delay to prevent immediate click registration
+        setTimeout(() => {
+            this.drawingModeJustChanged = false;
+        }, 200); // 200ms delay
+        
+        console.log(`Drawing mode set to: ${mode}`);
+    }
+    
+    handleDrawingClick(e) {
+        // Prevent default behavior
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Ignore clicks if drawing mode was just changed
+        if (this.drawingModeJustChanged) {
+            console.log('Ignoring click - drawing mode just changed');
+            return;
+        }
+        
+        if (this.drawingMode === 'rectangle') {
+            if (!this.isDrawing) {
+                // Start drawing rectangle
+                this.startRectangleDrawing(e.clientX, e.clientY);
+            } else {
+                // Finish drawing rectangle
+                this.finishRectangleDrawing(e.clientX, e.clientY);
+            }
+        }
+    }
+    
+    startRectangleDrawing(x, y) {
+        this.isDrawing = true;
+        this.rectangleStart = { x, y };
+        
+        // Show and position the rectangle
+        if (this.elements.drawingRectangle) {
+            this.elements.drawingRectangle.classList.add('active');
+            this.elements.drawingRectangle.style.left = x + 'px';
+            this.elements.drawingRectangle.style.top = y + 'px';
+            this.elements.drawingRectangle.style.width = '0px';
+            this.elements.drawingRectangle.style.height = '0px';
+        }
+        
+        console.log(`Started rectangle at (${x}, ${y})`);
+    }
+    
+    updateRectangleDrawing(e) {
+        if (!this.isDrawing || !this.rectangleStart || !this.elements.drawingRectangle) {
+            return;
+        }
+        
+        const currentX = e.clientX;
+        const currentY = e.clientY;
+        const startX = this.rectangleStart.x;
+        const startY = this.rectangleStart.y;
+        
+        const width = Math.abs(currentX - startX);
+        const height = Math.abs(currentY - startY);
+        const left = Math.min(startX, currentX);
+        const top = Math.min(startY, currentY);
+        
+        this.elements.drawingRectangle.style.left = left + 'px';
+        this.elements.drawingRectangle.style.top = top + 'px';
+        this.elements.drawingRectangle.style.width = width + 'px';
+        this.elements.drawingRectangle.style.height = height + 'px';
+    }
+    
+    finishRectangleDrawing(x, y) {
+        if (!this.isDrawing || !this.rectangleStart) {
+            return;
+        }
+        
+        const startX = this.rectangleStart.x;
+        const startY = this.rectangleStart.y;
+        const endX = x;
+        const endY = y;
+        
+        // Calculate rectangle bounds
+        const left = Math.min(startX, endX);
+        const top = Math.min(startY, endY);
+        const right = Math.max(startX, endX);
+        const bottom = Math.max(startY, endY);
+        const width = right - left;
+        const height = bottom - top;
+        
+        // Calculate center point
+        const centerX = Math.round(left + width / 2);
+        const centerY = Math.round(top + height / 2);
+        
+        // Calculate median coordinates (median of the two drawing points)
+        const medianX = Math.round((startX + endX) / 2);
+        const medianY = Math.round((startY + endY) / 2);
+        
+        // Record the shape
+        const rectangle = {
+            type: 'rectangle',
+            coordinates: {
+                x1: startX,
+                y1: startY,
+                x2: endX,
+                y2: endY,
+                left: left,
+                top: top,
+                right: right,
+                bottom: bottom,
+                width: width,
+                height: height,
+                centerX: centerX,
+                centerY: centerY,
+                medianX: medianX,
+                medianY: medianY
+            },
+            timestamp: new Date().toISOString()
+        };
+        
+        this.drawnShapes.push(rectangle);
+        
+        // Store the last rectangle coordinates for potential updates
+        this.lastRectangleCoords = {
+            medianX: medianX,
+            medianY: medianY,
+            centerX: centerX,
+            centerY: centerY
+        };
+        
+        // Hide the drawing rectangle
+        if (this.elements.drawingRectangle) {
+            this.elements.drawingRectangle.classList.remove('active');
+        }
+        
+        // Reset drawing state
+        this.isDrawing = false;
+        this.rectangleStart = null;
+        
+        // Log the completed rectangle
+        console.log('Rectangle completed:', rectangle);
+        
+        // Create message with Update button
+        const messageId = 'rect_' + Date.now();
+        this.addMessage('system', 
+            `📐 Rectangle Drawn\n` +
+            `Rectangle: (${startX}, ${startY}) to (${endX}, ${endY})\n` +
+            `Bounds: ${width}×${height} at (${left}, ${top})\n` +
+            `Center: (${centerX}, ${centerY})\n` +
+            `Median: (${medianX}, ${medianY})\n` +
+            `Total shapes drawn: ${this.drawnShapes.length}\n` +
+            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinates('${messageId}')">📍 Update Selected Element</button>`
+        );
+    }
+    
+    cancelCurrentDrawing() {
+        if (this.isDrawing) {
+            this.isDrawing = false;
+            this.rectangleStart = null;
+            
+            if (this.elements.drawingRectangle) {
+                this.elements.drawingRectangle.classList.remove('active');
+            }
+        }
+    }
+    
+    getDrawnShapes() {
+        return this.drawnShapes;
+    }
+    
+    clearDrawnShapes() {
+        this.drawnShapes = [];
+        this.addMessage('system', '🗑️ Shapes Cleared\nAll drawn shapes have been cleared.');
+    }
+    
+    exportDrawnShapes() {
+        if (this.drawnShapes.length === 0) {
+            this.addMessage('system', '📄 Export Results\nNo shapes to export. Draw some rectangles first!');
+            return null;
+        }
+        
+        const exportData = {
+            timestamp: new Date().toISOString(),
+            totalShapes: this.drawnShapes.length,
+            shapes: this.drawnShapes
+        };
+        
+        // Display export summary
+        const summary = this.drawnShapes.map((shape, index) => {
+            const coords = shape.coordinates;
+            return `${index + 1}. Rectangle: (${coords.x1}, ${coords.y1}) to (${coords.x2}, ${coords.y2}) - ${coords.width}×${coords.height} - Center: (${coords.centerX}, ${coords.centerY}) - Median: (${coords.medianX}, ${coords.medianY})`;
+        }).join('\n');
+        
+        this.addMessage('system', 
+            `📄 Exported Shape Data\n` +
+            `Total shapes: ${this.drawnShapes.length}\n\n${summary}\n\nShape data available in console (window.kioskChat.getDrawnShapes())`
+        );
+        
+        console.log('Exported shape data:', exportData);
+        return exportData;
+    }
+    
+    initializeScreenDropdown() {
+        if (!this.kioskData || !this.kioskData.screens) {
+            console.warn('No kiosk data available for screen dropdown');
+            return;
+        }
+        
+        // Clear existing options except the first one
+        this.elements.screenDropdown.innerHTML = '<option value="">Screen</option>';
+        
+        // Add screen options
+        Object.keys(this.kioskData.screens).forEach(screenKey => {
+            const screen = this.kioskData.screens[screenKey];
+            const option = document.createElement('option');
+            option.value = screenKey;
+            option.textContent = screen.name || screenKey;
+            this.elements.screenDropdown.appendChild(option);
+        });
+        
+        console.log('Screen dropdown initialized with screens:', Object.keys(this.kioskData.screens));
+    }
+    
+    updateElementDropdown(selectedScreen) {
+        if (!this.kioskData || !this.kioskData.screens || !selectedScreen) {
+            // Reset to default
+            this.elements.elementDropdown.innerHTML = '<option value="">Element</option>';
+            return;
+        }
+        
+        const screenData = this.kioskData.screens[selectedScreen];
+        if (!screenData || !screenData.elements) {
+            this.elements.elementDropdown.innerHTML = '<option value="">Element</option>';
+            return;
+        }
+        
+        // Clear existing options
+        this.elements.elementDropdown.innerHTML = '<option value="">Element</option>';
+        
+        // Add element options
+        screenData.elements.forEach(element => {
+            const option = document.createElement('option');
+            option.value = element.id;
+            option.textContent = element.name || element.id;
+            this.elements.elementDropdown.appendChild(option);
+        });
+        
+        console.log(`Element dropdown updated for screen "${selectedScreen}" with elements:`, 
+                   screenData.elements.map(e => e.id));
+    }
+    
+    handleScreenChange() {
+        const selectedScreen = this.elements.screenDropdown.value;
+        console.log('Screen changed to:', selectedScreen);
+        
+        // Update element dropdown based on selected screen
+        this.updateElementDropdown(selectedScreen);
+        
+        if (selectedScreen) {
+            const screenData = this.kioskData.screens[selectedScreen];
+            this.addMessage('system', 
+                `🖥️ Screen Selected: ${screenData.name || selectedScreen}\n` +
+                `Description: ${screenData.description || 'No description'}\n` +
+                `Elements: ${screenData.elements ? screenData.elements.length : 0}`
+            );
+        }
+    }
+    
+    handleElementChange() {
+        const selectedScreen = this.elements.screenDropdown.value;
+        const selectedElement = this.elements.elementDropdown.value;
+        
+        console.log('Element changed to:', selectedElement, 'for screen:', selectedScreen);
+        
+        if (selectedElement && selectedScreen) {
+            const screenData = this.kioskData.screens[selectedScreen];
+            const elementData = screenData.elements.find(e => e.id === selectedElement);
+            
+            if (elementData) {
+                this.addMessage('system', 
+                    `🧩 Element Selected: ${elementData.name || selectedElement}\n` +
+                    `Screen: ${screenData.name || selectedScreen}\n` +
+                    `Coordinates: (${elementData.coordinates?.x || 'N/A'}, ${elementData.coordinates?.y || 'N/A'})\n` +
+                    `Description: ${elementData.description || 'No description'}`
+                );
+            }
+        }
+    }
+    
+    handleUpdateCoordinates(messageId) {
+        const selectedScreen = this.elements.screenDropdown.value;
+        const selectedElement = this.elements.elementDropdown.value;
+        
+        if (!selectedScreen || !selectedElement) {
+            this.addMessage('system', '⚠️ Update Failed\nPlease select both a Screen and Element before updating coordinates.');
+            return;
+        }
+        
+        if (!this.lastRectangleCoords) {
+            this.addMessage('system', '⚠️ Update Failed\nNo rectangle coordinates available. Draw a rectangle first.');
+            return;
+        }
+        
+        // Store the pending update
+        const updateKey = `${selectedScreen}.${selectedElement}`;
+        this.pendingUpdates[updateKey] = {
+            screen: selectedScreen,
+            elementId: selectedElement,
+            newCoordinates: {
+                x: this.lastRectangleCoords.medianX,
+                y: this.lastRectangleCoords.medianY
+            },
+            timestamp: new Date().toISOString()
+        };
+        
+        // Enable the save button
+        this.elements.saveButton.disabled = false;
+        
+        // Show confirmation message
+        const screenData = this.kioskData.screens[selectedScreen];
+        const elementData = screenData.elements.find(e => e.id === selectedElement);
+        const elementName = elementData?.name || selectedElement;
+        
+        this.addMessage('system', 
+            `✅ Coordinate Update Queued\n` +
+            `Element: ${elementName}\n` +
+            `Screen: ${screenData.name || selectedScreen}\n` +
+            `New Coordinates: (${this.lastRectangleCoords.medianX}, ${this.lastRectangleCoords.medianY})\n` +
+            `Click Save to apply changes to config file.`
+        );
+        
+        console.log('Pending update queued:', updateKey, this.pendingUpdates[updateKey]);
+    }
+    
+    async handleSaveCoordinates() {
+        if (Object.keys(this.pendingUpdates).length === 0) {
+            this.addMessage('system', '⚠️ No Changes to Save\nNo coordinate updates are pending.');
+            return;
+        }
+        
+        try {
+            // Disable save button during save operation
+            this.elements.saveButton.disabled = true;
+            this.addMessage('system', '💾 Saving Changes\nUpdating kiosk_data.json...');
+            
+            // Send updates to backend
+            const response = await fetch('/api/kiosk-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    updates: this.pendingUpdates
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Clear pending updates on successful save
+                const updateCount = Object.keys(this.pendingUpdates).length;
+                this.pendingUpdates = {};
+                
+                // Reload kiosk data to reflect changes
+                await this.loadKioskData();
+                
+                this.addMessage('system', 
+                    `✅ Changes Saved Successfully\n` +
+                    `Updated ${updateCount} element coordinate(s) in kiosk_data.json\n` +
+                    `Configuration reloaded.`
+                );
+                
+                console.log('Coordinate updates saved successfully');
+            } else {
+                // Re-enable save button on failure
+                this.elements.saveButton.disabled = false;
+                
+                this.addMessage('system', 
+                    `❌ Save Failed\n` +
+                    `Error: ${result.error || 'Unknown error occurred'}\n` +
+                    `Changes not saved. Please try again.`
+                );
+                
+                console.error('Save failed:', result.error);
+            }
+        } catch (error) {
+            // Re-enable save button on error
+            this.elements.saveButton.disabled = false;
+            
+            this.addMessage('system', 
+                `❌ Save Error\n` +
+                `Network or server error: ${error.message}\n` +
+                `Changes not saved. Please check connection and try again.`
+            );
+            
+            console.error('Save error:', error);
+        }
+    }
+    
+    initializeKeyboardShortcuts() {
+        // Handle keyboard shortcuts for drawing functionality
+        document.addEventListener('keydown', (e) => {
+            // ESC key - exit drawing mode
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                if (this.drawingMode !== 'none') {
+                    // Cancel any current drawing
+                    this.cancelCurrentDrawing();
+                    
+                    // Set drawing mode back to none
+                    this.elements.drawingMode.value = 'none';
+                    this.setDrawingMode('none');
+                    
+                    // Show feedback message
+                    this.addMessage('system', '⌨️ Drawing Mode Exited\nESC pressed - drawing mode set back to None');
+                    
+                    console.log('ESC pressed - exiting drawing mode');
+                }
+            }
+        });
+    }
+    
     initializeEventListeners() {
         // Send message on button click
         this.elements.sendButton.addEventListener('click', () => {
@@ -296,6 +786,21 @@ class KioskSpeechChat {
         // Mouse Control Test button
         this.elements.mouseControlTestButton.addEventListener('click', () => {
             this.runMouseControlTest();
+        });
+        
+        // Screen dropdown
+        this.elements.screenDropdown.addEventListener('change', () => {
+            this.handleScreenChange();
+        });
+        
+        // Element dropdown
+        this.elements.elementDropdown.addEventListener('change', () => {
+            this.handleElementChange();
+        });
+        
+        // Save button
+        this.elements.saveButton.addEventListener('click', () => {
+            this.handleSaveCoordinates();
         });
         
         // Settings toggle
@@ -558,7 +1063,7 @@ class KioskSpeechChat {
                     
                     // If action was executed, also show action feedback
                     if (actionResult && actionResult.action_executed) {
-                        this.addMessage('system', '🖱️ Action Executed', actionResult.message || 'Action completed successfully');
+                        this.addMessage('system', `🖱️ Action Executed\n${actionResult.message || 'Action completed successfully'}`);
                     }
                     
                     // Show confidence if available
@@ -1116,7 +1621,10 @@ class KioskSpeechChat {
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.textContent = text;
+        
+        // Handle line breaks by converting \n to <br> tags
+        const formattedText = text.replace(/\n/g, '<br>');
+        contentDiv.innerHTML = formattedText;
         
         messageDiv.appendChild(contentDiv);
         this.elements.chatMessages.appendChild(messageDiv);
@@ -1298,7 +1806,7 @@ class KioskSpeechChat {
             console.log('Running mouse control test...');
             
             // Add a chat message about the test starting
-            this.addMessage("system", "🖱️ Mouse Control Test started...", "Running basic mouse movement and click tests");
+            this.addMessage("system", "🖱️ Mouse Control Test started...\nRunning basic mouse movement and click tests");
             
             // Test 1: Get current mouse position
             let testResults = [];
@@ -1375,12 +1883,12 @@ class KioskSpeechChat {
             
             const resultMessage = `Mouse Control Test Complete!\n\n${testResults.join('\n')}\n\nResults: ${successCount}/${totalTests} tests passed`;
             
-            this.addMessage("system", "🖱️ Mouse Control Test Results", resultMessage);
+            this.addMessage("system", `🖱️ Mouse Control Test Results\n${resultMessage}`);
             console.log('Mouse control test completed:', testResults);
             
         } catch (error) {
             console.error('Mouse control test error:', error);
-            this.addMessage("system", "❌ Mouse Control Test Error", `Test failed: ${error.message}`);
+            this.addMessage("system", `❌ Mouse Control Test Error\nTest failed: ${error.message}`);
         } finally {
             // Re-enable button
             this.elements.mouseControlTestButton.disabled = false;

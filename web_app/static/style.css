@@ -51,10 +51,194 @@ body {
 
 .navbar-center {
     justify-content: center;
+    gap: 20px;
 }
 
 .navbar-right {
     justify-content: flex-end;
+}
+
+.drawing-mode-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(40, 167, 69, 0.1);
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(40, 167, 69, 0.2);
+}
+
+.drawing-mode-selector i {
+    color: #28a745;
+    font-size: 0.9rem;
+}
+
+.drawing-mode-selector label {
+    font-size: 0.9rem;
+    color: #555;
+    font-weight: 500;
+    margin: 0;
+}
+
+.drawing-dropdown {
+    background: white;
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    color: #555;
+    cursor: pointer;
+    outline: none;
+}
+
+.drawing-dropdown:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.2);
+}
+
+/* Button Group */
+.button-group {
+    display: flex;
+    align-items: center;
+    height: fit-content;
+}
+
+.group-dropdown {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    background: rgba(102, 126, 234, 0.1);
+    color: #555;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    margin: 0;
+    float: left;
+    vertical-align: top;
+    line-height: 1;
+}
+
+.group-dropdown:hover {
+    background: rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.5);
+    color: #333;
+}
+
+.group-dropdown i {
+    color: #667eea;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.group-select {
+    background: transparent;
+    border: none;
+    color: #555;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 2px 4px;
+    min-width: 60px;
+}
+
+.group-select:focus {
+    color: #333;
+}
+
+.group-dropdown-left {
+    border-radius: 15px 0 0 15px;
+    border-right: 0;
+    margin-right: 0;
+    background: rgba(102, 126, 234, 0.15); /* Slightly darker */
+}
+
+.group-dropdown-left:hover {
+    background: rgba(102, 126, 234, 0.25); /* Darker on hover */
+}
+
+.group-dropdown-right {
+    border-radius: 0 15px 15px 0;
+    border-left: 0;
+    margin-left: 0;
+}
+
+/* Save Button */
+.save-button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid rgba(40, 167, 69, 0.3);
+    border-radius: 15px;
+    background: rgba(40, 167, 69, 0.1);
+    color: #555;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.save-button:enabled:hover {
+    background: rgba(40, 167, 69, 0.2);
+    border-color: rgba(40, 167, 69, 0.5);
+    color: #333;
+}
+
+.save-button:enabled:active {
+    background: rgba(40, 167, 69, 0.3);
+    transform: scale(0.98);
+}
+
+.save-button:disabled {
+    background: rgba(128, 128, 128, 0.1);
+    border-color: rgba(128, 128, 128, 0.3);
+    color: #999;
+    cursor: not-allowed;
+}
+
+.save-button i {
+    color: #28a745;
+    font-size: 0.9rem;
+}
+
+.save-button:disabled i {
+    color: #999;
+}
+
+/* Update Button */
+.update-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    margin-top: 8px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 12px;
+    background: rgba(102, 126, 234, 0.1);
+    color: #555;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.update-button:hover {
+    background: rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.5);
+    color: #333;
+}
+
+.update-button:active {
+    background: rgba(102, 126, 234, 0.3);
+    transform: scale(0.98);
 }
 
 .navbar-title {
@@ -116,6 +300,29 @@ body {
     color: #667eea;
 }
 
+/* Drawing Rectangle Overlay */
+.drawing-rectangle {
+    position: fixed;
+    border: 2px dashed #28a745;
+    background: rgba(40, 167, 69, 0.1);
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+}
+
+.drawing-rectangle.active {
+    display: block;
+}
+
+/* Drawing mode cursor */
+body.drawing-mode {
+    cursor: crosshair !important;
+}
+
+body.drawing-mode * {
+    cursor: crosshair !important;
+}
+
 .app-container {
     display: flex;
     height: calc(100vh - 50px);
@@ -141,8 +348,8 @@ body {
 
 @media (min-width: 768px) {
     .app-container {
-        margin: 20px auto;
-        height: calc(100vh - 40px);
+        margin: 70px auto 20px;
+        height: calc(100vh - 90px);
         border-radius: 15px;
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
     }
