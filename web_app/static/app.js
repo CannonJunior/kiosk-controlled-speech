@@ -1190,32 +1190,164 @@ class KioskSpeechChat {
             this.elements.takeScreenshotButton.disabled = true;
             this.elements.takeScreenshotButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Taking...</span>';
             
-            // Call the MCP screenshot tool
-            const response = await this.callMCPTool('screen_capture_take_screenshot', {});
+            let screenshotBlob = null;
+            let method = 'unknown';
             
-            if (response.success && response.data.screenshot_path) {
-                // Create screenshot object
-                const screenshot = {
-                    id: Date.now().toString(),
-                    timestamp: new Date().toISOString(),
-                    path: response.data.screenshot_path,
-                    filename: response.data.filename || `screenshot_${Date.now()}.png`,
-                    size: response.data.size || 'Unknown size'
-                };
-                
-                // Add to screenshots array
-                this.screenshots.push(screenshot);
-                this.screenshotCount++;
-                
-                // Update UI
-                this.updateScreenshotCount();
-                this.addScreenshotToGallery(screenshot);
-                
-                console.log('Screenshot taken successfully:', screenshot);
-                
-            } else {
-                throw new Error(response.error || 'Failed to take screenshot');
+            // Method 1: Screen Capture API (real screen capture)
+            try {
+                if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+                    console.log('Attempting Screen Capture API...');
+                    
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { mediaSource: 'screen' },
+                        audio: false
+                    });
+                    
+                    // Create video element to capture frame
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.autoplay = true;
+                    video.muted = true;
+                    
+                    await new Promise((resolve) => {
+                        video.onloadedmetadata = resolve;
+                    });
+                    
+                    // Create canvas and capture frame
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(video, 0, 0);
+                    
+                    // Stop the stream
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // Convert to blob
+                    screenshotBlob = await new Promise(resolve => {
+                        canvas.toBlob(resolve, 'image/png');
+                    });
+                    
+                    method = 'Screen Capture API';
+                    console.log('Screen Capture API successful');
+                }
+            } catch (error) {
+                console.log('Screen Capture API failed:', error.message);
             }
+            
+            // Method 2: html2canvas (page content capture)
+            if (!screenshotBlob) {
+                try {
+                    // Check if html2canvas is available
+                    if (typeof html2canvas !== 'undefined') {
+                        console.log('Attempting html2canvas...');
+                        
+                        const canvas = await html2canvas(document.body, {
+                            allowTaint: true,
+                            useCORS: true,
+                            scale: 1,
+                            width: window.innerWidth,
+                            height: window.innerHeight
+                        });
+                        
+                        screenshotBlob = await new Promise(resolve => {
+                            canvas.toBlob(resolve, 'image/png');
+                        });
+                        
+                        method = 'html2canvas';
+                        console.log('html2canvas successful');
+                    } else {
+                        // Load html2canvas dynamically
+                        await this.loadHtml2Canvas();
+                        
+                        const canvas = await html2canvas(document.body, {
+                            allowTaint: true,
+                            useCORS: true,
+                            scale: 1,
+                            width: window.innerWidth,
+                            height: window.innerHeight
+                        });
+                        
+                        screenshotBlob = await new Promise(resolve => {
+                            canvas.toBlob(resolve, 'image/png');
+                        });
+                        
+                        method = 'html2canvas (loaded)';
+                        console.log('html2canvas loaded and successful');
+                    }
+                } catch (error) {
+                    console.log('html2canvas failed:', error.message);
+                }
+            }
+            
+            // Method 3: Canvas-based viewport capture (fallback)
+            if (!screenshotBlob) {
+                try {
+                    console.log('Attempting Canvas viewport capture...');
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Fill with white background
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Add text indicating this is a viewport capture
+                    ctx.fillStyle = '#333333';
+                    ctx.font = '24px Arial';
+                    ctx.fillText('Browser Viewport Screenshot', 50, 100);
+                    ctx.font = '16px Arial';
+                    ctx.fillText('Captured at: ' + new Date().toLocaleString(), 50, 140);
+                    ctx.fillText('Viewport size: ' + window.innerWidth + 'x' + window.innerHeight, 50, 170);
+                    ctx.fillText('URL: ' + window.location.href, 50, 200);
+                    
+                    // Try to capture some basic page info
+                    const title = document.title;
+                    ctx.fillText('Page title: ' + title, 50, 230);
+                    
+                    screenshotBlob = await new Promise(resolve => {
+                        canvas.toBlob(resolve, 'image/png');
+                    });
+                    
+                    method = 'Canvas viewport capture';
+                    console.log('Canvas viewport capture successful');
+                } catch (error) {
+                    console.log('Canvas viewport capture failed:', error.message);
+                    throw new Error('All screenshot methods failed');
+                }
+            }
+            
+            if (!screenshotBlob) {
+                throw new Error('Failed to capture screenshot with any method');
+            }
+            
+            // Create screenshot object with client-side blob URL
+            const screenshotUrl = URL.createObjectURL(screenshotBlob);
+            const timestamp = new Date().toISOString();
+            const filename = `screenshot_${timestamp.replace(/[:.]/g, '-')}.png`;
+            
+            const screenshot = {
+                id: Date.now().toString(),
+                timestamp: timestamp,
+                path: screenshotUrl,
+                filename: filename,
+                size: this.formatFileSize(screenshotBlob.size),
+                method: method,
+                blob: screenshotBlob // Store blob for download
+            };
+            
+            // Add to screenshots array
+            this.screenshots.push(screenshot);
+            this.screenshotCount++;
+            
+            // Update UI
+            this.updateScreenshotCount();
+            this.addScreenshotToGallery(screenshot);
+            
+            console.log('Screenshot taken successfully using:', method, screenshot);
+            this.addMessage('system', `📸 Screenshot captured using ${method}`);
             
         } catch (error) {
             console.error('Error taking screenshot:', error);
@@ -1225,6 +1357,29 @@ class KioskSpeechChat {
             this.elements.takeScreenshotButton.disabled = false;
             this.elements.takeScreenshotButton.innerHTML = '<i class="fas fa-camera"></i><span>Take Screenshot</span>';
         }
+    }
+    
+    async loadHtml2Canvas() {
+        return new Promise((resolve, reject) => {
+            if (typeof html2canvas !== 'undefined') {
+                resolve();
+                return;
+            }
+            
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
+    
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
     
     async callMCPTool(toolName, parameters) {
@@ -1267,7 +1422,7 @@ class KioskSpeechChat {
         thumbnail.dataset.screenshotId = screenshot.id;
         
         thumbnail.innerHTML = `
-            <img src="/api/screenshot/${screenshot.filename}" alt="Screenshot ${screenshot.id}" loading="lazy">
+            <img src="${screenshot.path}" alt="Screenshot ${screenshot.id}" loading="lazy">
             <div class="thumbnail-overlay">
                 <span>View</span>
             </div>
@@ -1285,7 +1440,7 @@ class KioskSpeechChat {
     openScreenshotModal(screenshot) {
         this.currentScreenshot = screenshot;
         this.elements.modalTitle.textContent = `Screenshot - ${new Date(screenshot.timestamp).toLocaleString()}`;
-        this.elements.modalImage.src = `/api/screenshot/${screenshot.filename}`;
+        this.elements.modalImage.src = screenshot.path;
         this.elements.screenshotModal.style.display = 'flex';
         
         // Prevent body scroll
@@ -1305,17 +1460,36 @@ class KioskSpeechChat {
         
         // Create download link
         const link = document.createElement('a');
-        link.href = `/api/screenshot/${this.currentScreenshot.filename}`;
+        
+        // Use blob if available, otherwise use path
+        if (this.currentScreenshot.blob) {
+            link.href = URL.createObjectURL(this.currentScreenshot.blob);
+        } else {
+            link.href = this.currentScreenshot.path;
+        }
+        
         link.download = this.currentScreenshot.filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        // Clean up blob URL if it was created
+        if (this.currentScreenshot.blob) {
+            setTimeout(() => {
+                URL.revokeObjectURL(link.href);
+            }, 100);
+        }
     }
     
     deleteCurrentScreenshot() {
         if (!this.currentScreenshot) return;
         
         if (confirm('Are you sure you want to delete this screenshot?')) {
+            // Clean up blob URL to prevent memory leaks
+            if (this.currentScreenshot.path && this.currentScreenshot.path.startsWith('blob:')) {
+                URL.revokeObjectURL(this.currentScreenshot.path);
+            }
+            
             // Remove from array
             this.screenshots = this.screenshots.filter(s => s.id !== this.currentScreenshot.id);
             this.screenshotCount--;

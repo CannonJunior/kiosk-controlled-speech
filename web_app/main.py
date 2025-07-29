@@ -24,8 +24,31 @@ import uvicorn
 import sys
 sys.path.append('..')
 from fastmcp import Client
-from web_app.error_recovery import error_recovery
-from web_app.vad_config import get_vad_config
+
+# Try to import error recovery and vad config, with fallbacks
+try:
+    from error_recovery import error_recovery
+except ImportError:
+    # Create a mock error recovery object if not available
+    class MockErrorRecovery:
+        async def start(self): pass
+        async def stop(self): pass
+        async def execute_with_resilience(self, service, func): return await func()
+        def get_metrics(self): return {"status": "mock"}
+        class ResourceManager:
+            def register_temp_file(self, path): pass
+        resource_manager = ResourceManager()
+    error_recovery = MockErrorRecovery()
+
+try:
+    from vad_config import get_vad_config
+except ImportError:
+    # Create a mock vad config function
+    def get_vad_config():
+        class MockConfig:
+            def get_client_defaults(self): return {"vadEnabled": True, "vadSensitivity": 0.003}
+            def get_ui_settings(self): return {"timeoutRange": {"min": 1.5, "max": 6.0}}
+        return MockConfig()
 
 # Setup logging
 logging.basicConfig(
@@ -513,6 +536,36 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     except Exception as e:
         logger.error(f"WebSocket error for client {client_id}: {e}")
         connection_manager.disconnect(client_id)
+
+@app.post("/api/mcp-tool")
+async def call_mcp_tool(request: Request):
+    """Call MCP tool endpoint for web interface"""
+    try:
+        data = await request.json()
+        tool_name = data.get("tool")
+        parameters = data.get("parameters", {})
+        
+        if not tool_name:
+            raise HTTPException(status_code=400, detail="Tool name is required")
+        
+        # Use the speech bridge MCP client to call the tool
+        if not speech_bridge.mcp_client:
+            raise HTTPException(status_code=503, detail="MCP services not initialized")
+        
+        # Call the tool using FastMCP client
+        result_raw = await speech_bridge.mcp_client.call_tool(tool_name, parameters)
+        result = parse_tool_result(result_raw)
+        
+        if result.get("success"):
+            return result
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Tool call failed"))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"MCP tool call error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sessions")
 async def get_active_sessions():

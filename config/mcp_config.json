@@ -1,35 +1,35 @@
 {
   "servers": {
     "speech_to_text": {
-      "command": "python",
+      "command": "python3",
       "args": ["services/speech_to_text/mcp_server.py"],
       "env": {
         "PYTHONPATH": "."
       }
     },
     "screen_capture": {
-      "command": "python", 
+      "command": "python3", 
       "args": ["services/screen_capture/mcp_server.py"],
       "env": {
         "PYTHONPATH": "."
       }
     },
     "mouse_control": {
-      "command": "python",
+      "command": "python3",
       "args": ["services/mouse_control/mcp_server.py"],
       "env": {
         "PYTHONPATH": "."
       }
     },
     "screen_detector": {
-      "command": "python",
+      "command": "python3",
       "args": ["services/screen_detector/mcp_server.py"],
       "env": {
         "PYTHONPATH": "."
       }
     },
     "ollama_agent": {
-      "command": "python",
+      "command": "python3",
       "args": ["services/ollama_agent/mcp_server.py"],
       "env": {
         "PYTHONPATH": "."
