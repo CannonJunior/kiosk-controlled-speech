@@ -72,8 +72,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static file serving for web interface
-app.mount("/static", StaticFiles(directory="web_app/static"), name="static")
+# Static file serving for web interface - handle both run contexts
+static_dir = "static" if Path("static").exists() else "web_app/static"
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 class WebSocketConnectionManager:
     """Manages WebSocket connections for real-time communication"""
@@ -351,7 +352,8 @@ async def shutdown_event():
 @app.get("/", response_class=HTMLResponse)
 async def get_chat_interface():
     """Serve the main chat interface"""
-    html_file = Path("web_app/static/index.html")
+    # Handle both run contexts  
+    html_file = Path("static/index.html") if Path("static").exists() else Path("web_app/static/index.html")
     if html_file.exists():
         return FileResponse(html_file)
     else:

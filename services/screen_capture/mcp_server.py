@@ -6,6 +6,7 @@ import os
 import subprocess
 import tempfile
 import uuid
+import shutil
 from typing import Any, Dict
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,12 @@ import sys
 sys.path.append('/home/kiosk_user/.local/lib/python3.12/site-packages')
 
 from fastmcp import FastMCP
+
+# Import PIL at module level
+try:
+    from PIL import Image, ImageDraw, ImageFont, ImageGrab
+except ImportError:
+    Image = ImageDraw = ImageFont = ImageGrab = None
 
 mcp = FastMCP("Screen Capture Server")
 
@@ -80,7 +87,6 @@ except Exception as e:
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
                     
                     if result.returncode == 0 and filepath.exists():
-                        from PIL import Image
                         screenshot = Image.open(str(filepath))
                         method_used = f"Windows Python ({cmd.split()[0]})"
                         os.unlink(py_file_path)  # Clean up script
@@ -99,51 +105,77 @@ except Exception as e:
         except Exception as e:
             error_messages.append(f"Windows Python method failed: {e}")
             
-        # Method 2: Try PowerShell with corrected syntax
+        # Method 2: PowerShell Script (Working Method)
         if screenshot is None:
             try:
-                # Create a working directory in Windows temp
-                import tempfile
-                import uuid
+                # Create Windows temp directory first
+                mkdir_cmd = 'powershell.exe -Command "New-Item -ItemType Directory -Force -Path C:\\temp"'
+                subprocess.run(mkdir_cmd, shell=True, capture_output=True, text=True, timeout=5)
                 
-                # Use a simple PowerShell command
-                win_temp_path = f"C:\\\\temp\\\\screenshot_{uuid.uuid4().hex}.png"
+                # Generate unique filename
+                temp_filename = f"screenshot_{uuid.uuid4().hex}.png"
+                win_temp_path = f"C:\\temp\\{temp_filename}"
                 
-                ps_cmd = f'''powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height); $graphics = [System.Drawing.Graphics]::FromImage($bmp); $graphics.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size); $bmp.Save('{win_temp_path}'); $graphics.Dispose(); $bmp.Dispose()"'''
+                # Create PowerShell script content
+                ps_script_content = f"""
+Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+$bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+$graphics = [System.Drawing.Graphics]::FromImage($bmp)
+$graphics.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
+$bmp.Save('{win_temp_path}')
+$graphics.Dispose()
+$bmp.Dispose()
+Write-Host "Screenshot saved to {win_temp_path}"
+"""
                 
+                # Save PowerShell script to temp file
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.ps1', delete=False) as ps_file:
+                    ps_file.write(ps_script_content)
+                    ps_script_path = ps_file.name
+                
+                # Execute PowerShell script
+                ps_cmd = f'powershell.exe -ExecutionPolicy Bypass -File "{ps_script_path}"'
                 result = subprocess.run(ps_cmd, shell=True, capture_output=True, text=True, timeout=15)
                 
-                # Convert back to WSL path to check if file exists
-                wsl_temp_path = win_temp_path.replace('C:\\\\', '/mnt/c/').replace('\\\\', '/')
+                # Convert to WSL path and check if file exists
+                wsl_temp_path = win_temp_path.replace('C:\\', '/mnt/c/').replace('\\', '/')
                 
                 if result.returncode == 0 and Path(wsl_temp_path).exists():
-                    from PIL import Image
-                    screenshot = Image.open(wsl_temp_path)
-                    screenshot_copy = screenshot.copy()
-                    screenshot.close()
+                    # Copy to final location
+                    shutil.copy2(wsl_temp_path, str(filepath))
                     
-                    # Clean up temp file
+                    # Clean up temp files
                     try:
                         os.unlink(wsl_temp_path)
+                        os.unlink(ps_script_path)
                     except:
                         pass
-                        
-                    screenshot = screenshot_copy
-                    method_used = "PowerShell Direct"
+                    
+                    # Load and verify the screenshot  
+                    screenshot = Image.open(str(filepath))
+                    method_used = "PowerShell Script"
+                    
                 else:
-                    error_messages.append(f"PowerShell Direct method failed: {result.stderr}")
+                    error_messages.append(f"PowerShell Script method failed: return code {result.returncode}")
+                    if result.stderr:
+                        error_messages.append(f"PowerShell stderr: {result.stderr}")
+                    
+                    # Clean up script file
+                    try:
+                        os.unlink(ps_script_path)
+                    except:
+                        pass
                     
             except Exception as e:
-                error_messages.append(f"PowerShell Direct method failed: {e}")
+                error_messages.append(f"PowerShell Script method failed: {e}")
             
         # Method 3: Try wsl-screenshot if available
         if screenshot is None:
             try:
-                import subprocess
                 result = subprocess.run(['wsl-screenshot', '--output', str(filepath)], 
                                       capture_output=True, text=True, timeout=10)
                 if result.returncode == 0 and filepath.exists():
-                    from PIL import Image
                     screenshot = Image.open(str(filepath))
                     method_used = "wsl-screenshot"
                 else:
@@ -169,8 +201,7 @@ except Exception as e:
         # Method 4: Try PIL with ImageGrab (Windows/X11)
         if screenshot is None:
             try:
-                from PIL import ImageGrab
-                screenshot = ImageGrab.grab()
+                screenshot = ImageGrab.grab() if ImageGrab else None
                 method_used = "PIL.ImageGrab"
             except Exception as e:
                 error_messages.append(f"PIL.ImageGrab failed: {e}")
@@ -178,11 +209,9 @@ except Exception as e:
         # Method 5: Try gnome-screenshot
         if screenshot is None:
             try:
-                import subprocess
                 result = subprocess.run(['gnome-screenshot', '-f', str(filepath)], 
                                       capture_output=True, text=True, timeout=10)
                 if result.returncode == 0 and filepath.exists():
-                    from PIL import Image
                     screenshot = Image.open(str(filepath))
                     method_used = "gnome-screenshot"
                 else:
@@ -193,11 +222,9 @@ except Exception as e:
         # Method 6: Try scrot
         if screenshot is None:
             try:
-                import subprocess
                 result = subprocess.run(['scrot', str(filepath)], 
                                       capture_output=True, text=True, timeout=10)
                 if result.returncode == 0 and filepath.exists():
-                    from PIL import Image
                     screenshot = Image.open(str(filepath))
                     method_used = "scrot"
                 else:
@@ -208,14 +235,10 @@ except Exception as e:
         # Method 7: Create a realistic demo screenshot showing current status
         if screenshot is None:
             try:
-                # Try to import PIL with error handling
-                try:
-                    from PIL import Image, ImageDraw, ImageFont
-                except ImportError as pil_error:
-                    # Try alternative import paths
-                    import sys
-                    sys.path.append('/home/kiosk_user/.local/lib/python3.12/site-packages')
-                    from PIL import Image, ImageDraw, ImageFont
+                # Check if PIL is available
+                if not Image or not ImageDraw or not ImageFont:
+                    error_messages.append("PIL not available for mock generation")
+                    raise ImportError("PIL components not available")
                     
                 import random
                 from datetime import datetime as dt_module
