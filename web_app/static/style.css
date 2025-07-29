@@ -14,11 +14,113 @@ body {
     overflow: hidden;
 }
 
-.app-container {
+/* Top Navbar */
+.top-navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(15px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
     display: flex;
-    height: 100vh;
+    align-items: center;
+}
+
+.navbar-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
     max-width: 1400px;
     margin: 0 auto;
+    padding: 0 20px;
+    height: 100%;
+}
+
+.navbar-left,
+.navbar-center,
+.navbar-right {
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+
+.navbar-center {
+    justify-content: center;
+}
+
+.navbar-right {
+    justify-content: flex-end;
+}
+
+.navbar-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.navbar-title i {
+    color: #667eea;
+    font-size: 1.2rem;
+}
+
+.mouse-position-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(102, 126, 234, 0.1);
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.mouse-position-display i {
+    color: #667eea;
+    font-size: 0.9rem;
+}
+
+.mouse-coords {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.9rem;
+    color: #555;
+    font-weight: 500;
+}
+
+.mouse-coords span {
+    color: #667eea;
+    font-weight: 600;
+}
+
+.navbar-stats {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.stat-item i {
+    color: #667eea;
+}
+
+.app-container {
+    display: flex;
+    height: calc(100vh - 50px);
+    max-width: 1400px;
+    margin: 50px auto 0;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
     border-radius: 0;
@@ -853,6 +955,38 @@ body {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+/* Mouse Control Test Button */
+.mouse-control-test-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 25px;
+    background: #28a745;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.mouse-control-test-button:hover {
+    background: #218838;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+.mouse-control-test-button:active {
+    transform: scale(0.98);
+}
+
+.mouse-control-test-button i {
+    font-size: 1rem;
 }
 
 /* Settings */

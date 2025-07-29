@@ -60,6 +60,7 @@ class KioskSpeechChat {
         // Initialize components
         this.initializeElements();
         this.initializeEventListeners();
+        this.initializeNavbar();
         this.loadVADConfig();
         this.loadSettings();
         this.connectWebSocket();
@@ -141,6 +142,12 @@ class KioskSpeechChat {
     initializeElements() {
         // Get DOM elements
         this.elements = {
+            // Navbar elements
+            topNavbar: document.getElementById('topNavbar'),
+            mouseX: document.getElementById('mouseX'),
+            mouseY: document.getElementById('mouseY'),
+            currentTime: document.getElementById('currentTime'),
+            
             connectionStatus: document.getElementById('connectionStatus'),
             chatMessages: document.getElementById('chatMessages'),
             messageInput: document.getElementById('messageInput'),
@@ -148,6 +155,7 @@ class KioskSpeechChat {
             voiceButton: document.getElementById('voiceButton'),
             recordingIndicator: document.getElementById('recordingIndicator'),
             processingIndicator: document.getElementById('processingIndicator'),
+            mouseControlTestButton: document.getElementById('mouseControlTestButton'),
             settingsToggle: document.getElementById('settingsToggle'),
             settingsPanel: document.getElementById('settingsPanel'),
             vadSidebar: document.getElementById('vadSidebar'),
@@ -193,6 +201,80 @@ class KioskSpeechChat {
         };
     }
     
+    initializeNavbar() {
+        // Initialize mouse position tracking
+        this.lastMouseX = 0;
+        this.lastMouseY = 0;
+        this.mouseUpdateThrottle = null;
+        
+        // Track mouse movement globally
+        document.addEventListener('mousemove', (e) => {
+            this.lastMouseMoveTime = Date.now();
+            
+            // Throttle updates to avoid excessive DOM manipulation
+            if (this.mouseUpdateThrottle) {
+                clearTimeout(this.mouseUpdateThrottle);
+            }
+            
+            this.mouseUpdateThrottle = setTimeout(() => {
+                this.updateMousePosition(e.clientX, e.clientY);
+            }, 16); // ~60fps
+        });
+        
+        // Initialize time display
+        this.updateTime();
+        this.timeInterval = setInterval(() => {
+            this.updateTime();
+        }, 1000);
+        
+        // Also track mouse position from MCP server periodically
+        this.startMousePositionPolling();
+    }
+    
+    updateMousePosition(x, y) {
+        if (this.elements.mouseX && this.elements.mouseY) {
+            this.elements.mouseX.textContent = x;
+            this.elements.mouseY.textContent = y;
+            this.lastMouseX = x;
+            this.lastMouseY = y;
+        }
+    }
+    
+    updateTime() {
+        if (this.elements.currentTime) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            this.elements.currentTime.textContent = timeString;
+        }
+    }
+    
+    async startMousePositionPolling() {
+        // Poll the actual mouse position from the MCP server every 2 seconds
+        const pollMousePosition = async () => {
+            try {
+                const response = await this.callMCPTool('mouse_control_get_position', {});
+                if (response.success && response.data) {
+                    const { x, y } = response.data;
+                    // Only update if we haven't received a recent local mouse move
+                    const timeSinceLastMove = Date.now() - (this.lastMouseMoveTime || 0);
+                    if (timeSinceLastMove > 1000) { // 1 second
+                        this.updateMousePosition(x, y);
+                    }
+                }
+            } catch (error) {
+                // Silently fail - mouse position polling is not critical
+                console.debug('Mouse position polling failed:', error);
+            }
+        };
+        
+        // Start polling
+        setInterval(pollMousePosition, 2000);
+    }
+    
     initializeEventListeners() {
         // Send message on button click
         this.elements.sendButton.addEventListener('click', () => {
@@ -209,6 +291,11 @@ class KioskSpeechChat {
         // Voice recording toggle
         this.elements.voiceButton.addEventListener('click', () => {
             this.toggleVoiceRecording();
+        });
+        
+        // Mouse Control Test button
+        this.elements.mouseControlTestButton.addEventListener('click', () => {
+            this.runMouseControlTest();
         });
         
         // Settings toggle
@@ -443,11 +530,24 @@ class KioskSpeechChat {
                 this.hideProcessingIndicator();
                 if (data.response && data.response.success) {
                     const response = data.response.response;
+                    const actionResult = data.response.action_result;
+                    
                     let messageText = response.message || 'I processed your request.';
                     
-                    // Format response based on action type
+                    // Format response based on action type and execution result
                     if (response.action === 'click') {
-                        messageText = `I would ${response.action} on "${response.element_id}" at coordinates (${response.coordinates?.x}, ${response.coordinates?.y}). ${response.message || ''}`;
+                        if (actionResult && actionResult.action_executed) {
+                            // Check if this was a real click or mock
+                            const method = actionResult.method || 'unknown';
+                            const isMock = method.includes('mock');
+                            const methodIcon = isMock ? '🎭' : '🖱️';
+                            
+                            messageText = `${methodIcon} Successfully clicked "${response.element_id}" at coordinates (${actionResult.coordinates?.x}, ${actionResult.coordinates?.y}) using ${method}`;
+                        } else if (actionResult && !actionResult.action_executed) {
+                            messageText = `❌ Failed to click "${response.element_id}": ${actionResult.error || 'Unknown error'}`;
+                        } else {
+                            messageText = `I would ${response.action} on "${response.element_id}" at coordinates (${response.coordinates?.x}, ${response.coordinates?.y}). ${response.message || ''}`;
+                        }
                     } else if (response.action === 'help') {
                         messageText = response.message || 'Here are the available commands...';
                     } else if (response.action === 'clarify') {
@@ -455,6 +555,11 @@ class KioskSpeechChat {
                     }
                     
                     this.addMessage('assistant', messageText);
+                    
+                    // If action was executed, also show action feedback
+                    if (actionResult && actionResult.action_executed) {
+                        this.addMessage('system', '🖱️ Action Executed', actionResult.message || 'Action completed successfully');
+                    }
                     
                     // Show confidence if available
                     if (response.confidence !== undefined) {
@@ -1182,6 +1287,105 @@ class KioskSpeechChat {
         // Save sidebar state to localStorage
         const isCollapsed = this.elements.screenshotSidebar.classList.contains('collapsed');
         localStorage.setItem('screenshotSidebarCollapsed', isCollapsed.toString());
+    }
+    
+    async runMouseControlTest() {
+        try {
+            // Disable button during test
+            this.elements.mouseControlTestButton.disabled = true;
+            this.elements.mouseControlTestButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Testing...</span>';
+            
+            console.log('Running mouse control test...');
+            
+            // Add a chat message about the test starting
+            this.addMessage("system", "🖱️ Mouse Control Test started...", "Running basic mouse movement and click tests");
+            
+            // Test 1: Get current mouse position
+            let testResults = [];
+            
+            try {
+                const positionResponse = await this.callMCPTool('mouse_control_get_mouse_position', {});
+                if (positionResponse.success) {
+                    testResults.push("✅ Get mouse position: SUCCESS");
+                    console.log('Current mouse position:', positionResponse.data);
+                } else {
+                    testResults.push("❌ Get mouse position: FAILED");
+                }
+            } catch (e) {
+                testResults.push("❌ Get mouse position: ERROR - " + e.message);
+            }
+            
+            // Test 2: Move mouse to a safe test position
+            try {
+                const moveResponse = await this.callMCPTool('mouse_control_move_mouse', {
+                    x: 500,
+                    y: 300
+                });
+                if (moveResponse.success) {
+                    testResults.push("✅ Move mouse: SUCCESS");
+                    console.log('Mouse moved to test position');
+                } else {
+                    testResults.push("❌ Move mouse: FAILED");
+                }
+            } catch (e) {
+                testResults.push("❌ Move mouse: ERROR - " + e.message);
+            }
+            
+            // Wait a moment before next test
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Test 3: Test left click (safe area)
+            try {
+                const clickResponse = await this.callMCPTool('mouse_control_click', {
+                    x: 500,
+                    y: 300,
+                    button: 'left'
+                });
+                if (clickResponse.success) {
+                    testResults.push("✅ Left click: SUCCESS");
+                    console.log('Left click test completed');
+                } else {
+                    testResults.push("❌ Left click: FAILED");
+                }
+            } catch (e) {
+                testResults.push("❌ Left click: ERROR - " + e.message);
+            }
+            
+            // Test 4: Test scroll (if available)
+            try {
+                const scrollResponse = await this.callMCPTool('mouse_control_scroll', {
+                    x: 500,
+                    y: 300,
+                    direction: 'up',
+                    clicks: 1
+                });
+                if (scrollResponse.success) {
+                    testResults.push("✅ Mouse scroll: SUCCESS");
+                    console.log('Scroll test completed');
+                } else {
+                    testResults.push("❌ Mouse scroll: FAILED");
+                }
+            } catch (e) {
+                testResults.push("❌ Mouse scroll: ERROR - " + e.message);
+            }
+            
+            // Display results
+            const successCount = testResults.filter(result => result.includes('✅')).length;
+            const totalTests = testResults.length;
+            
+            const resultMessage = `Mouse Control Test Complete!\n\n${testResults.join('\n')}\n\nResults: ${successCount}/${totalTests} tests passed`;
+            
+            this.addMessage("system", "🖱️ Mouse Control Test Results", resultMessage);
+            console.log('Mouse control test completed:', testResults);
+            
+        } catch (error) {
+            console.error('Mouse control test error:', error);
+            this.addMessage("system", "❌ Mouse Control Test Error", `Test failed: ${error.message}`);
+        } finally {
+            // Re-enable button
+            this.elements.mouseControlTestButton.disabled = false;
+            this.elements.mouseControlTestButton.innerHTML = '<i class="fas fa-mouse-pointer"></i><span>Mouse Control Test</span>';
+        }
     }
     
     async takeScreenshot() {

@@ -8,6 +8,34 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar" id="topNavbar">
+        <div class="navbar-content">
+            <div class="navbar-left">
+                <span class="navbar-title">
+                    <i class="fas fa-desktop"></i>
+                    Kiosk Control Panel
+                </span>
+            </div>
+            <div class="navbar-center">
+                <div class="mouse-position-display">
+                    <i class="fas fa-mouse-pointer"></i>
+                    <span class="mouse-coords">
+                        Mouse: <span id="mouseX">0</span>, <span id="mouseY">0</span>
+                    </span>
+                </div>
+            </div>
+            <div class="navbar-right">
+                <div class="navbar-stats">
+                    <span class="stat-item">
+                        <i class="fas fa-clock"></i>
+                        <span id="currentTime">--:--</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
     <div class="app-container">
         <!-- VAD Sidebar Panel -->
         <aside class="vad-sidebar" id="vadSidebar">
@@ -97,6 +125,10 @@
                 <div class="header-content">
                     <h1><i class="fas fa-microphone"></i> Kiosk Speech Chat</h1>
                     <div class="header-controls">
+                        <button id="mouseControlTestButton" class="mouse-control-test-button" title="Mouse Control Test">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <span>Mouse Control Test</span>
+                        </button>
                         <div class="connection-status" id="connectionStatus">
                             <i class="fas fa-circle"></i>
                             <span>Connecting...</span>

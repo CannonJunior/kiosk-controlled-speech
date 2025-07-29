@@ -209,6 +209,189 @@ class SpeechWebBridge:
             except Exception as e:
                 logger.error(f"MCP client cleanup error: {e}")
     
+    async def _load_current_screen_data(self) -> Dict[str, Any]:
+        """Load current screen data from kiosk_data.json"""
+        try:
+            # Try to load kiosk_data.json from config directory
+            config_paths = [
+                Path("../config/kiosk_data.json"),
+                Path("config/kiosk_data.json"),
+                Path("./config/kiosk_data.json")
+            ]
+            
+            kiosk_data = None
+            for config_path in config_paths:
+                if config_path.exists():
+                    with open(config_path, 'r') as f:
+                        kiosk_data = json.load(f)
+                    logger.info(f"Loaded kiosk data from {config_path}")
+                    break
+            
+            if not kiosk_data:
+                logger.warning("Could not find kiosk_data.json, using fallback data")
+                return self._get_fallback_screen_data()
+            
+            # Return the web_app screen data from kiosk_data.json
+            web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
+            if web_app_screen:
+                return {
+                    "name": web_app_screen.get("name", "Kiosk Speech Chat Web Application"),
+                    "description": web_app_screen.get("description", "Web-based chat interface"),
+                    "elements": web_app_screen.get("elements", [])
+                }
+            else:
+                logger.warning("web_app screen not found in kiosk_data.json, using fallback")
+                return self._get_fallback_screen_data()
+                
+        except Exception as e:
+            logger.error(f"Error loading kiosk data: {e}")
+            return self._get_fallback_screen_data()
+    
+    def _get_fallback_screen_data(self) -> Dict[str, Any]:
+        """Fallback screen data when kiosk_data.json is not available"""
+        return {
+            "name": "Chat Interface",
+            "description": "Basic chat interface fallback",
+            "elements": [
+                {
+                    "id": "messageInput",
+                    "name": "Message Input Field",
+                    "coordinates": {"x": 400, "y": 500},
+                    "size": {"width": 600, "height": 40},
+                    "voice_commands": ["type message", "enter text", "input field"],
+                    "action": "focus",
+                    "description": "Text input field for typing messages"
+                },
+                {
+                    "id": "voiceButton", 
+                    "name": "Voice Input Button",
+                    "coordinates": {"x": 500, "y": 500},
+                    "size": {"width": 45, "height": 45},
+                    "voice_commands": ["start recording", "voice input", "microphone", "speak"],
+                    "action": "click",
+                    "description": "Click to start/stop voice recording"
+                },
+                {
+                    "id": "sendButton",
+                    "name": "Send Message Button", 
+                    "coordinates": {"x": 550, "y": 500},
+                    "size": {"width": 45, "height": 45},
+                    "voice_commands": ["send message", "send", "submit"],
+                    "action": "click",
+                    "description": "Send the typed or transcribed message"
+                },
+                {
+                    "id": "mouseControlTestButton",
+                    "name": "Mouse_Control_Test_Button",
+                    "coordinates": {"x": 600, "y": 50},
+                    "size": {"width": 160, "height": 35},
+                    "voice_commands": ["mouse control test", "test mouse", "mouse test", "control test"],
+                    "action": "click",
+                    "description": "Run mouse control functionality test"
+                },
+                {
+                    "id": "takeScreenshotButton",
+                    "name": "Take Screenshot Button",
+                    "coordinates": {"x": 1200, "y": 150},
+                    "size": {"width": 280, "height": 40},
+                    "voice_commands": ["take screenshot", "screenshot", "capture screen", "take picture"],
+                    "action": "click",
+                    "description": "Capture a screenshot of the current screen and add it to the gallery"
+                }
+            ]
+        }
+    
+    async def _execute_suggested_action(self, ollama_response: Dict[str, Any], current_screen: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute action suggested by Ollama model"""
+        try:
+            action_type = ollama_response.get("action")
+            
+            if action_type == "click":
+                # Get element information
+                element_id = ollama_response.get("element_id")
+                coordinates = ollama_response.get("coordinates")
+                
+                # If coordinates are not provided by Ollama, look them up from current_screen
+                if not coordinates and element_id:
+                    for element in current_screen.get("elements", []):
+                        if element.get("id") == element_id:
+                            coordinates = element.get("coordinates")
+                            logger.info(f"Found coordinates for {element_id}: {coordinates}")
+                            break
+                
+                if coordinates:
+                    # Execute mouse click using MCP tool
+                    try:
+                        result_raw = await self.mcp_client.call_tool(
+                            "mouse_control_click", {
+                                "x": coordinates["x"],
+                                "y": coordinates["y"],
+                                "button": "left"
+                            }
+                        )
+                        click_result = parse_tool_result(result_raw)
+                        
+                        if click_result.get("success"):
+                            click_data = click_result.get("data", {})
+                            method = click_data.get("method", "unknown")
+                            is_mock = click_data.get("mock", True)
+                            
+                            logger.info(f"Successfully clicked {element_id} at {coordinates} using {method}")
+                            return {
+                                "action_executed": True,
+                                "action_type": "click",
+                                "element_id": element_id,
+                                "coordinates": coordinates,
+                                "result": "success",
+                                "method": method,
+                                "mock": is_mock,
+                                "message": f"Clicked {element_id} at coordinates {coordinates} using {method}"
+                            }
+                        else:
+                            logger.error(f"Click failed: {click_result.get('error')}")
+                            return {
+                                "action_executed": False,
+                                "action_type": "click",
+                                "error": f"Click failed: {click_result.get('error')}"
+                            }
+                            
+                    except Exception as e:
+                        logger.error(f"Mouse click execution error: {e}")
+                        return {
+                            "action_executed": False,
+                            "action_type": "click",
+                            "error": f"Mouse click error: {str(e)}"
+                        }
+                else:
+                    logger.warning(f"No coordinates found for element {element_id}")
+                    return {
+                        "action_executed": False,
+                        "action_type": "click",
+                        "error": f"No coordinates found for element {element_id}"
+                    }
+                    
+            elif action_type in ["help", "error", "clarify", "navigate"]:
+                # These are response-only actions, no execution needed
+                return {
+                    "action_executed": False,
+                    "action_type": action_type,
+                    "message": "Response-only action, no execution needed"
+                }
+            else:
+                # Unknown or unsupported action
+                return {
+                    "action_executed": False,
+                    "action_type": action_type,
+                    "message": f"Unsupported action type: {action_type}"
+                }
+                
+        except Exception as e:
+            logger.error(f"Action execution error: {e}")
+            return {
+                "action_executed": False,
+                "error": f"Action execution failed: {str(e)}"
+            }
+    
     async def process_audio_data(self, audio_data: str, client_id: str) -> Dict[str, Any]:
         """Process base64 audio data and return transcription"""
         try:
@@ -267,24 +450,8 @@ class SpeechWebBridge:
     async def process_chat_message(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Process chat message through Ollama agent"""
         try:
-            # Create mock screen data for chat context
-            current_screen = {
-                "name": "Chat Interface",
-                "elements": [
-                    {
-                        "id": "chat_input",
-                        "name": "Message Input",
-                        "coordinates": {"x": 400, "y": 500},
-                        "voice_commands": ["send message", "type message"]
-                    },
-                    {
-                        "id": "voice_button", 
-                        "name": "Voice Input",
-                        "coordinates": {"x": 450, "y": 500},
-                        "voice_commands": ["start recording", "voice input"]
-                    }
-                ]
-            }
+            # Load actual screen data from kiosk_data.json
+            current_screen = await self._load_current_screen_data()
             
             # Process through Ollama agent using FastMCP with error recovery
             async def call_ollama_service():
@@ -302,9 +469,15 @@ class SpeechWebBridge:
             )
             
             if result.get("success"):
+                ollama_response = result.get("data", {})
+                
+                # Check if Ollama suggested an action to execute
+                action_result = await self._execute_suggested_action(ollama_response, current_screen)
+                
                 return {
                     "success": True,
-                    "response": result.get("data", {}),
+                    "response": ollama_response,
+                    "action_result": action_result,
                     "processing_time": "< 1s"
                 }
             else:

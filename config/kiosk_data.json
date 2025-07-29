@@ -258,6 +258,26 @@
           "conditions": ["settings_panel_open"],
           "action": "click",
           "description": "Test microphone access and permissions"
+        },
+        {
+          "id": "mouseControlTestButton",
+          "name": "Mouse_Control_Test_Button",
+          "coordinates": {"x": 600, "y": 50},
+          "size": {"width": 160, "height": 35},
+          "voice_commands": ["mouse control test", "test mouse", "mouse test", "control test"],
+          "conditions": ["always_visible"],
+          "action": "click",
+          "description": "Run mouse control functionality test with position, movement, click and scroll"
+        },
+        {
+          "id": "takeScreenshotButton",
+          "name": "Take Screenshot Button",
+          "coordinates": {"x": 1200, "y": 200},
+          "size": {"width": 280, "height": 40},
+          "voice_commands": ["take screenshot", "screenshot", "capture screen", "take picture"],
+          "conditions": ["always_visible"],
+          "action": "click",
+          "description": "Capture a screenshot of the current screen and add it to the gallery"
         }
       ]
     }
