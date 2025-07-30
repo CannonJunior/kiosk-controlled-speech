@@ -2,10 +2,10 @@
   "client_vad": {
     "description": "Client-side Voice Activity Detection settings for web browser",
     "enabled": true,
-    "sensitivity": 0.002,
+    "sensitivity": 0.001,
     "silence_timeout_ms": 800,
     "speech_start_delay_ms": 300,
-    "consecutive_silence_threshold": 3,
+    "consecutive_silence_threshold": 2,
     "check_interval_ms": 100,
     "dynamic_timeout": {
       "enabled": true,
@@ -49,7 +49,7 @@
     },
     "vad": {
       "threshold": 0.02,
-      "silence_timeout_seconds": 1.0
+      "silence_timeout_seconds": 0.8
     }
   }
 }

@@ -446,4 +446,4 @@ async def get_screen_info():
         return {"success": False, "error": str(e)}
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(show_banner=False)

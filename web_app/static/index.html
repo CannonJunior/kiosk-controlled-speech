@@ -165,6 +165,9 @@
                         <button class="settings-toggle" id="settingsToggle" title="Settings">
                             <i class="fas fa-cog"></i>
                         </button>
+                        <button class="optimization-toggle" id="optimizationToggle" title="Performance">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </button>
                     </div>
                 </div>
             </header>
@@ -186,6 +189,9 @@
                 <div class="recording-animation">
                     <i class="fas fa-microphone"></i>
                     <span>Listening...</span>
+                </div>
+                <div class="vad-debug-info" id="vadDebugInfo" style="font-size: 12px; margin-top: 5px; color: #666;">
+                    RMS: <span id="rmsLevel">--</span> | Threshold: <span id="vadThreshold">--</span>
                 </div>
             </div>
 
@@ -285,11 +291,69 @@
             </div>
         </div>
 
+        <!-- Optimization Panel -->
+        <div class="optimization-panel" id="optimizationPanel" style="display: none;">
+            <div class="optimization-content">
+                <h3><i class="fas fa-tachometer-alt"></i> Performance</h3>
+                
+                <!-- Performance Presets -->
+                <div class="setting-group">
+                    <h4>Performance Presets</h4>
+                    <div class="preset-buttons">
+                        <button id="speedPreset" class="preset-button" data-preset="speed">
+                            <i class="fas fa-rocket"></i> Speed
+                        </button>
+                        <button id="balancedPreset" class="preset-button" data-preset="balanced">
+                            <i class="fas fa-balance-scale"></i> Balanced
+                        </button>
+                        <button id="accuracyPreset" class="preset-button" data-preset="accuracy">
+                            <i class="fas fa-bullseye"></i> Accuracy
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Current Model -->
+                <div class="setting-group">
+                    <label>Current Model:</label>
+                    <div id="currentModel" class="model-info">Loading...</div>
+                </div>
+                
+                <!-- Cache Statistics -->
+                <div class="setting-group">
+                    <h4>Cache Performance</h4>
+                    <div class="cache-stats">
+                        <div class="stat-item">
+                            <span>Screen Cache Hit Rate:</span>
+                            <span id="screenCacheHitRate">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Response Cache Hit Rate:</span>
+                            <span id="responseCacheHitRate">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Total Queries:</span>
+                            <span id="totalQueries">--</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cache Actions -->
+                <div class="setting-group">
+                    <button id="clearCachesButton" class="action-button">
+                        <i class="fas fa-trash"></i> Clear All Caches
+                    </button>
+                    <button id="refreshStatsButton" class="action-button">
+                        <i class="fas fa-sync"></i> Refresh Stats
+                    </button>
+                </div>
+            </div>
+        </div>
+
 
         <!-- Audio Processing Indicator -->
         <div class="processing-indicator" id="processingIndicator" style="display: none;">
             <div class="spinner"></div>
-            <span>Processing audio...</span>
+            <span>Processing Input...</span>
         </div>
     </div>
 
@@ -329,6 +393,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=20250730-011"></script>
 </body>
 </html>

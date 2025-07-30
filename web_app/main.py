@@ -9,6 +9,7 @@ import logging
 import base64
 import tempfile
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -24,6 +25,9 @@ import uvicorn
 import sys
 sys.path.append('..')
 from fastmcp import Client
+
+# Import optimization features
+from .optimization import optimization_manager
 
 # Try to import error recovery and vad config, with fallbacks
 try:
@@ -209,8 +213,22 @@ class SpeechWebBridge:
             except Exception as e:
                 logger.error(f"MCP client cleanup error: {e}")
     
+    async def _update_ollama_model_config(self, model_config: Dict[str, Any]) -> None:
+        """Update Ollama model configuration if needed"""
+        try:
+            # Call configure_model tool if available
+            await self.mcp_client.call_tool(
+                "ollama_agent_configure_model", {
+                    "model": model_config.get("name"),
+                    "temperature": model_config.get("temperature"),
+                    "max_tokens": model_config.get("max_tokens")
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update Ollama model config: {e}")
+    
     async def _load_current_screen_data(self) -> Dict[str, Any]:
-        """Load current screen data from kiosk_data.json"""
+        """Load current screen data from kiosk_data.json with caching"""
         try:
             # Try to load kiosk_data.json from config directory
             config_paths = [
@@ -219,32 +237,50 @@ class SpeechWebBridge:
                 Path("./config/kiosk_data.json")
             ]
             
-            kiosk_data = None
-            for config_path in config_paths:
-                if config_path.exists():
-                    with open(config_path, 'r') as f:
-                        kiosk_data = json.load(f)
-                    logger.info(f"Loaded kiosk data from {config_path}")
+            # Find existing config file
+            config_path = None
+            for path in config_paths:
+                if path.exists():
+                    config_path = str(path)
                     break
             
-            if not kiosk_data:
+            if not config_path:
                 logger.warning("Could not find kiosk_data.json, using fallback data")
+                optimization_manager.increment_metric("screen_cache_misses")
                 return self._get_fallback_screen_data()
             
-            # Return the web_app screen data from kiosk_data.json
+            # Check cache first
+            cached_data = optimization_manager.screen_cache.get(config_path, "web_app")
+            if cached_data:
+                optimization_manager.increment_metric("screen_cache_hits")
+                return cached_data
+            
+            # Load from file
+            with open(config_path, 'r') as f:
+                kiosk_data = json.load(f)
+            logger.info(f"Loaded kiosk data from {config_path}")
+            
+            # Extract web_app screen data
             web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
             if web_app_screen:
-                return {
+                screen_data = {
                     "name": web_app_screen.get("name", "Kiosk Speech Chat Web Application"),
                     "description": web_app_screen.get("description", "Web-based chat interface"),
                     "elements": web_app_screen.get("elements", [])
                 }
+                
+                # Cache the data
+                optimization_manager.screen_cache.set(config_path, "web_app", screen_data)
+                optimization_manager.increment_metric("screen_cache_misses")
+                return screen_data
             else:
                 logger.warning("web_app screen not found in kiosk_data.json, using fallback")
+                optimization_manager.increment_metric("screen_cache_misses")
                 return self._get_fallback_screen_data()
                 
         except Exception as e:
             logger.error(f"Error loading kiosk data: {e}")
+            optimization_manager.increment_metric("screen_cache_misses")
             return self._get_fallback_screen_data()
     
     def _get_fallback_screen_data(self) -> Dict[str, Any]:
@@ -448,13 +484,41 @@ class SpeechWebBridge:
             }
     
     async def process_chat_message(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Process chat message through Ollama agent"""
+        """Process chat message through Ollama agent with caching optimizations"""
+        start_time = time.time()
+        optimization_manager.increment_metric("total_queries")
+        
         try:
-            # Load actual screen data from kiosk_data.json
+            # Load actual screen data from kiosk_data.json (cached)
             current_screen = await self._load_current_screen_data()
+            
+            # Check response cache first
+            cached_response = optimization_manager.response_cache.get(message, current_screen)
+            if cached_response:
+                optimization_manager.increment_metric("response_cache_hits")
+                
+                # Still execute suggested actions for cached responses
+                action_result = await self._execute_suggested_action(cached_response, current_screen)
+                
+                processing_time = time.time() - start_time
+                return {
+                    "success": True,
+                    "response": cached_response,
+                    "action_result": action_result,
+                    "processing_time": f"{processing_time:.2f}s",
+                    "cached": True
+                }
+            
+            optimization_manager.increment_metric("response_cache_misses")
+            
+            # Get current model configuration
+            model_config = optimization_manager.model_config.get_current_model_config()
             
             # Process through Ollama agent using FastMCP with error recovery
             async def call_ollama_service():
+                # Update model configuration if needed
+                await self._update_ollama_model_config(model_config)
+                
                 result_raw = await self.mcp_client.call_tool(
                     "ollama_agent_process_voice_command", {
                         "voice_text": message,
@@ -471,26 +535,36 @@ class SpeechWebBridge:
             if result.get("success"):
                 ollama_response = result.get("data", {})
                 
+                # Cache the response for future similar queries
+                if not ollama_response.get("fallback", False):
+                    optimization_manager.response_cache.set(message, current_screen, ollama_response)
+                
                 # Check if Ollama suggested an action to execute
                 action_result = await self._execute_suggested_action(ollama_response, current_screen)
                 
+                processing_time = time.time() - start_time
                 return {
                     "success": True,
                     "response": ollama_response,
                     "action_result": action_result,
-                    "processing_time": "< 1s"
+                    "processing_time": f"{processing_time:.2f}s",
+                    "model_used": model_config.get("name", "unknown")
                 }
             else:
+                processing_time = time.time() - start_time
                 return {
                     "success": False,
-                    "error": result.get("error", "Message processing failed")
+                    "error": result.get("error", "Message processing failed"),
+                    "processing_time": f"{processing_time:.2f}s"
                 }
                 
         except Exception as e:
+            processing_time = time.time() - start_time
             logger.error(f"Chat processing error: {e}")
             return {
                 "success": False,
-                "error": f"Chat processing failed: {str(e)}"
+                "error": f"Chat processing failed: {str(e)}",
+                "processing_time": f"{processing_time:.2f}s"
             }
 
 # Global instances
@@ -885,6 +959,94 @@ async def get_active_sessions():
             for client_id, session in connection_manager.user_sessions.items()
         }
     }
+
+@app.get("/api/optimization/stats")
+async def get_optimization_stats():
+    """Get optimization performance statistics"""
+    return optimization_manager.get_performance_stats()
+
+@app.post("/api/optimization/model")
+async def set_optimization_model(request: Request):
+    """Set the current Ollama model for optimization"""
+    try:
+        data = await request.json()
+        model_key = data.get("model")
+        
+        if not model_key:
+            raise HTTPException(status_code=400, detail="Model key is required")
+        
+        success = optimization_manager.model_config.set_current_model(model_key)
+        
+        if success:
+            optimization_manager.increment_metric("model_switches")
+            return {
+                "success": True,
+                "model": optimization_manager.model_config.get_model_info(model_key)
+            }
+        else:
+            raise HTTPException(status_code=400, detail=f"Model '{model_key}' not found")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Model switch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/optimization/models")
+async def get_available_models():
+    """Get available optimization models"""
+    try:
+        models = {}
+        for model_key in optimization_manager.model_config.get_available_models():
+            models[model_key] = optimization_manager.model_config.get_model_info(model_key)
+        
+        return {
+            "success": True,
+            "models": models,
+            "current": optimization_manager.model_config.get_model_info()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get models: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/optimization/cache/clear")
+async def clear_optimization_caches():
+    """Clear all optimization caches"""
+    try:
+        optimization_manager.clear_all_caches()
+        return {"success": True, "message": "All caches cleared"}
+    except Exception as e:
+        logger.error(f"Cache clear error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/optimization/preset/{preset}")
+async def set_optimization_preset(preset: str):
+    """Set optimization preset (speed, balanced, accuracy)"""
+    try:
+        if preset == "speed":
+            success = optimization_manager.optimize_for_speed()
+        elif preset == "balanced":
+            success = optimization_manager.optimize_balanced()
+        elif preset == "accuracy":
+            success = optimization_manager.optimize_for_accuracy()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown preset: {preset}")
+        
+        if success:
+            optimization_manager.increment_metric("model_switches")
+            return {
+                "success": True,
+                "preset": preset,
+                "model": optimization_manager.model_config.get_model_info()
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to apply preset: {preset}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Preset error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 def main():
     """Run the web application"""

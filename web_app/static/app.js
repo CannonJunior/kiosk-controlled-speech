@@ -26,6 +26,9 @@ class KioskSpeechChat {
         // Dictation state (manual control)
         this.isDictationListening = false;
         
+        // VAD test mode
+        this.vadTestActive = false;
+        
         // Screenshot management
         this.screenshots = [];
         this.screenshotCount = 0;
@@ -45,10 +48,10 @@ class KioskSpeechChat {
             selectedMicrophone: null,
             // VAD settings will be loaded from server config
             vadEnabled: true,
-            vadSensitivity: 0.002,
+            vadSensitivity: 0.001,
             silenceTimeout: 800,
             speechStartDelay: 300,
-            consecutiveSilenceThreshold: 3,
+            consecutiveSilenceThreshold: 2,
             checkInterval: 100,
             dynamicTimeout: {
                 enabled: true,
@@ -240,6 +243,8 @@ class KioskSpeechChat {
         // Initialize mouse position tracking
         this.lastMouseX = 0;
         this.lastMouseY = 0;
+        this.lastClientX = 0;
+        this.lastClientY = 0;
         this.mouseUpdateThrottle = null;
         
         // Track mouse movement globally
@@ -252,7 +257,11 @@ class KioskSpeechChat {
             }
             
             this.mouseUpdateThrottle = setTimeout(() => {
-                this.updateMousePosition(e.clientX, e.clientY);
+                // Use screen coordinates for display to match MCP tool coordinate system
+                this.updateMousePosition(e.screenX, e.screenY);
+                // Store client coordinates for drawing
+                this.lastClientX = e.clientX;
+                this.lastClientY = e.clientY;
             }, 16); // ~60fps
         });
         
@@ -434,13 +443,18 @@ class KioskSpeechChat {
         const width = right - left;
         const height = bottom - top;
         
-        // Calculate center point
+        // Calculate center point (client coordinates)
         const centerX = Math.round(left + width / 2);
         const centerY = Math.round(top + height / 2);
         
-        // Calculate median coordinates (median of the two drawing points)
-        const medianX = Math.round((startX + endX) / 2);
-        const medianY = Math.round((startY + endY) / 2);
+        // Convert to screen coordinates by calculating offset
+        // Use current mouse position to estimate screen offset
+        const screenOffsetX = this.lastMouseX - this.lastClientX;
+        const screenOffsetY = this.lastMouseY - this.lastClientY;
+        
+        // Calculate screen coordinates
+        const screenCenterX = Math.round(centerX + screenOffsetX);
+        const screenCenterY = Math.round(centerY + screenOffsetY);
         
         // Record the shape
         const rectangle = {
@@ -458,8 +472,8 @@ class KioskSpeechChat {
                 height: height,
                 centerX: centerX,
                 centerY: centerY,
-                medianX: medianX,
-                medianY: medianY
+                screenCenterX: screenCenterX,
+                screenCenterY: screenCenterY
             },
             timestamp: new Date().toISOString()
         };
@@ -468,10 +482,10 @@ class KioskSpeechChat {
         
         // Store the last rectangle coordinates for potential updates
         this.lastRectangleCoords = {
-            medianX: medianX,
-            medianY: medianY,
             centerX: centerX,
-            centerY: centerY
+            centerY: centerY,
+            screenCenterX: screenCenterX,
+            screenCenterY: screenCenterY
         };
         
         // Hide the drawing rectangle
@@ -486,16 +500,17 @@ class KioskSpeechChat {
         // Log the completed rectangle
         console.log('Rectangle completed:', rectangle);
         
-        // Create message with Update button
+        // Create message with Update buttons
         const messageId = 'rect_' + Date.now();
         this.addMessage('system', 
             `📐 Rectangle Drawn\n` +
-            `Rectangle: (${startX}, ${startY}) to (${endX}, ${endY})\n` +
+            `Rectangle: (${startX}, ${startY}) to (${endX}, ${endY}) [Client]\n` +
             `Bounds: ${width}×${height} at (${left}, ${top})\n` +
-            `Center: (${centerX}, ${centerY})\n` +
-            `Median: (${medianX}, ${medianY})\n` +
+            `Center (Client): (${centerX}, ${centerY})\n` +
+            `Center (Screen): (${screenCenterX}, ${screenCenterY})\n` +
             `Total shapes drawn: ${this.drawnShapes.length}\n` +
-            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinates('${messageId}')">📍 Update Selected Element</button>`
+            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinates('${messageId}')" style="margin-right: 8px;">📍 Update with Client Coords</button>` +
+            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinatesScreen('${messageId}')">📍 Update with Screen Coords</button>`
         );
     }
     
@@ -534,7 +549,7 @@ class KioskSpeechChat {
         // Display export summary
         const summary = this.drawnShapes.map((shape, index) => {
             const coords = shape.coordinates;
-            return `${index + 1}. Rectangle: (${coords.x1}, ${coords.y1}) to (${coords.x2}, ${coords.y2}) - ${coords.width}×${coords.height} - Center: (${coords.centerX}, ${coords.centerY}) - Median: (${coords.medianX}, ${coords.medianY})`;
+            return `${index + 1}. Rectangle: (${coords.x1}, ${coords.y1}) to (${coords.x2}, ${coords.y2}) - ${coords.width}×${coords.height} - Client: (${coords.centerX}, ${coords.centerY}) - Screen: (${coords.screenCenterX}, ${coords.screenCenterY})`;
         }).join('\n');
         
         this.addMessage('system', 
@@ -653,8 +668,8 @@ class KioskSpeechChat {
             screen: selectedScreen,
             elementId: selectedElement,
             newCoordinates: {
-                x: this.lastRectangleCoords.medianX,
-                y: this.lastRectangleCoords.medianY
+                x: this.lastRectangleCoords.centerX,
+                y: this.lastRectangleCoords.centerY
             },
             timestamp: new Date().toISOString()
         };
@@ -668,14 +683,59 @@ class KioskSpeechChat {
         const elementName = elementData?.name || selectedElement;
         
         this.addMessage('system', 
-            `✅ Coordinate Update Queued\n` +
+            `✅ Client Coordinate Update Queued\n` +
             `Element: ${elementName}\n` +
             `Screen: ${screenData.name || selectedScreen}\n` +
-            `New Coordinates: (${this.lastRectangleCoords.medianX}, ${this.lastRectangleCoords.medianY})\n` +
+            `New Coordinates: (${this.lastRectangleCoords.centerX}, ${this.lastRectangleCoords.centerY}) [Client]\n` +
             `Click Save to apply changes to config file.`
         );
         
         console.log('Pending update queued:', updateKey, this.pendingUpdates[updateKey]);
+    }
+    
+    handleUpdateCoordinatesScreen(messageId) {
+        const selectedScreen = this.elements.screenDropdown.value;
+        const selectedElement = this.elements.elementDropdown.value;
+        
+        if (!selectedScreen || !selectedElement) {
+            this.addMessage('system', '⚠️ Update Failed\nPlease select both a Screen and Element before updating coordinates.');
+            return;
+        }
+        
+        if (!this.lastRectangleCoords) {
+            this.addMessage('system', '⚠️ Update Failed\nNo rectangle coordinates available. Draw a rectangle first.');
+            return;
+        }
+        
+        // Store the pending update with screen coordinates
+        const updateKey = `${selectedScreen}.${selectedElement}`;
+        this.pendingUpdates[updateKey] = {
+            screen: selectedScreen,
+            elementId: selectedElement,
+            newCoordinates: {
+                x: this.lastRectangleCoords.screenCenterX,
+                y: this.lastRectangleCoords.screenCenterY
+            },
+            timestamp: new Date().toISOString()
+        };
+        
+        // Enable the save button
+        this.elements.saveButton.disabled = false;
+        
+        // Show confirmation message
+        const screenData = this.kioskData.screens[selectedScreen];
+        const elementData = screenData.elements.find(e => e.id === selectedElement);
+        const elementName = elementData?.name || selectedElement;
+        
+        this.addMessage('system', 
+            `✅ Screen Coordinate Update Queued\n` +
+            `Element: ${elementName}\n` +
+            `Screen: ${screenData.name || selectedScreen}\n` +
+            `New Coordinates: (${this.lastRectangleCoords.screenCenterX}, ${this.lastRectangleCoords.screenCenterY}) [Screen]\n` +
+            `Click Save to apply changes to config file.`
+        );
+        
+        console.log('Pending screen coordinate update queued:', updateKey, this.pendingUpdates[updateKey]);
     }
     
     async handleSaveCoordinates() {
@@ -942,7 +1002,57 @@ class KioskSpeechChat {
                 !this.elements.settingsToggle.contains(e.target)) {
                 this.elements.settingsPanel.style.display = 'none';
             }
+            
+            // Close optimization panel when clicking outside
+            const optimizationPanel = document.getElementById('optimizationPanel');
+            const optimizationToggle = document.getElementById('optimizationToggle');
+            if (optimizationPanel && optimizationToggle && 
+                !optimizationPanel.contains(e.target) && 
+                !optimizationToggle.contains(e.target)) {
+                optimizationPanel.style.display = 'none';
+            }
         });
+        
+        // Optimization panel toggle
+        const optimizationToggle = document.getElementById('optimizationToggle');
+        if (optimizationToggle) {
+            optimizationToggle.addEventListener('click', () => {
+                this.toggleOptimizationPanel();
+            });
+        }
+        
+        // Optimization preset buttons
+        const presetButtons = document.querySelectorAll('.preset-button');
+        presetButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const preset = e.currentTarget.dataset.preset;
+                this.setOptimizationPreset(preset);
+            });
+        });
+        
+        // Clear caches button
+        const clearCachesButton = document.getElementById('clearCachesButton');
+        if (clearCachesButton) {
+            clearCachesButton.addEventListener('click', () => {
+                this.clearOptimizationCaches();
+            });
+        }
+        
+        // Refresh stats button
+        const refreshStatsButton = document.getElementById('refreshStatsButton');
+        if (refreshStatsButton) {
+            refreshStatsButton.addEventListener('click', () => {
+                this.refreshOptimizationStats();
+            });
+        }
+        
+        // VAD test button
+        const vadTestToggle = document.getElementById('vadTestToggle');
+        if (vadTestToggle) {
+            vadTestToggle.addEventListener('click', () => {
+                this.toggleVADTest();
+            });
+        }
         
         // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
@@ -1365,7 +1475,8 @@ class KioskSpeechChat {
             
             // Show appropriate message based on VAD status
             if (this.settings.vadEnabled && disableVAD !== false) {
-                this.addMessage('system', `🎤 Recording started - speak naturally, auto-stop after ${this.settings.silenceTimeout/1000}s silence`);
+                const silenceTimeoutSeconds = (this.settings.silenceTimeout || 800) / 1000;
+                this.addMessage('system', `🎤 Recording started - speak naturally, auto-stop after ${silenceTimeoutSeconds}s silence`);
             } else if (disableVAD === false) {
                 this.addMessage('system', '🎤 Dictation mode - click the dictation button again to stop and process');
             }
@@ -1407,6 +1518,8 @@ class KioskSpeechChat {
             const source = audioContext.createMediaStreamSource(this.audioStream);
             this.vadAnalyser = audioContext.createAnalyser();
             
+            console.log('Audio context state:', audioContext.state);
+            
             // Configure analyser for VAD
             this.vadAnalyser.fftSize = 512;
             this.vadAnalyser.smoothingTimeConstant = 0.8;
@@ -1418,7 +1531,14 @@ class KioskSpeechChat {
             // Start VAD monitoring
             this.startVADMonitoring();
             
-            console.log('VAD setup complete');
+            console.log('VAD setup complete with settings:', {
+                vadEnabled: this.settings.vadEnabled,
+                vadSensitivity: this.settings.vadSensitivity,
+                silenceTimeout: this.settings.silenceTimeout,
+                speechStartDelay: this.settings.speechStartDelay,
+                consecutiveSilenceThreshold: this.settings.consecutiveSilenceThreshold,
+                checkInterval: this.settings.checkInterval
+            });
         } catch (error) {
             console.error('VAD setup failed:', error);
             this.settings.vadEnabled = false;
@@ -1432,26 +1552,30 @@ class KioskSpeechChat {
             const now = Date.now();
             const recordingDuration = now - this.recordingStartTime;
             
-            // Grace period - don't apply VAD for the first second to allow user to start speaking
+            // Grace period - don't apply VAD for the first period to allow user to start speaking
             if (recordingDuration < this.settings.speechStartDelay) {
+                if (Math.random() < 0.01) { // Occasional debug log during grace period
+                    console.log(`VAD: Grace period active, ${recordingDuration}ms < ${this.settings.speechStartDelay}ms`);
+                }
                 return;
             }
             
-            // Get audio data
-            this.vadAnalyser.getFloatFrequencyData(this.vadDataArray);
+            // Get time domain audio data (better for VAD than frequency data)
+            this.vadAnalyser.getFloatTimeDomainData(this.vadDataArray);
             
-            // Calculate RMS energy for more accurate voice detection
+            // Calculate RMS energy from time domain data
             let sum = 0;
-            let validSamples = 0;
             for (let i = 0; i < this.vadDataArray.length; i++) {
-                if (this.vadDataArray[i] > -Infinity) {
-                    const linear = Math.pow(10, this.vadDataArray[i] / 20);
-                    sum += linear * linear;
-                    validSamples++;
-                }
+                sum += this.vadDataArray[i] * this.vadDataArray[i];
             }
             
-            const rmsLevel = validSamples > 0 ? Math.sqrt(sum / validSamples) : 0;
+            const rmsLevel = Math.sqrt(sum / this.vadDataArray.length);
+            
+            // Update real-time debug info in UI
+            const rmsLevelSpan = document.getElementById('rmsLevel');
+            const vadThresholdSpan = document.getElementById('vadThreshold');
+            if (rmsLevelSpan) rmsLevelSpan.textContent = rmsLevel.toFixed(4);
+            if (vadThresholdSpan) vadThresholdSpan.textContent = this.settings.vadSensitivity.toFixed(4);
             
             // Voice detection with hysteresis (different thresholds for start/stop)
             const isVoiceDetected = rmsLevel > this.settings.vadSensitivity;
@@ -1463,12 +1587,28 @@ class KioskSpeechChat {
                 if (!this.speechDetected) {
                     this.speechDetected = true;
                     console.log('🗣️ Speech started! RMS level:', rmsLevel.toFixed(6));
+                    // Visual feedback for speech detection
+                    const recordingIndicator = document.getElementById('recordingIndicator');
+                    if (recordingIndicator) {
+                        recordingIndicator.style.border = '3px solid #4CAF50'; // Green border when speech detected
+                    }
                 }
             } else {
                 this.consecutiveSilenceCount++;
                 
+                // Debug logging for silence detection
+                if (this.consecutiveSilenceCount === 1) {
+                    console.log(`🔇 Silence counting started. SpeechDetected=${this.speechDetected}, RMS=${rmsLevel.toFixed(6)} < ${this.settings.vadSensitivity}`);
+                }
+                
+                // Debug: Show why auto-stop might not be working
+                if (this.consecutiveSilenceCount >= this.settings.consecutiveSilenceThreshold && !this.speechDetected) {
+                    console.log(`⚠️ Auto-stop blocked: Speech never detected (RMS never exceeded ${this.settings.vadSensitivity})`);
+                }
+                
                 // Only stop if we've detected speech before AND we have some consistent silence
                 if (this.speechDetected && this.consecutiveSilenceCount >= this.settings.consecutiveSilenceThreshold) {
+                    console.log(`🔇 Silence condition met: speechDetected=${this.speechDetected}, consecutiveCount=${this.consecutiveSilenceCount}/${this.settings.consecutiveSilenceThreshold}`);
                     const silenceDuration = now - this.lastVoiceTime;
                     
                     // Dynamic timeout - shorter if we've been recording for a while
@@ -1486,14 +1626,34 @@ class KioskSpeechChat {
                     
                     if (silenceDuration > effectiveTimeout) {
                         console.log(`🔇 VAD: Silence for ${silenceDuration}ms after speech (timeout: ${effectiveTimeout}ms), stopping recording`);
+                        // Visual feedback for auto-stop
+                        const recordingIndicator = document.getElementById('recordingIndicator');
+                        if (recordingIndicator) {
+                            recordingIndicator.style.border = '3px solid #FF9800'; // Orange border when stopping
+                        }
                         this.stopRecording();
+                    } else if (silenceDuration > effectiveTimeout * 0.7) {
+                        // Visual warning when approaching timeout
+                        const recordingIndicator = document.getElementById('recordingIndicator');
+                        if (recordingIndicator) {
+                            recordingIndicator.style.border = '3px solid #FFC107'; // Yellow border when close to timeout
+                        }
                     }
                 }
             }
             
-            // Debug logging (reduced frequency)
-            if (Math.random() < 0.1) { // Only log 10% of the time
-                console.log(`VAD: RMS=${rmsLevel.toFixed(6)}, Speech=${this.speechDetected}, Silence=${this.consecutiveSilenceCount}, Duration=${Math.round(recordingDuration/1000)}s`);
+            // More aggressive debug logging to diagnose the issue
+            if (Math.random() < 0.2) { // Log 20% of the time to see what's happening
+                const silenceDuration = now - this.lastVoiceTime;
+                console.log(`VAD DEBUG: RMS=${rmsLevel.toFixed(6)}, Threshold=${this.settings.vadSensitivity}, Voice=${isVoiceDetected}, SpeechDetected=${this.speechDetected}, SilenceCount=${this.consecutiveSilenceCount}/${this.settings.consecutiveSilenceThreshold}, SilenceDur=${silenceDuration}ms/${this.settings.silenceTimeout}ms, RecordingTime=${Math.round(recordingDuration/1000)}s`);
+            }
+            
+            // Always log when important state changes occur
+            if (isVoiceDetected && !this.speechDetected) {
+                console.log(`🗣️ SPEECH STARTED: RMS=${rmsLevel.toFixed(6)} > ${this.settings.vadSensitivity}`);
+            }
+            if (!isVoiceDetected && this.speechDetected && this.consecutiveSilenceCount === 1) {
+                console.log(`🔇 SILENCE STARTED: RMS=${rmsLevel.toFixed(6)} < ${this.settings.vadSensitivity}`);
             }
         }, this.settings.checkInterval); // Use configured check interval
     }
@@ -1508,6 +1668,12 @@ class KioskSpeechChat {
         this.speechDetected = false;
         this.consecutiveSilenceCount = 0;
         this.recordingStartTime = 0;
+        
+        // Reset visual indicator
+        const recordingIndicator = document.getElementById('recordingIndicator');
+        if (recordingIndicator) {
+            recordingIndicator.style.border = '';
+        }
     }
     
     stopRecording() {
@@ -2096,6 +2262,163 @@ class KioskSpeechChat {
             localStorage.setItem('kioskSpeechSettings', JSON.stringify(this.settings));
         } catch (error) {
             console.error('Error saving settings:', error);
+        }
+    }
+    
+    // Optimization Panel Methods
+    toggleOptimizationPanel() {
+        const panel = document.getElementById('optimizationPanel');
+        if (!panel) return;
+        
+        if (panel.style.display === 'none' || !panel.style.display) {
+            panel.style.display = 'block';
+            this.refreshOptimizationStats();
+        } else {
+            panel.style.display = 'none';
+        }
+    }
+    
+    async setOptimizationPreset(preset) {
+        try {
+            const response = await fetch(`/api/optimization/preset/${preset}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                this.addMessage('system', `🚀 Performance preset set to "${preset}"\nModel: ${result.model.name}\nDescription: ${result.model.description}`);
+                this.updateCurrentModel(result.model);
+                this.updateActivePreset(preset);
+            } else {
+                throw new Error(`Failed to set preset: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Error setting optimization preset:', error);
+            this.addMessage('system', `❌ Failed to set optimization preset: ${error.message}`);
+        }
+    }
+    
+    async clearOptimizationCaches() {
+        try {
+            const response = await fetch('/api/optimization/cache/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                this.addMessage('system', '🗑️ All optimization caches cleared\nNext queries will rebuild cache for improved performance');
+                this.refreshOptimizationStats();
+            } else {
+                throw new Error(`Failed to clear caches: ${response.statusText}`);
+            }
+        } catch (error) {
+            console.error('Error clearing caches:', error);
+            this.addMessage('system', `❌ Failed to clear caches: ${error.message}`);
+        }
+    }
+    
+    async refreshOptimizationStats() {
+        try {
+            const response = await fetch('/api/optimization/stats');
+            if (response.ok) {
+                const stats = await response.json();
+                this.updateOptimizationStats(stats);
+            }
+        } catch (error) {
+            console.error('Error refreshing optimization stats:', error);
+        }
+    }
+    
+    updateOptimizationStats(stats) {
+        const screenHitRate = document.getElementById('screenCacheHitRate');
+        const responseHitRate = document.getElementById('responseCacheHitRate');
+        const totalQueries = document.getElementById('totalQueries');
+        
+        if (screenHitRate && stats.cache_stats?.screen_cache) {
+            screenHitRate.textContent = `${stats.cache_stats.screen_cache.hit_rate.toFixed(1)}%`;
+        }
+        
+        if (responseHitRate && stats.cache_stats?.response_cache) {
+            responseHitRate.textContent = `${stats.cache_stats.response_cache.hit_rate.toFixed(1)}%`;
+        }
+        
+        if (totalQueries && stats.metrics) {
+            totalQueries.textContent = stats.metrics.total_queries || 0;
+        }
+        
+        // Update current model info
+        if (stats.model_config?.current_model) {
+            this.updateCurrentModel(stats.model_config.current_model);
+        }
+    }
+    
+    updateCurrentModel(modelInfo) {
+        const currentModelDiv = document.getElementById('currentModel');
+        if (currentModelDiv && modelInfo) {
+            currentModelDiv.innerHTML = `
+                <div><strong>${modelInfo.name}</strong></div>
+                <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                    ${modelInfo.description}<br>
+                    Latency: ${modelInfo.estimated_latency}
+                </div>
+            `;
+        }
+    }
+    
+    updateActivePreset(activePreset) {
+        const presetButtons = document.querySelectorAll('.preset-button');
+        presetButtons.forEach(button => {
+            if (button.dataset.preset === activePreset) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+    }
+    
+    // VAD Test functionality
+    async toggleVADTest() {
+        if (this.isRecording) {
+            this.addMessage('system', '❌ Cannot start VAD test while recording. Stop current recording first.');
+            return;
+        }
+        
+        if (this.vadTestActive) {
+            // Stop VAD test
+            this.vadTestActive = false;
+            this.cleanupVAD();
+            if (this.audioStream) {
+                this.audioStream.getTracks().forEach(track => track.stop());
+                this.audioStream = null;
+            }
+            document.getElementById('recordingIndicator').style.display = 'none';
+            this.addMessage('system', '🔧 VAD test stopped');
+        } else {
+            // Start VAD test
+            try {
+                this.vadTestActive = true;
+                const constraints = {
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 16000
+                    }
+                };
+                
+                this.audioStream = await navigator.mediaDevices.getUserMedia(constraints);
+                this.setupVAD();
+                document.getElementById('recordingIndicator').style.display = 'block';
+                this.addMessage('system', '🔧 VAD test started - watch RMS levels and thresholds in recording indicator');
+            } catch (error) {
+                this.vadTestActive = false;
+                this.addMessage('system', `❌ VAD test failed: ${error.message}`);
+            }
         }
     }
 }

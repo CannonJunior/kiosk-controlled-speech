@@ -149,6 +149,26 @@
       },
       "elements": [
         {
+          "id": "performanceButton",
+          "name": "Performance Button",
+          "coordinates": {
+            "x": 858,
+            "y": 176
+          },
+          "size": {
+            "width": 45,
+            "height": 45
+          },
+          "voice_commands": [
+            "click"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Displays the Performance modal"
+        },
+        {
           "id": "messageInput",
           "name": "Message Input Field",
           "coordinates": {
@@ -550,10 +570,10 @@
         },
         {
           "id": "mouseControlTestButton",
-          "name": "Mouse_Control_Test_Button",
+          "name": "Mouse Control Test Button",
           "coordinates": {
-            "x": 600,
-            "y": 50
+            "x": 603,
+            "y": 176
           },
           "size": {
             "width": 160,
@@ -575,8 +595,8 @@
           "id": "takeScreenshotButton",
           "name": "Take Screenshot Button",
           "coordinates": {
-            "x": 1115,
-            "y": 197
+            "x": 1122,
+            "y": 313
           },
           "size": {
             "width": 280,

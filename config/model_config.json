@@ -1,0 +1,48 @@
+{
+  "models": {
+    "default": {
+      "name": "qwen2.5:1.5b",
+      "description": "Fast lightweight model - excellent for quick responses",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "0.5-1.5s",
+      "use_case": "Speed-optimized for real-time kiosk interactions"
+    },
+    "balanced": {
+      "name": "llama3.1:8b",
+      "description": "Balanced speed and accuracy",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "1-3s",
+      "use_case": "Good balance of performance and response quality"
+    },
+    "accurate": {
+      "name": "llama3.1:70b",
+      "description": "High accuracy, slower response",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "3-8s",
+      "use_case": "Maximum accuracy for complex queries"
+    },
+    "phi": {
+      "name": "phi3:mini",
+      "description": "Microsoft Phi-3 Mini - very fast and efficient",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "0.3-1s",
+      "use_case": "Ultra-fast responses for simple commands"
+    },
+    "gemma": {
+      "name": "gemma2:2b",
+      "description": "Google Gemma 2B - fast and capable",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "0.4-1.2s",
+      "use_case": "Fast responses with good understanding"
+    }
+  },
+  "current_model": "default",
+  "fallback_model": "phi",
+  "auto_fallback": true,
+  "fallback_timeout": 10
+}
