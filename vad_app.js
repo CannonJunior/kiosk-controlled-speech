@@ -26,18 +26,10 @@ class KioskSpeechChat {
         // Dictation state (manual control)
         this.isDictationListening = false;
         
-        
         // Screenshot management
         this.screenshots = [];
         this.screenshotCount = 0;
         this.currentScreenshot = null;
-        
-        // Drawing functionality
-        this.drawingMode = 'none';
-        this.isDrawing = false;
-        this.rectangleStart = null;
-        this.drawnShapes = [];
-        this.drawingModeJustChanged = false;
         
         // Settings (will be loaded from config)
         this.settings = {
@@ -46,10 +38,10 @@ class KioskSpeechChat {
             selectedMicrophone: null,
             // VAD settings will be loaded from server config
             vadEnabled: true,
-            vadSensitivity: 0.001,
+            vadSensitivity: 0.002,
             silenceTimeout: 800,
             speechStartDelay: 300,
-            consecutiveSilenceThreshold: 2,
+            consecutiveSilenceThreshold: 3,
             checkInterval: 100,
             dynamicTimeout: {
                 enabled: true,
@@ -61,9 +53,6 @@ class KioskSpeechChat {
         
         // Configuration loaded from server
         this.vadConfig = null;
-        this.kioskData = null;
-        this.pendingUpdates = {}; // Track coordinate updates before saving
-        this.lastRectangleCoords = null; // Store last drawn rectangle coordinates
         
         // Browser and URL detection
         this.detectBrowserAndURL();
@@ -71,9 +60,7 @@ class KioskSpeechChat {
         // Initialize components
         this.initializeElements();
         this.initializeEventListeners();
-        this.initializeNavbar();
         this.loadVADConfig();
-        this.loadKioskData();
         this.loadSettings();
         this.connectWebSocket();
         this.initializeAudio();
@@ -147,25 +134,6 @@ class KioskSpeechChat {
         }
     }
     
-    async loadKioskData() {
-        try {
-            const response = await fetch('/api/kiosk-data');
-            const data = await response.json();
-            
-            if (data.success) {
-                this.kioskData = data.data;
-                console.log('Kiosk data loaded from server:', this.kioskData);
-                
-                // Initialize the dropdowns
-                this.initializeScreenDropdown();
-            } else {
-                console.warn('Failed to load kiosk data from server:', data.error);
-            }
-        } catch (error) {
-            console.error('Error loading kiosk data:', error);
-        }
-    }
-    
     generateClientId() {
         return 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     }
@@ -173,17 +141,6 @@ class KioskSpeechChat {
     initializeElements() {
         // Get DOM elements
         this.elements = {
-            // Navbar elements
-            topNavbar: document.getElementById('topNavbar'),
-            mouseX: document.getElementById('mouseX'),
-            mouseY: document.getElementById('mouseY'),
-            currentTime: document.getElementById('currentTime'),
-            drawingMode: document.getElementById('drawingMode'),
-            drawingRectangle: document.getElementById('drawingRectangle'),
-            saveButton: document.getElementById('saveButton'),
-            screenDropdown: document.getElementById('screen'),
-            elementDropdown: document.getElementById('element'),
-            
             connectionStatus: document.getElementById('connectionStatus'),
             chatMessages: document.getElementById('chatMessages'),
             messageInput: document.getElementById('messageInput'),
@@ -191,7 +148,6 @@ class KioskSpeechChat {
             voiceButton: document.getElementById('voiceButton'),
             recordingIndicator: document.getElementById('recordingIndicator'),
             processingIndicator: document.getElementById('processingIndicator'),
-            mouseControlTestButton: document.getElementById('mouseControlTestButton'),
             settingsToggle: document.getElementById('settingsToggle'),
             settingsPanel: document.getElementById('settingsPanel'),
             vadSidebar: document.getElementById('vadSidebar'),
@@ -237,592 +193,6 @@ class KioskSpeechChat {
         };
     }
     
-    initializeNavbar() {
-        // Initialize mouse position tracking
-        this.lastMouseX = 0;
-        this.lastMouseY = 0;
-        this.lastClientX = 0;
-        this.lastClientY = 0;
-        this.mouseUpdateThrottle = null;
-        
-        // Track mouse movement globally
-        document.addEventListener('mousemove', (e) => {
-            this.lastMouseMoveTime = Date.now();
-            
-            // Throttle updates to avoid excessive DOM manipulation
-            if (this.mouseUpdateThrottle) {
-                clearTimeout(this.mouseUpdateThrottle);
-            }
-            
-            this.mouseUpdateThrottle = setTimeout(() => {
-                // Use screen coordinates for display to match MCP tool coordinate system
-                this.updateMousePosition(e.screenX, e.screenY);
-                // Store client coordinates for drawing
-                this.lastClientX = e.clientX;
-                this.lastClientY = e.clientY;
-            }, 16); // ~60fps
-        });
-        
-        // Initialize time display
-        this.updateTime();
-        this.timeInterval = setInterval(() => {
-            this.updateTime();
-        }, 1000);
-        
-        // Also track mouse position from MCP server periodically
-        this.startMousePositionPolling();
-        
-        // Initialize drawing functionality
-        this.initializeDrawing();
-        
-        // Initialize keyboard shortcuts
-        this.initializeKeyboardShortcuts();
-    }
-    
-    updateMousePosition(x, y) {
-        if (this.elements.mouseX && this.elements.mouseY) {
-            this.elements.mouseX.textContent = x;
-            this.elements.mouseY.textContent = y;
-            this.lastMouseX = x;
-            this.lastMouseY = y;
-        }
-    }
-    
-    updateTime() {
-        if (this.elements.currentTime) {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('en-US', { 
-                hour12: false, 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            });
-            this.elements.currentTime.textContent = timeString;
-        }
-    }
-    
-    async startMousePositionPolling() {
-        // Poll the actual mouse position from the MCP server every 2 seconds
-        const pollMousePosition = async () => {
-            try {
-                const response = await this.callMCPTool('mouse_control_get_position', {});
-                if (response.success && response.data) {
-                    const { x, y } = response.data;
-                    // Only update if we haven't received a recent local mouse move
-                    const timeSinceLastMove = Date.now() - (this.lastMouseMoveTime || 0);
-                    if (timeSinceLastMove > 1000) { // 1 second
-                        this.updateMousePosition(x, y);
-                    }
-                }
-            } catch (error) {
-                // Silently fail - mouse position polling is not critical
-                console.debug('Mouse position polling failed:', error);
-            }
-        };
-        
-        // Start polling
-        setInterval(pollMousePosition, 2000);
-    }
-    
-    initializeDrawing() {
-        // Handle drawing mode changes
-        if (this.elements.drawingMode) {
-            this.elements.drawingMode.addEventListener('change', (e) => {
-                this.setDrawingMode(e.target.value);
-            });
-        }
-        
-        // Handle mouse events for drawing
-        document.addEventListener('click', (e) => {
-            if (this.drawingMode !== 'none') {
-                this.handleDrawingClick(e);
-            }
-        });
-        
-        document.addEventListener('mousemove', (e) => {
-            if (this.drawingMode === 'rectangle' && this.isDrawing) {
-                this.updateRectangleDrawing(e);
-            }
-        });
-    }
-    
-    setDrawingMode(mode) {
-        this.drawingMode = mode;
-        this.drawingModeJustChanged = true;
-        
-        if (mode === 'none') {
-            document.body.classList.remove('drawing-mode');
-            this.cancelCurrentDrawing();
-        } else {
-            document.body.classList.add('drawing-mode');
-        }
-        
-        // Add brief delay to prevent immediate click registration
-        setTimeout(() => {
-            this.drawingModeJustChanged = false;
-        }, 200); // 200ms delay
-        
-        console.log(`Drawing mode set to: ${mode}`);
-    }
-    
-    handleDrawingClick(e) {
-        // Prevent default behavior
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Ignore clicks if drawing mode was just changed
-        if (this.drawingModeJustChanged) {
-            console.log('Ignoring click - drawing mode just changed');
-            return;
-        }
-        
-        if (this.drawingMode === 'rectangle') {
-            if (!this.isDrawing) {
-                // Start drawing rectangle
-                this.startRectangleDrawing(e.clientX, e.clientY);
-            } else {
-                // Finish drawing rectangle
-                this.finishRectangleDrawing(e.clientX, e.clientY);
-            }
-        }
-    }
-    
-    startRectangleDrawing(x, y) {
-        this.isDrawing = true;
-        this.rectangleStart = { x, y };
-        
-        // Show and position the rectangle
-        if (this.elements.drawingRectangle) {
-            this.elements.drawingRectangle.classList.add('active');
-            this.elements.drawingRectangle.style.left = x + 'px';
-            this.elements.drawingRectangle.style.top = y + 'px';
-            this.elements.drawingRectangle.style.width = '0px';
-            this.elements.drawingRectangle.style.height = '0px';
-        }
-        
-        console.log(`Started rectangle at (${x}, ${y})`);
-    }
-    
-    updateRectangleDrawing(e) {
-        if (!this.isDrawing || !this.rectangleStart || !this.elements.drawingRectangle) {
-            return;
-        }
-        
-        const currentX = e.clientX;
-        const currentY = e.clientY;
-        const startX = this.rectangleStart.x;
-        const startY = this.rectangleStart.y;
-        
-        const width = Math.abs(currentX - startX);
-        const height = Math.abs(currentY - startY);
-        const left = Math.min(startX, currentX);
-        const top = Math.min(startY, currentY);
-        
-        this.elements.drawingRectangle.style.left = left + 'px';
-        this.elements.drawingRectangle.style.top = top + 'px';
-        this.elements.drawingRectangle.style.width = width + 'px';
-        this.elements.drawingRectangle.style.height = height + 'px';
-    }
-    
-    finishRectangleDrawing(x, y) {
-        if (!this.isDrawing || !this.rectangleStart) {
-            return;
-        }
-        
-        const startX = this.rectangleStart.x;
-        const startY = this.rectangleStart.y;
-        const endX = x;
-        const endY = y;
-        
-        // Calculate rectangle bounds
-        const left = Math.min(startX, endX);
-        const top = Math.min(startY, endY);
-        const right = Math.max(startX, endX);
-        const bottom = Math.max(startY, endY);
-        const width = right - left;
-        const height = bottom - top;
-        
-        // Calculate center point (client coordinates)
-        const centerX = Math.round(left + width / 2);
-        const centerY = Math.round(top + height / 2);
-        
-        // Convert to screen coordinates by calculating offset
-        // Use current mouse position to estimate screen offset
-        const screenOffsetX = this.lastMouseX - this.lastClientX;
-        const screenOffsetY = this.lastMouseY - this.lastClientY;
-        
-        // Calculate screen coordinates
-        const screenCenterX = Math.round(centerX + screenOffsetX);
-        const screenCenterY = Math.round(centerY + screenOffsetY);
-        
-        // Record the shape
-        const rectangle = {
-            type: 'rectangle',
-            coordinates: {
-                x1: startX,
-                y1: startY,
-                x2: endX,
-                y2: endY,
-                left: left,
-                top: top,
-                right: right,
-                bottom: bottom,
-                width: width,
-                height: height,
-                centerX: centerX,
-                centerY: centerY,
-                screenCenterX: screenCenterX,
-                screenCenterY: screenCenterY
-            },
-            timestamp: new Date().toISOString()
-        };
-        
-        this.drawnShapes.push(rectangle);
-        
-        // Store the last rectangle coordinates for potential updates
-        this.lastRectangleCoords = {
-            centerX: centerX,
-            centerY: centerY,
-            screenCenterX: screenCenterX,
-            screenCenterY: screenCenterY
-        };
-        
-        // Hide the drawing rectangle
-        if (this.elements.drawingRectangle) {
-            this.elements.drawingRectangle.classList.remove('active');
-        }
-        
-        // Reset drawing state
-        this.isDrawing = false;
-        this.rectangleStart = null;
-        
-        // Log the completed rectangle
-        console.log('Rectangle completed:', rectangle);
-        
-        // Create message with Update buttons
-        const messageId = 'rect_' + Date.now();
-        this.addMessage('system', 
-            `📐 Rectangle Drawn\n` +
-            `Rectangle: (${startX}, ${startY}) to (${endX}, ${endY}) [Client]\n` +
-            `Bounds: ${width}×${height} at (${left}, ${top})\n` +
-            `Center (Client): (${centerX}, ${centerY})\n` +
-            `Center (Screen): (${screenCenterX}, ${screenCenterY})\n` +
-            `Total shapes drawn: ${this.drawnShapes.length}\n` +
-            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinates('${messageId}')" style="margin-right: 8px;">📍 Update with Client Coords</button>` +
-            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinatesScreen('${messageId}')">📍 Update with Screen Coords</button>`
-        );
-    }
-    
-    cancelCurrentDrawing() {
-        if (this.isDrawing) {
-            this.isDrawing = false;
-            this.rectangleStart = null;
-            
-            if (this.elements.drawingRectangle) {
-                this.elements.drawingRectangle.classList.remove('active');
-            }
-        }
-    }
-    
-    getDrawnShapes() {
-        return this.drawnShapes;
-    }
-    
-    clearDrawnShapes() {
-        this.drawnShapes = [];
-        this.addMessage('system', '🗑️ Shapes Cleared\nAll drawn shapes have been cleared.');
-    }
-    
-    exportDrawnShapes() {
-        if (this.drawnShapes.length === 0) {
-            this.addMessage('system', '📄 Export Results\nNo shapes to export. Draw some rectangles first!');
-            return null;
-        }
-        
-        const exportData = {
-            timestamp: new Date().toISOString(),
-            totalShapes: this.drawnShapes.length,
-            shapes: this.drawnShapes
-        };
-        
-        // Display export summary
-        const summary = this.drawnShapes.map((shape, index) => {
-            const coords = shape.coordinates;
-            return `${index + 1}. Rectangle: (${coords.x1}, ${coords.y1}) to (${coords.x2}, ${coords.y2}) - ${coords.width}×${coords.height} - Client: (${coords.centerX}, ${coords.centerY}) - Screen: (${coords.screenCenterX}, ${coords.screenCenterY})`;
-        }).join('\n');
-        
-        this.addMessage('system', 
-            `📄 Exported Shape Data\n` +
-            `Total shapes: ${this.drawnShapes.length}\n\n${summary}\n\nShape data available in console (window.kioskChat.getDrawnShapes())`
-        );
-        
-        console.log('Exported shape data:', exportData);
-        return exportData;
-    }
-    
-    initializeScreenDropdown() {
-        if (!this.kioskData || !this.kioskData.screens) {
-            console.warn('No kiosk data available for screen dropdown');
-            return;
-        }
-        
-        // Clear existing options except the first one
-        this.elements.screenDropdown.innerHTML = '<option value="">Screen</option>';
-        
-        // Add screen options
-        Object.keys(this.kioskData.screens).forEach(screenKey => {
-            const screen = this.kioskData.screens[screenKey];
-            const option = document.createElement('option');
-            option.value = screenKey;
-            option.textContent = screen.name || screenKey;
-            this.elements.screenDropdown.appendChild(option);
-        });
-        
-        console.log('Screen dropdown initialized with screens:', Object.keys(this.kioskData.screens));
-    }
-    
-    updateElementDropdown(selectedScreen) {
-        if (!this.kioskData || !this.kioskData.screens || !selectedScreen) {
-            // Reset to default
-            this.elements.elementDropdown.innerHTML = '<option value="">Element</option>';
-            return;
-        }
-        
-        const screenData = this.kioskData.screens[selectedScreen];
-        if (!screenData || !screenData.elements) {
-            this.elements.elementDropdown.innerHTML = '<option value="">Element</option>';
-            return;
-        }
-        
-        // Clear existing options
-        this.elements.elementDropdown.innerHTML = '<option value="">Element</option>';
-        
-        // Add element options
-        screenData.elements.forEach(element => {
-            const option = document.createElement('option');
-            option.value = element.id;
-            option.textContent = element.name || element.id;
-            this.elements.elementDropdown.appendChild(option);
-        });
-        
-        console.log(`Element dropdown updated for screen "${selectedScreen}" with elements:`, 
-                   screenData.elements.map(e => e.id));
-    }
-    
-    handleScreenChange() {
-        const selectedScreen = this.elements.screenDropdown.value;
-        console.log('Screen changed to:', selectedScreen);
-        
-        // Update element dropdown based on selected screen
-        this.updateElementDropdown(selectedScreen);
-        
-        if (selectedScreen) {
-            const screenData = this.kioskData.screens[selectedScreen];
-            this.addMessage('system', 
-                `🖥️ Screen Selected: ${screenData.name || selectedScreen}\n` +
-                `Description: ${screenData.description || 'No description'}\n` +
-                `Elements: ${screenData.elements ? screenData.elements.length : 0}`
-            );
-        }
-    }
-    
-    handleElementChange() {
-        const selectedScreen = this.elements.screenDropdown.value;
-        const selectedElement = this.elements.elementDropdown.value;
-        
-        console.log('Element changed to:', selectedElement, 'for screen:', selectedScreen);
-        
-        if (selectedElement && selectedScreen) {
-            const screenData = this.kioskData.screens[selectedScreen];
-            const elementData = screenData.elements.find(e => e.id === selectedElement);
-            
-            if (elementData) {
-                this.addMessage('system', 
-                    `🧩 Element Selected: ${elementData.name || selectedElement}\n` +
-                    `Screen: ${screenData.name || selectedScreen}\n` +
-                    `Coordinates: (${elementData.coordinates?.x || 'N/A'}, ${elementData.coordinates?.y || 'N/A'})\n` +
-                    `Description: ${elementData.description || 'No description'}`
-                );
-            }
-        }
-    }
-    
-    handleUpdateCoordinates(messageId) {
-        const selectedScreen = this.elements.screenDropdown.value;
-        const selectedElement = this.elements.elementDropdown.value;
-        
-        if (!selectedScreen || !selectedElement) {
-            this.addMessage('system', '⚠️ Update Failed\nPlease select both a Screen and Element before updating coordinates.');
-            return;
-        }
-        
-        if (!this.lastRectangleCoords) {
-            this.addMessage('system', '⚠️ Update Failed\nNo rectangle coordinates available. Draw a rectangle first.');
-            return;
-        }
-        
-        // Store the pending update
-        const updateKey = `${selectedScreen}.${selectedElement}`;
-        this.pendingUpdates[updateKey] = {
-            screen: selectedScreen,
-            elementId: selectedElement,
-            newCoordinates: {
-                x: this.lastRectangleCoords.centerX,
-                y: this.lastRectangleCoords.centerY
-            },
-            timestamp: new Date().toISOString()
-        };
-        
-        // Enable the save button
-        this.elements.saveButton.disabled = false;
-        
-        // Show confirmation message
-        const screenData = this.kioskData.screens[selectedScreen];
-        const elementData = screenData.elements.find(e => e.id === selectedElement);
-        const elementName = elementData?.name || selectedElement;
-        
-        this.addMessage('system', 
-            `✅ Client Coordinate Update Queued\n` +
-            `Element: ${elementName}\n` +
-            `Screen: ${screenData.name || selectedScreen}\n` +
-            `New Coordinates: (${this.lastRectangleCoords.centerX}, ${this.lastRectangleCoords.centerY}) [Client]\n` +
-            `Click Save to apply changes to config file.`
-        );
-        
-        console.log('Pending update queued:', updateKey, this.pendingUpdates[updateKey]);
-    }
-    
-    handleUpdateCoordinatesScreen(messageId) {
-        const selectedScreen = this.elements.screenDropdown.value;
-        const selectedElement = this.elements.elementDropdown.value;
-        
-        if (!selectedScreen || !selectedElement) {
-            this.addMessage('system', '⚠️ Update Failed\nPlease select both a Screen and Element before updating coordinates.');
-            return;
-        }
-        
-        if (!this.lastRectangleCoords) {
-            this.addMessage('system', '⚠️ Update Failed\nNo rectangle coordinates available. Draw a rectangle first.');
-            return;
-        }
-        
-        // Store the pending update with screen coordinates
-        const updateKey = `${selectedScreen}.${selectedElement}`;
-        this.pendingUpdates[updateKey] = {
-            screen: selectedScreen,
-            elementId: selectedElement,
-            newCoordinates: {
-                x: this.lastRectangleCoords.screenCenterX,
-                y: this.lastRectangleCoords.screenCenterY
-            },
-            timestamp: new Date().toISOString()
-        };
-        
-        // Enable the save button
-        this.elements.saveButton.disabled = false;
-        
-        // Show confirmation message
-        const screenData = this.kioskData.screens[selectedScreen];
-        const elementData = screenData.elements.find(e => e.id === selectedElement);
-        const elementName = elementData?.name || selectedElement;
-        
-        this.addMessage('system', 
-            `✅ Screen Coordinate Update Queued\n` +
-            `Element: ${elementName}\n` +
-            `Screen: ${screenData.name || selectedScreen}\n` +
-            `New Coordinates: (${this.lastRectangleCoords.screenCenterX}, ${this.lastRectangleCoords.screenCenterY}) [Screen]\n` +
-            `Click Save to apply changes to config file.`
-        );
-        
-        console.log('Pending screen coordinate update queued:', updateKey, this.pendingUpdates[updateKey]);
-    }
-    
-    async handleSaveCoordinates() {
-        if (Object.keys(this.pendingUpdates).length === 0) {
-            this.addMessage('system', '⚠️ No Changes to Save\nNo coordinate updates are pending.');
-            return;
-        }
-        
-        try {
-            // Disable save button during save operation
-            this.elements.saveButton.disabled = true;
-            this.addMessage('system', '💾 Saving Changes\nUpdating kiosk_data.json...');
-            
-            // Send updates to backend
-            const response = await fetch('/api/kiosk-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    updates: this.pendingUpdates
-                })
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                // Clear pending updates on successful save
-                const updateCount = Object.keys(this.pendingUpdates).length;
-                this.pendingUpdates = {};
-                
-                // Reload kiosk data to reflect changes
-                await this.loadKioskData();
-                
-                this.addMessage('system', 
-                    `✅ Changes Saved Successfully\n` +
-                    `Updated ${updateCount} element coordinate(s) in kiosk_data.json\n` +
-                    `Configuration reloaded.`
-                );
-                
-                console.log('Coordinate updates saved successfully');
-            } else {
-                // Re-enable save button on failure
-                this.elements.saveButton.disabled = false;
-                
-                this.addMessage('system', 
-                    `❌ Save Failed\n` +
-                    `Error: ${result.error || 'Unknown error occurred'}\n` +
-                    `Changes not saved. Please try again.`
-                );
-                
-                console.error('Save failed:', result.error);
-            }
-        } catch (error) {
-            // Re-enable save button on error
-            this.elements.saveButton.disabled = false;
-            
-            this.addMessage('system', 
-                `❌ Save Error\n` +
-                `Network or server error: ${error.message}\n` +
-                `Changes not saved. Please check connection and try again.`
-            );
-            
-            console.error('Save error:', error);
-        }
-    }
-    
-    initializeKeyboardShortcuts() {
-        // Handle keyboard shortcuts for drawing functionality
-        document.addEventListener('keydown', (e) => {
-            // ESC key - exit drawing mode
-            if (e.key === 'Escape' || e.keyCode === 27) {
-                if (this.drawingMode !== 'none') {
-                    // Cancel any current drawing
-                    this.cancelCurrentDrawing();
-                    
-                    // Set drawing mode back to none
-                    this.elements.drawingMode.value = 'none';
-                    this.setDrawingMode('none');
-                    
-                    // Show feedback message
-                    this.addMessage('system', '⌨️ Drawing Mode Exited\nESC pressed - drawing mode set back to None');
-                    
-                    console.log('ESC pressed - exiting drawing mode');
-                }
-            }
-        });
-    }
-    
     initializeEventListeners() {
         // Send message on button click
         this.elements.sendButton.addEventListener('click', () => {
@@ -839,26 +209,6 @@ class KioskSpeechChat {
         // Voice recording toggle
         this.elements.voiceButton.addEventListener('click', () => {
             this.toggleVoiceRecording();
-        });
-        
-        // Mouse Control Test button
-        this.elements.mouseControlTestButton.addEventListener('click', () => {
-            this.runMouseControlTest();
-        });
-        
-        // Screen dropdown
-        this.elements.screenDropdown.addEventListener('change', () => {
-            this.handleScreenChange();
-        });
-        
-        // Element dropdown
-        this.elements.elementDropdown.addEventListener('change', () => {
-            this.handleElementChange();
-        });
-        
-        // Save button
-        this.elements.saveButton.addEventListener('click', () => {
-            this.handleSaveCoordinates();
         });
         
         // Settings toggle
@@ -986,6 +336,13 @@ class KioskSpeechChat {
             this.hideError();
         });
 
+        // Test microphone button
+        const testMicButton = document.getElementById('testMicButton');
+        if (testMicButton) {
+            testMicButton.addEventListener('click', () => {
+                this.testMicrophoneAccess();
+            });
+        }
         
         // Close settings when clicking outside
         document.addEventListener('click', (e) => {
@@ -993,50 +350,7 @@ class KioskSpeechChat {
                 !this.elements.settingsToggle.contains(e.target)) {
                 this.elements.settingsPanel.style.display = 'none';
             }
-            
-            // Close optimization panel when clicking outside
-            const optimizationPanel = document.getElementById('optimizationPanel');
-            const optimizationToggle = document.getElementById('optimizationToggle');
-            if (optimizationPanel && optimizationToggle && 
-                !optimizationPanel.contains(e.target) && 
-                !optimizationToggle.contains(e.target)) {
-                optimizationPanel.style.display = 'none';
-            }
         });
-        
-        // Optimization panel toggle
-        const optimizationToggle = document.getElementById('optimizationToggle');
-        if (optimizationToggle) {
-            optimizationToggle.addEventListener('click', () => {
-                this.toggleOptimizationPanel();
-            });
-        }
-        
-        // Optimization preset buttons
-        const presetButtons = document.querySelectorAll('.preset-button');
-        presetButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
-                const preset = e.currentTarget.dataset.preset;
-                this.setOptimizationPreset(preset);
-            });
-        });
-        
-        // Clear caches button
-        const clearCachesButton = document.getElementById('clearCachesButton');
-        if (clearCachesButton) {
-            clearCachesButton.addEventListener('click', () => {
-                this.clearOptimizationCaches();
-            });
-        }
-        
-        // Refresh stats button
-        const refreshStatsButton = document.getElementById('refreshStatsButton');
-        if (refreshStatsButton) {
-            refreshStatsButton.addEventListener('click', () => {
-                this.refreshOptimizationStats();
-            });
-        }
-        
         
         // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
@@ -1129,24 +443,11 @@ class KioskSpeechChat {
                 this.hideProcessingIndicator();
                 if (data.response && data.response.success) {
                     const response = data.response.response;
-                    const actionResult = data.response.action_result;
-                    
                     let messageText = response.message || 'I processed your request.';
                     
-                    // Format response based on action type and execution result
+                    // Format response based on action type
                     if (response.action === 'click') {
-                        if (actionResult && actionResult.action_executed) {
-                            // Check if this was a real click or mock
-                            const method = actionResult.method || 'unknown';
-                            const isMock = method.includes('mock');
-                            const methodIcon = isMock ? '🎭' : '🖱️';
-                            
-                            messageText = `${methodIcon} Successfully clicked "${response.element_id}" at coordinates (${actionResult.coordinates?.x}, ${actionResult.coordinates?.y}) using ${method}`;
-                        } else if (actionResult && !actionResult.action_executed) {
-                            messageText = `❌ Failed to click "${response.element_id}": ${actionResult.error || 'Unknown error'}`;
-                        } else {
-                            messageText = `I would ${response.action} on "${response.element_id}" at coordinates (${response.coordinates?.x}, ${response.coordinates?.y}). ${response.message || ''}`;
-                        }
+                        messageText = `I would ${response.action} on "${response.element_id}" at coordinates (${response.coordinates?.x}, ${response.coordinates?.y}). ${response.message || ''}`;
                     } else if (response.action === 'help') {
                         messageText = response.message || 'Here are the available commands...';
                     } else if (response.action === 'clarify') {
@@ -1154,11 +455,6 @@ class KioskSpeechChat {
                     }
                     
                     this.addMessage('assistant', messageText);
-                    
-                    // If action was executed, also show action feedback
-                    if (actionResult && actionResult.action_executed) {
-                        this.addMessage('system', `🖱️ Action Executed\n${actionResult.message || 'Action completed successfully'}`);
-                    }
                     
                     // Show confidence if available
                     if (response.confidence !== undefined) {
@@ -1459,8 +755,7 @@ class KioskSpeechChat {
             
             // Show appropriate message based on VAD status
             if (this.settings.vadEnabled && disableVAD !== false) {
-                const silenceTimeoutSeconds = (this.settings.silenceTimeout || 800) / 1000;
-                this.addMessage('system', `🎤 Recording started - speak naturally, auto-stop after ${silenceTimeoutSeconds}s silence`);
+                this.addMessage('system', `🎤 Recording started - speak naturally, auto-stop after ${this.settings.silenceTimeout/1000}s silence`);
             } else if (disableVAD === false) {
                 this.addMessage('system', '🎤 Dictation mode - click the dictation button again to stop and process');
             }
@@ -1502,8 +797,6 @@ class KioskSpeechChat {
             const source = audioContext.createMediaStreamSource(this.audioStream);
             this.vadAnalyser = audioContext.createAnalyser();
             
-            console.log('Audio context state:', audioContext.state);
-            
             // Configure analyser for VAD
             this.vadAnalyser.fftSize = 512;
             this.vadAnalyser.smoothingTimeConstant = 0.8;
@@ -1515,14 +808,7 @@ class KioskSpeechChat {
             // Start VAD monitoring
             this.startVADMonitoring();
             
-            console.log('VAD setup complete with settings:', {
-                vadEnabled: this.settings.vadEnabled,
-                vadSensitivity: this.settings.vadSensitivity,
-                silenceTimeout: this.settings.silenceTimeout,
-                speechStartDelay: this.settings.speechStartDelay,
-                consecutiveSilenceThreshold: this.settings.consecutiveSilenceThreshold,
-                checkInterval: this.settings.checkInterval
-            });
+            console.log('VAD setup complete');
         } catch (error) {
             console.error('VAD setup failed:', error);
             this.settings.vadEnabled = false;
@@ -1536,15 +822,12 @@ class KioskSpeechChat {
             const now = Date.now();
             const recordingDuration = now - this.recordingStartTime;
             
-            // Grace period - don't apply VAD for the first period to allow user to start speaking
+            // Grace period - don't apply VAD for the first second to allow user to start speaking
             if (recordingDuration < this.settings.speechStartDelay) {
-                if (Math.random() < 0.01) { // Occasional debug log during grace period
-                    console.log(`VAD: Grace period active, ${recordingDuration}ms < ${this.settings.speechStartDelay}ms`);
-                }
                 return;
             }
             
-            // Get frequency domain audio data (working approach from vad_app.js)
+            // Get audio data
             this.vadAnalyser.getFloatFrequencyData(this.vadDataArray);
             
             // Calculate RMS energy for more accurate voice detection
@@ -1559,12 +842,6 @@ class KioskSpeechChat {
             }
             
             const rmsLevel = validSamples > 0 ? Math.sqrt(sum / validSamples) : 0;
-            
-            // Update real-time debug info in UI
-            const rmsLevelSpan = document.getElementById('rmsLevel');
-            const vadThresholdSpan = document.getElementById('vadThreshold');
-            if (rmsLevelSpan) rmsLevelSpan.textContent = rmsLevel.toFixed(4);
-            if (vadThresholdSpan) vadThresholdSpan.textContent = this.settings.vadSensitivity.toFixed(4);
             
             // Voice detection with hysteresis (different thresholds for start/stop)
             const isVoiceDetected = rmsLevel > this.settings.vadSensitivity;
@@ -1604,9 +881,9 @@ class KioskSpeechChat {
                 }
             }
             
-            // Debug logging (reduced frequency like working version)
+            // Debug logging (reduced frequency)
             if (Math.random() < 0.1) { // Only log 10% of the time
-                console.log(`VAD: RMS=${rmsLevel.toFixed(6)}, Speech=${this.speechDetected}, Silence=${this.consecutiveSilenceCount}, Duration=${Math.round(recordingDuration/1000)}s`);
+                console.log(`VAD: RMS=${rmsLevel.toFixed(6)}, Speech=${this.speechDetected}, Silence=${this.consecutiveSinceCount}, Duration=${Math.round(recordingDuration/1000)}s`);
             }
         }, this.settings.checkInterval); // Use configured check interval
     }
@@ -1621,12 +898,6 @@ class KioskSpeechChat {
         this.speechDetected = false;
         this.consecutiveSilenceCount = 0;
         this.recordingStartTime = 0;
-        
-        // Reset visual indicator
-        const recordingIndicator = document.getElementById('recordingIndicator');
-        if (recordingIndicator) {
-            recordingIndicator.style.border = '';
-        }
     }
     
     stopRecording() {
@@ -1740,10 +1011,7 @@ class KioskSpeechChat {
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        
-        // Handle line breaks by converting \n to <br> tags
-        const formattedText = text.replace(/\n/g, '<br>');
-        contentDiv.innerHTML = formattedText;
+        contentDiv.textContent = text;
         
         messageDiv.appendChild(contentDiv);
         this.elements.chatMessages.appendChild(messageDiv);
@@ -1916,129 +1184,23 @@ class KioskSpeechChat {
         localStorage.setItem('screenshotSidebarCollapsed', isCollapsed.toString());
     }
     
-    async runMouseControlTest() {
-        try {
-            // Disable button during test
-            this.elements.mouseControlTestButton.disabled = true;
-            this.elements.mouseControlTestButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Testing...</span>';
-            
-            console.log('Running mouse control test...');
-            
-            // Add a chat message about the test starting
-            this.addMessage("system", "🖱️ Mouse Control Test started...\nRunning basic mouse movement and click tests");
-            
-            // Test 1: Get current mouse position
-            let testResults = [];
-            
-            try {
-                const positionResponse = await this.callMCPTool('mouse_control_get_mouse_position', {});
-                if (positionResponse.success) {
-                    testResults.push("✅ Get mouse position: SUCCESS");
-                    console.log('Current mouse position:', positionResponse.data);
-                } else {
-                    testResults.push("❌ Get mouse position: FAILED");
-                }
-            } catch (e) {
-                testResults.push("❌ Get mouse position: ERROR - " + e.message);
-            }
-            
-            // Test 2: Move mouse to a safe test position
-            try {
-                const moveResponse = await this.callMCPTool('mouse_control_move_mouse', {
-                    x: 500,
-                    y: 300
-                });
-                if (moveResponse.success) {
-                    testResults.push("✅ Move mouse: SUCCESS");
-                    console.log('Mouse moved to test position');
-                } else {
-                    testResults.push("❌ Move mouse: FAILED");
-                }
-            } catch (e) {
-                testResults.push("❌ Move mouse: ERROR - " + e.message);
-            }
-            
-            // Wait a moment before next test
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Test 3: Test left click (safe area)
-            try {
-                const clickResponse = await this.callMCPTool('mouse_control_click', {
-                    x: 500,
-                    y: 300,
-                    button: 'left'
-                });
-                if (clickResponse.success) {
-                    testResults.push("✅ Left click: SUCCESS");
-                    console.log('Left click test completed');
-                } else {
-                    testResults.push("❌ Left click: FAILED");
-                }
-            } catch (e) {
-                testResults.push("❌ Left click: ERROR - " + e.message);
-            }
-            
-            // Test 4: Test scroll (if available)
-            try {
-                const scrollResponse = await this.callMCPTool('mouse_control_scroll', {
-                    x: 500,
-                    y: 300,
-                    direction: 'up',
-                    clicks: 1
-                });
-                if (scrollResponse.success) {
-                    testResults.push("✅ Mouse scroll: SUCCESS");
-                    console.log('Scroll test completed');
-                } else {
-                    testResults.push("❌ Mouse scroll: FAILED");
-                }
-            } catch (e) {
-                testResults.push("❌ Mouse scroll: ERROR - " + e.message);
-            }
-            
-            // Display results
-            const successCount = testResults.filter(result => result.includes('✅')).length;
-            const totalTests = testResults.length;
-            
-            const resultMessage = `Mouse Control Test Complete!\n\n${testResults.join('\n')}\n\nResults: ${successCount}/${totalTests} tests passed`;
-            
-            this.addMessage("system", `🖱️ Mouse Control Test Results\n${resultMessage}`);
-            console.log('Mouse control test completed:', testResults);
-            
-        } catch (error) {
-            console.error('Mouse control test error:', error);
-            this.addMessage("system", `❌ Mouse Control Test Error\nTest failed: ${error.message}`);
-        } finally {
-            // Re-enable button
-            this.elements.mouseControlTestButton.disabled = false;
-            this.elements.mouseControlTestButton.innerHTML = '<i class="fas fa-mouse-pointer"></i><span>Mouse Control Test</span>';
-        }
-    }
-    
     async takeScreenshot() {
         try {
             // Disable button during screenshot
             this.elements.takeScreenshotButton.disabled = true;
             this.elements.takeScreenshotButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Taking...</span>';
             
-            console.log('Calling MCP screenshot tool...');
+            // Call the MCP screenshot tool
+            const response = await this.callMCPTool('screen_capture_take_screenshot', {});
             
-            // Call the MCP screenshot tool via the web app backend
-            const response = await this.callMCPTool('screen_capture_screen_capture_take_screenshot', {});
-            
-            if (response.success && response.data) {
-                const data = response.data;
-                
-                // Create screenshot object from MCP response
+            if (response.success && response.data.screenshot_path) {
+                // Create screenshot object
                 const screenshot = {
                     id: Date.now().toString(),
                     timestamp: new Date().toISOString(),
-                    path: data.screenshot_path,
-                    filename: data.filename || `screenshot_${Date.now()}.png`,
-                    size: data.size || 'Unknown size',
-                    method: data.method || 'MCP Tool',
-                    width: data.width,
-                    height: data.height
+                    path: response.data.screenshot_path,
+                    filename: response.data.filename || `screenshot_${Date.now()}.png`,
+                    size: response.data.size || 'Unknown size'
                 };
                 
                 // Add to screenshots array
@@ -2051,43 +1213,18 @@ class KioskSpeechChat {
                 
                 console.log('Screenshot taken successfully:', screenshot);
                 
-                // Show success message with method used
-                if (data.method === 'PowerShell Script') {
-                    this.addMessage('system', '📸 Real desktop screenshot captured via PowerShell!');
-                } else if (data.method && data.method.includes('simulated')) {
-                    this.addMessage('system', '🎭 Mock screenshot generated (real capture unavailable)');
-                } else {
-                    this.addMessage('system', `📸 Screenshot captured using ${data.method}`);
-                }
-                
-                // Show any errors encountered but still succeeded
-                if (data.errors && data.errors.length > 0) {
-                    console.log('Screenshot warnings:', data.errors);
-                }
-                
             } else {
-                // MCP call failed, show error
-                const errorMsg = response.error || 'Unknown error from screenshot service';
-                console.error('MCP screenshot failed:', errorMsg);
-                this.showError('Failed to take screenshot: ' + errorMsg);
+                throw new Error(response.error || 'Failed to take screenshot');
             }
             
         } catch (error) {
-            console.error('Error calling screenshot service:', error);
+            console.error('Error taking screenshot:', error);
             this.showError('Failed to take screenshot: ' + error.message);
         } finally {
             // Re-enable button
             this.elements.takeScreenshotButton.disabled = false;
             this.elements.takeScreenshotButton.innerHTML = '<i class="fas fa-camera"></i><span>Take Screenshot</span>';
         }
-    }
-    
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
     
     async callMCPTool(toolName, parameters) {
@@ -2130,7 +1267,7 @@ class KioskSpeechChat {
         thumbnail.dataset.screenshotId = screenshot.id;
         
         thumbnail.innerHTML = `
-            <img src="${screenshot.path}" alt="Screenshot ${screenshot.id}" loading="lazy">
+            <img src="/api/screenshot/${screenshot.filename}" alt="Screenshot ${screenshot.id}" loading="lazy">
             <div class="thumbnail-overlay">
                 <span>View</span>
             </div>
@@ -2148,7 +1285,7 @@ class KioskSpeechChat {
     openScreenshotModal(screenshot) {
         this.currentScreenshot = screenshot;
         this.elements.modalTitle.textContent = `Screenshot - ${new Date(screenshot.timestamp).toLocaleString()}`;
-        this.elements.modalImage.src = screenshot.path;
+        this.elements.modalImage.src = `/api/screenshot/${screenshot.filename}`;
         this.elements.screenshotModal.style.display = 'flex';
         
         // Prevent body scroll
@@ -2168,7 +1305,7 @@ class KioskSpeechChat {
         
         // Create download link
         const link = document.createElement('a');
-        link.href = this.currentScreenshot.path;
+        link.href = `/api/screenshot/${this.currentScreenshot.filename}`;
         link.download = this.currentScreenshot.filename;
         document.body.appendChild(link);
         link.click();
@@ -2217,123 +1354,6 @@ class KioskSpeechChat {
             console.error('Error saving settings:', error);
         }
     }
-    
-    // Optimization Panel Methods
-    toggleOptimizationPanel() {
-        const panel = document.getElementById('optimizationPanel');
-        if (!panel) return;
-        
-        if (panel.style.display === 'none' || !panel.style.display) {
-            panel.style.display = 'block';
-            this.refreshOptimizationStats();
-        } else {
-            panel.style.display = 'none';
-        }
-    }
-    
-    async setOptimizationPreset(preset) {
-        try {
-            const response = await fetch(`/api/optimization/preset/${preset}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                this.addMessage('system', `🚀 Performance preset set to "${preset}"\nModel: ${result.model.name}\nDescription: ${result.model.description}`);
-                this.updateCurrentModel(result.model);
-                this.updateActivePreset(preset);
-            } else {
-                throw new Error(`Failed to set preset: ${response.statusText}`);
-            }
-        } catch (error) {
-            console.error('Error setting optimization preset:', error);
-            this.addMessage('system', `❌ Failed to set optimization preset: ${error.message}`);
-        }
-    }
-    
-    async clearOptimizationCaches() {
-        try {
-            const response = await fetch('/api/optimization/cache/clear', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (response.ok) {
-                this.addMessage('system', '🗑️ All optimization caches cleared\nNext queries will rebuild cache for improved performance');
-                this.refreshOptimizationStats();
-            } else {
-                throw new Error(`Failed to clear caches: ${response.statusText}`);
-            }
-        } catch (error) {
-            console.error('Error clearing caches:', error);
-            this.addMessage('system', `❌ Failed to clear caches: ${error.message}`);
-        }
-    }
-    
-    async refreshOptimizationStats() {
-        try {
-            const response = await fetch('/api/optimization/stats');
-            if (response.ok) {
-                const stats = await response.json();
-                this.updateOptimizationStats(stats);
-            }
-        } catch (error) {
-            console.error('Error refreshing optimization stats:', error);
-        }
-    }
-    
-    updateOptimizationStats(stats) {
-        const screenHitRate = document.getElementById('screenCacheHitRate');
-        const responseHitRate = document.getElementById('responseCacheHitRate');
-        const totalQueries = document.getElementById('totalQueries');
-        
-        if (screenHitRate && stats.cache_stats?.screen_cache) {
-            screenHitRate.textContent = `${stats.cache_stats.screen_cache.hit_rate.toFixed(1)}%`;
-        }
-        
-        if (responseHitRate && stats.cache_stats?.response_cache) {
-            responseHitRate.textContent = `${stats.cache_stats.response_cache.hit_rate.toFixed(1)}%`;
-        }
-        
-        if (totalQueries && stats.metrics) {
-            totalQueries.textContent = stats.metrics.total_queries || 0;
-        }
-        
-        // Update current model info
-        if (stats.model_config?.current_model) {
-            this.updateCurrentModel(stats.model_config.current_model);
-        }
-    }
-    
-    updateCurrentModel(modelInfo) {
-        const currentModelDiv = document.getElementById('currentModel');
-        if (currentModelDiv && modelInfo) {
-            currentModelDiv.innerHTML = `
-                <div><strong>${modelInfo.name}</strong></div>
-                <div style="font-size: 11px; color: #666; margin-top: 4px;">
-                    ${modelInfo.description}<br>
-                    Latency: ${modelInfo.estimated_latency}
-                </div>
-            `;
-        }
-    }
-    
-    updateActivePreset(activePreset) {
-        const presetButtons = document.querySelectorAll('.preset-button');
-        presetButtons.forEach(button => {
-            if (button.dataset.preset === activePreset) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
-        });
-    }
-    
 }
 
 // Initialize the application when DOM is loaded

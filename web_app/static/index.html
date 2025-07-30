@@ -8,6 +8,63 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
+    <!-- Top Navbar -->
+    <nav class="top-navbar" id="topNavbar">
+        <div class="navbar-content">
+            <div class="navbar-left">
+                <span class="navbar-title">
+                    <i class="fas fa-desktop"></i>
+                    Kiosk Control Panel
+                </span>
+            </div>
+            <div class="navbar-center">
+                <div class="drawing-mode-selector">
+                    <i class="fas fa-draw-polygon"></i>
+                    <label for="drawingMode">Draw:</label>
+                    <select id="drawingMode" class="drawing-dropdown">
+                        <option value="none">None</option>
+                        <option value="rectangle">Rectangle</option>
+                    </select>
+                </div>
+                <button id="saveButton" class="save-button" disabled>
+                    <i class="fas fa-save"></i>
+                    <span>Save</span>
+                </button>
+                <div class="button-group">
+                    <div class="group-dropdown group-dropdown-left">
+                        <i class="fas fa-desktop"></i>
+                        <select id="screen" class="group-select">
+                            <option value="">Screen</option>
+                        </select>
+                    </div>
+                    <div class="group-dropdown group-dropdown-right">
+                        <i class="fas fa-cube"></i>
+                        <select id="element" class="group-select">
+                            <option value="">Element</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mouse-position-display">
+                    <i class="fas fa-mouse-pointer"></i>
+                    <span class="mouse-coords">
+                        Mouse: <span id="mouseX">0</span>, <span id="mouseY">0</span>
+                    </span>
+                </div>
+            </div>
+            <div class="navbar-right">
+                <div class="navbar-stats">
+                    <span class="stat-item">
+                        <i class="fas fa-clock"></i>
+                        <span id="currentTime">--:--</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Drawing Rectangle Overlay -->
+    <div class="drawing-rectangle" id="drawingRectangle"></div>
+
     <div class="app-container">
         <!-- VAD Sidebar Panel -->
         <aside class="vad-sidebar" id="vadSidebar">
@@ -97,12 +154,19 @@
                 <div class="header-content">
                     <h1><i class="fas fa-microphone"></i> Kiosk Speech Chat</h1>
                     <div class="header-controls">
+                        <button id="mouseControlTestButton" class="mouse-control-test-button" title="Mouse Control Test">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <span>Mouse Control Test</span>
+                        </button>
                         <div class="connection-status" id="connectionStatus">
                             <i class="fas fa-circle"></i>
                             <span>Connecting...</span>
                         </div>
                         <button class="settings-toggle" id="settingsToggle" title="Settings">
                             <i class="fas fa-cog"></i>
+                        </button>
+                        <button class="optimization-toggle" id="optimizationToggle" title="Performance">
+                            <i class="fas fa-tachometer-alt"></i>
                         </button>
                     </div>
                 </div>
@@ -125,6 +189,9 @@
                 <div class="recording-animation">
                     <i class="fas fa-microphone"></i>
                     <span>Listening...</span>
+                </div>
+                <div class="vad-debug-info" id="vadDebugInfo" style="font-size: 12px; margin-top: 5px; color: #666;">
+                    RMS: <span id="rmsLevel">--</span> | Threshold: <span id="vadThreshold">--</span>
                 </div>
             </div>
 
@@ -154,10 +221,10 @@
         <!-- Screenshot Panel -->
         <aside class="screenshot-sidebar" id="screenshotSidebar">
             <div class="sidebar-header">
-                <h3><i class="fas fa-camera"></i> Screenshots</h3>
                 <button class="sidebar-toggle" id="screenshotToggle" title="Toggle Screenshot Panel">
                     <i class="fas fa-chevron-right"></i>
                 </button>
+                <h3><i class="fas fa-camera"></i> Screenshots</h3>
             </div>
             
             <div class="sidebar-content">
@@ -212,14 +279,67 @@
                     <input type="range" id="voiceThreshold" min="0.1" max="1.0" step="0.1" value="0.5">
                 </div>
                 <div class="setting-group">
-                    <button id="testMicButton" class="test-button" style="background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin: 5px 0;">
-                        <i class="fas fa-microphone-alt"></i> Test Microphone Access
-                    </button>
-                </div>
-                <div class="setting-group">
                     <a href="/troubleshooting" target="_blank" style="color: #667eea; text-decoration: none;">
                         <i class="fas fa-tools"></i> Microphone Troubleshooting
                     </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optimization Panel -->
+        <div class="optimization-panel" id="optimizationPanel" style="display: none;">
+            <div class="optimization-content">
+                <h3><i class="fas fa-tachometer-alt"></i> Performance</h3>
+                
+                <!-- Performance Presets -->
+                <div class="setting-group">
+                    <h4>Performance Presets</h4>
+                    <div class="preset-buttons">
+                        <button id="speedPreset" class="preset-button" data-preset="speed">
+                            <i class="fas fa-rocket"></i> Speed
+                        </button>
+                        <button id="balancedPreset" class="preset-button" data-preset="balanced">
+                            <i class="fas fa-balance-scale"></i> Balanced
+                        </button>
+                        <button id="accuracyPreset" class="preset-button" data-preset="accuracy">
+                            <i class="fas fa-bullseye"></i> Accuracy
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Current Model -->
+                <div class="setting-group">
+                    <label>Current Model:</label>
+                    <div id="currentModel" class="model-info">Loading...</div>
+                </div>
+                
+                <!-- Cache Statistics -->
+                <div class="setting-group">
+                    <h4>Cache Performance</h4>
+                    <div class="cache-stats">
+                        <div class="stat-item">
+                            <span>Screen Cache Hit Rate:</span>
+                            <span id="screenCacheHitRate">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Response Cache Hit Rate:</span>
+                            <span id="responseCacheHitRate">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>Total Queries:</span>
+                            <span id="totalQueries">--</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cache Actions -->
+                <div class="setting-group">
+                    <button id="clearCachesButton" class="action-button">
+                        <i class="fas fa-trash"></i> Clear All Caches
+                    </button>
+                    <button id="refreshStatsButton" class="action-button">
+                        <i class="fas fa-sync"></i> Refresh Stats
+                    </button>
                 </div>
             </div>
         </div>
@@ -228,7 +348,7 @@
         <!-- Audio Processing Indicator -->
         <div class="processing-indicator" id="processingIndicator" style="display: none;">
             <div class="spinner"></div>
-            <span>Processing audio...</span>
+            <span>Processing Input...</span>
         </div>
     </div>
 
@@ -268,6 +388,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=20250730-011"></script>
 </body>
 </html>
