@@ -65,6 +65,10 @@ class KioskSpeechChat {
         this.pendingUpdates = {}; // Track coordinate updates before saving
         this.lastRectangleCoords = null; // Store last drawn rectangle coordinates
         
+        // Processing mode settings
+        this.processingMode = 'llm'; // 'llm' or 'heuristic'
+        this.commandHistory = null;
+        
         // Browser and URL detection
         this.detectBrowserAndURL();
         
@@ -76,6 +80,8 @@ class KioskSpeechChat {
         this.loadKioskData();
         this.loadSettings();
         this.loadOptimizationState();
+        this.loadCommandHistory();
+        this.loadProcessingModePreference();
         this.connectWebSocket();
         this.initializeAudio();
     }
@@ -192,7 +198,9 @@ class KioskSpeechChat {
             voiceButton: document.getElementById('voiceButton'),
             recordingIndicator: document.getElementById('recordingIndicator'),
             processingIndicator: document.getElementById('processingIndicator'),
-            mouseControlTestButton: document.getElementById('mouseControlTestButton'),
+            processingModeToggle: document.getElementById('processingModeToggle'),
+            processingModeCheckbox: document.getElementById('processingModeCheckbox'),
+            processingModeText: document.getElementById('processingModeText'),
             settingsToggle: document.getElementById('settingsToggle'),
             settingsPanel: document.getElementById('settingsPanel'),
             vadSidebar: document.getElementById('vadSidebar'),
@@ -842,9 +850,9 @@ class KioskSpeechChat {
             this.toggleVoiceRecording();
         });
         
-        // Mouse Control Test button
-        this.elements.mouseControlTestButton.addEventListener('click', () => {
-            this.runMouseControlTest();
+        // Processing Mode Toggle
+        this.elements.processingModeCheckbox.addEventListener('change', () => {
+            this.toggleProcessingMode();
         });
         
         // Screen dropdown
@@ -1713,7 +1721,7 @@ class KioskSpeechChat {
         }
     }
     
-    sendChatMessage(message) {
+    async sendChatMessage(message) {
         if (this.ws && this.isConnected) {
             // Add user message to chat
             this.addMessage('user', message);
@@ -1721,18 +1729,370 @@ class KioskSpeechChat {
             // Show processing indicator
             this.showProcessingIndicator();
             
-            // Send to server
-            this.ws.send(JSON.stringify({
-                type: 'chat_message',
-                message: message,
-                context: {
-                    timestamp: new Date().toISOString(),
-                    client_id: this.clientId
+            // Check processing mode
+            if (this.processingMode === 'heuristic') {
+                // Process with heuristic locally
+                try {
+                    const result = await this.processHeuristicCommand(message);
+                    this.handleHeuristicResponse(message, result);
+                } catch (error) {
+                    console.error('Heuristic processing error:', error);
+                    this.hideProcessingIndicator();
+                    this.addMessage('system', `❌ Heuristic processing error: ${error.message}`);
                 }
-            }));
+            } else {
+                // Send to server for LLM processing
+                this.ws.send(JSON.stringify({
+                    type: 'chat_message',
+                    message: message,
+                    context: {
+                        timestamp: new Date().toISOString(),
+                        client_id: this.clientId
+                    }
+                }));
+            }
         } else {
             this.showError('Not connected to server');
         }
+    }
+
+    handleHeuristicResponse(originalMessage, result) {
+        this.hideProcessingIndicator();
+        
+        if (result.success) {
+            const action = result.action;
+            const similarity = (result.similarity * 100).toFixed(1);
+            
+            let responseMessage = `🎯 **Heuristic Match Found** (${similarity}% similarity)\n\n`;
+            responseMessage += `**Matched Command:** "${action.user_command}"\n`;
+            responseMessage += `**Action Taken:** ${action.action.description}\n\n`;
+            
+            if (result.result && result.result.success) {
+                responseMessage += `✅ **Action executed successfully**`;
+            } else if (result.result) {
+                responseMessage += `⚠️  **Action completed with issues**`;
+            }
+            
+            // Add feedback buttons
+            const messageElement = this.addMessage('assistant', responseMessage);
+            this.addFeedbackButtons(messageElement, originalMessage, action);
+            
+        } else {
+            let errorMessage = `❌ **Heuristic Processing Failed**\n\n`;
+            errorMessage += `**Reason:** ${result.error}\n`;
+            
+            if (result.similarity !== undefined) {
+                const similarity = (result.similarity * 100).toFixed(1);
+                errorMessage += `**Best match similarity:** ${similarity}%\n`;
+            }
+            
+            errorMessage += `\n💡 **Suggestion:** Try rephrasing your command or switch to LLM mode for better understanding.`;
+            
+            this.addMessage('system', errorMessage);
+        }
+    }
+
+    addFeedbackButtons(messageElement, originalCommand, matchedAction) {
+        const feedbackContainer = document.createElement('div');
+        feedbackContainer.className = 'feedback-buttons';
+        feedbackContainer.innerHTML = `
+            <div class="feedback-question">Was this action correct?</div>
+            <div class="feedback-options">
+                <button class="feedback-btn feedback-yes" data-feedback="yes">
+                    <i class="fas fa-thumbs-up"></i>
+                    Yes, correct
+                </button>
+                <button class="feedback-btn feedback-no" data-feedback="no">
+                    <i class="fas fa-thumbs-down"></i>
+                    No, incorrect
+                </button>
+            </div>
+        `;
+        
+        // Add event listeners
+        feedbackContainer.querySelector('.feedback-yes').addEventListener('click', () => {
+            this.handleFeedback('yes', originalCommand, matchedAction, feedbackContainer);
+        });
+        
+        feedbackContainer.querySelector('.feedback-no').addEventListener('click', () => {
+            this.handleFeedback('no', originalCommand, matchedAction, feedbackContainer);
+        });
+        
+        messageElement.appendChild(feedbackContainer);
+    }
+
+    handleFeedback(feedback, originalCommand, matchedAction, buttonContainer) {
+        console.log('handleFeedback called with:', { feedback, originalCommand, matchedAction });
+        
+        if (feedback === 'yes') {
+            // Replace buttons with success message
+            buttonContainer.innerHTML = `
+                <div class="feedback-result">
+                    <i class="fas fa-check-circle"></i>
+                    Feedback recorded: Correct action - Added to learning database
+                </div>
+            `;
+            
+            // Send positive feedback to server to add command-action pair
+            this.sendFeedbackToServer('add_pair', originalCommand, matchedAction);
+            
+        } else if (feedback === 'no') {
+            console.log('Processing "no" feedback, calling showCorrectionInterface');
+            // Show correction interface
+            this.showCorrectionInterface(buttonContainer, originalCommand, matchedAction);
+        }
+        
+        // Log feedback for debugging
+        console.log('User feedback processed:', {
+            feedback,
+            originalCommand,
+            matchedAction,
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    async sendFeedbackToServer(action, originalCommand, matchedAction, correctionData = null) {
+        try {
+            const payload = {
+                action: action, // 'add_pair' or 'update_correction'
+                user_command: originalCommand,
+                matched_action: matchedAction
+            };
+            
+            if (correctionData) {
+                payload.correct_screen = correctionData.screen;
+                payload.correct_element = correctionData.element;
+            }
+            
+            const response = await fetch('/api/feedback/command-history', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Feedback sent successfully:', result);
+                
+                // Reload command history to get updated data
+                await this.loadCommandHistory();
+            } else {
+                console.error('Failed to send feedback:', response.statusText);
+            }
+        } catch (error) {
+            console.error('Error sending feedback to server:', error);
+        }
+    }
+
+    showCorrectionInterface(buttonContainer, originalCommand, matchedAction) {
+        console.log('showCorrectionInterface called with:', { originalCommand, matchedAction });
+        
+        // Show loading state first
+        buttonContainer.innerHTML = `
+            <div class="feedback-correction">
+                <div class="correction-header">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Loading correction interface...
+                </div>
+            </div>
+        `;
+        
+        // Load kiosk data to get available screens and elements
+        this.loadKioskDataForFeedback().then(kioskData => {
+            console.log('Kiosk data loaded:', kioskData);
+            
+            if (!kioskData || !kioskData.screens) {
+                buttonContainer.innerHTML = `
+                    <div class="feedback-correction">
+                        <div class="correction-header">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Error: Could not load screen data. Please try again.
+                        </div>
+                        <div class="correction-actions">
+                            <button class="correction-cancel-btn">
+                                <i class="fas fa-times"></i>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const screens = Object.keys(kioskData.screens);
+            console.log('Available screens:', screens);
+            
+            buttonContainer.innerHTML = `
+                <div class="feedback-correction">
+                    <div class="correction-header">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Help us learn: Which screen and element should have been used?
+                    </div>
+                    <div class="correction-controls">
+                        <div class="correction-step">
+                            <label>Select Screen:</label>
+                            <select class="screen-selector">
+                                <option value="">Choose screen...</option>
+                                ${screens.map(screen => 
+                                    `<option value="${screen}">${kioskData.screens[screen].name}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="correction-step" style="display: none;">
+                            <label>Select Element:</label>
+                            <select class="element-selector">
+                                <option value="">Choose element...</option>
+                            </select>
+                        </div>
+                        <div class="correction-actions" style="display: none;">
+                            <button class="correction-submit-btn">
+                                <i class="fas fa-check"></i>
+                                Submit Correction
+                            </button>
+                            <button class="correction-cancel-btn">
+                                <i class="fas fa-times"></i>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add event listeners for the correction interface
+            this.setupCorrectionListeners(buttonContainer, originalCommand, matchedAction, kioskData);
+        }).catch(error => {
+            console.error('Error in showCorrectionInterface:', error);
+            buttonContainer.innerHTML = `
+                <div class="feedback-correction">
+                    <div class="correction-header">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Error loading correction interface: ${error.message}
+                    </div>
+                    <div class="correction-actions">
+                        <button class="correction-cancel-btn">
+                            <i class="fas fa-times"></i>
+                            Close
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    async loadKioskDataForFeedback() {
+        try {
+            const response = await fetch('/api/kiosk-data');
+            if (response.ok) {
+                const result = await response.json();
+                console.log('Raw API response:', result);
+                // The API returns data wrapped in { success: true, data: { ... } }
+                if (result.success && result.data) {
+                    return result.data;
+                } else {
+                    console.error('API returned success=false or no data');
+                    return { screens: {} };
+                }
+            } else {
+                console.error('Failed to load kiosk data, status:', response.status);
+                return { screens: {} };
+            }
+        } catch (error) {
+            console.error('Error loading kiosk data:', error);
+            return { screens: {} };
+        }
+    }
+
+    setupCorrectionListeners(container, originalCommand, matchedAction, kioskData) {
+        const screenSelector = container.querySelector('.screen-selector');
+        const elementSelector = container.querySelector('.element-selector');
+        const elementStep = container.querySelector('.correction-step:nth-child(2)');
+        const actionsStep = container.querySelector('.correction-actions');
+        const submitBtn = container.querySelector('.correction-submit-btn');
+        const cancelBtn = container.querySelector('.correction-cancel-btn');
+        
+        screenSelector.addEventListener('change', (e) => {
+            const selectedScreen = e.target.value;
+            if (selectedScreen) {
+                // Populate element dropdown
+                const screenData = kioskData.screens[selectedScreen];
+                const elements = screenData.elements || [];
+                
+                elementSelector.innerHTML = '<option value="">Choose element...</option>' +
+                    elements.map(element => 
+                        `<option value="${element.id}">${element.name}</option>`
+                    ).join('');
+                
+                elementStep.style.display = 'block';
+            } else {
+                elementStep.style.display = 'none';
+                actionsStep.style.display = 'none';
+            }
+        });
+        
+        elementSelector.addEventListener('change', (e) => {
+            if (e.target.value) {
+                actionsStep.style.display = 'block';
+            } else {
+                actionsStep.style.display = 'none';
+            }
+        });
+        
+        submitBtn.addEventListener('click', () => {
+            const selectedScreen = screenSelector.value;
+            const selectedElement = elementSelector.value;
+            
+            if (selectedScreen && selectedElement) {
+                // Send correction to server
+                this.sendFeedbackToServer('update_correction', originalCommand, matchedAction, {
+                    screen: selectedScreen,
+                    element: selectedElement
+                });
+                
+                // Update UI
+                container.innerHTML = `
+                    <div class="feedback-result">
+                        <i class="fas fa-check-circle"></i>
+                        Correction recorded - Thank you for helping us learn!
+                    </div>
+                `;
+            }
+        });
+        
+        cancelBtn.addEventListener('click', () => {
+            container.innerHTML = `
+                <div class="feedback-result">
+                    <i class="fas fa-times-circle"></i>
+                    feedback cancelled
+                </div>
+            `;
+        });
+    }
+
+    loadProcessingModePreference() {
+        const savedMode = localStorage.getItem('processingMode');
+        if (savedMode) {
+            this.processingMode = savedMode;
+            this.elements.processingModeCheckbox.checked = (savedMode === 'heuristic');
+        }
+        
+        // Update the label to match the current mode
+        const isHeuristic = (this.processingMode === 'heuristic');
+        const modeText = isHeuristic ? 'Heuristic Mode' : 'LLM Mode';
+        const modeIcon = isHeuristic ? 'fas fa-cogs' : 'fas fa-brain';
+        
+        this.elements.processingModeText.textContent = modeText;
+        this.elements.processingModeToggle.querySelector('i').className = modeIcon;
+        
+        // Update toggle container color class
+        if (isHeuristic) {
+            this.elements.processingModeToggle.classList.add('heuristic-mode');
+        } else {
+            this.elements.processingModeToggle.classList.remove('heuristic-mode');
+        }
+        
+        console.log('Loaded processing mode preference:', this.processingMode);
     }
     
     addMessage(sender, text) {
@@ -1751,6 +2111,9 @@ class KioskSpeechChat {
         
         // Scroll to bottom
         this.elements.chatMessages.scrollTop = this.elements.chatMessages.scrollHeight;
+        
+        // Return the message element for further modification (e.g., adding feedback buttons)
+        return messageDiv;
     }
     
     showTranscription(text, confidence) {
@@ -1917,102 +2280,145 @@ class KioskSpeechChat {
         localStorage.setItem('screenshotSidebarCollapsed', isCollapsed.toString());
     }
     
-    async runMouseControlTest() {
+    async loadCommandHistory() {
         try {
-            // Disable button during test
-            this.elements.mouseControlTestButton.disabled = true;
-            this.elements.mouseControlTestButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Testing...</span>';
-            
-            console.log('Running mouse control test...');
-            
-            // Add a chat message about the test starting
-            this.addMessage("system", "🖱️ Mouse Control Test started...\nRunning basic mouse movement and click tests");
-            
-            // Test 1: Get current mouse position
-            let testResults = [];
-            
-            try {
-                const positionResponse = await this.callMCPTool('mouse_control_get_mouse_position', {});
-                if (positionResponse.success) {
-                    testResults.push("✅ Get mouse position: SUCCESS");
-                    console.log('Current mouse position:', positionResponse.data);
-                } else {
-                    testResults.push("❌ Get mouse position: FAILED");
-                }
-            } catch (e) {
-                testResults.push("❌ Get mouse position: ERROR - " + e.message);
+            const response = await fetch('/config/command_history.json');
+            if (response.ok) {
+                this.commandHistory = await response.json();
+                console.log('Command history loaded:', this.commandHistory);
+            } else {
+                console.warn('Could not load command history');
+                this.commandHistory = { command_pairs: [] };
             }
-            
-            // Test 2: Move mouse to a safe test position
-            try {
-                const moveResponse = await this.callMCPTool('mouse_control_move_mouse', {
-                    x: 500,
-                    y: 300
-                });
-                if (moveResponse.success) {
-                    testResults.push("✅ Move mouse: SUCCESS");
-                    console.log('Mouse moved to test position');
+        } catch (error) {
+            console.error('Error loading command history:', error);
+            this.commandHistory = { command_pairs: [] };
+        }
+    }
+
+    toggleProcessingMode() {
+        const isHeuristic = this.elements.processingModeCheckbox.checked;
+        this.processingMode = isHeuristic ? 'heuristic' : 'llm';
+        
+        console.log('Processing mode changed to:', this.processingMode);
+        
+        // Update the label text and styling
+        const modeText = isHeuristic ? 'Heuristic Mode' : 'LLM Mode';
+        const modeIcon = isHeuristic ? 'fas fa-cogs' : 'fas fa-brain';
+        
+        this.elements.processingModeText.textContent = modeText;
+        this.elements.processingModeToggle.querySelector('i').className = modeIcon;
+        
+        // Update toggle container color class
+        if (isHeuristic) {
+            this.elements.processingModeToggle.classList.add('heuristic-mode');
+        } else {
+            this.elements.processingModeToggle.classList.remove('heuristic-mode');
+        }
+        
+        // Add a status message to chat
+        const shortModeText = isHeuristic ? 'Heuristic' : 'LLM';
+        this.addMessage('system', `🔄 Processing mode switched to: ${shortModeText}`);
+        
+        // Save preference to localStorage
+        localStorage.setItem('processingMode', this.processingMode);
+    }
+
+    calculateTextSimilarity(text1, text2) {
+        // Simple similarity calculation using Levenshtein distance
+        const normalize = (str) => str.toLowerCase().trim().replace(/[^\w\s]/g, '');
+        const a = normalize(text1);
+        const b = normalize(text2);
+        
+        if (a === b) return 1.0;
+        
+        const matrix = [];
+        const n = a.length;
+        const m = b.length;
+        
+        for (let i = 0; i <= n; i++) {
+            matrix[i] = [i];
+        }
+        for (let j = 0; j <= m; j++) {
+            matrix[0][j] = j;
+        }
+        
+        for (let i = 1; i <= n; i++) {
+            for (let j = 1; j <= m; j++) {
+                if (a[i - 1] === b[j - 1]) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
                 } else {
-                    testResults.push("❌ Move mouse: FAILED");
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j - 1] + 1
+                    );
                 }
-            } catch (e) {
-                testResults.push("❌ Move mouse: ERROR - " + e.message);
             }
+        }
+        
+        const maxLength = Math.max(n, m);
+        return maxLength === 0 ? 1 : 1 - (matrix[n][m] / maxLength);
+    }
+
+    async processHeuristicCommand(message) {
+        if (!this.commandHistory || !this.commandHistory.command_pairs) {
+            return {
+                success: false,
+                error: 'Command history not loaded'
+            };
+        }
+
+        // Find the most similar command
+        let bestMatch = null;
+        let bestSimilarity = 0;
+        
+        for (const pair of this.commandHistory.command_pairs) {
+            const similarity = this.calculateTextSimilarity(message, pair.user_command);
+            if (similarity > bestSimilarity) {
+                bestSimilarity = similarity;
+                bestMatch = pair;
+            }
+        }
+        
+        if (!bestMatch || bestSimilarity < 0.3) {
+            return {
+                success: false,
+                error: 'No similar command found',
+                similarity: bestSimilarity
+            };
+        }
+        
+        console.log(`Best match: "${bestMatch.user_command}" (similarity: ${bestSimilarity.toFixed(2)})`);
+        
+        // Execute the action
+        try {
+            const action = bestMatch.action;
+            let result = null;
             
-            // Wait a moment before next test
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            // Test 3: Test left click (safe area)
-            try {
-                const clickResponse = await this.callMCPTool('mouse_control_click', {
-                    x: 500,
-                    y: 300,
+            if (action.type === 'click' && action.coordinates) {
+                result = await this.callMCPTool('mouse_control_click', {
+                    x: action.coordinates.x,
+                    y: action.coordinates.y,
                     button: 'left'
                 });
-                if (clickResponse.success) {
-                    testResults.push("✅ Left click: SUCCESS");
-                    console.log('Left click test completed');
-                } else {
-                    testResults.push("❌ Left click: FAILED");
-                }
-            } catch (e) {
-                testResults.push("❌ Left click: ERROR - " + e.message);
+            } else if (action.type === 'help') {
+                result = { success: true, data: { message: 'Help information displayed' } };
             }
             
-            // Test 4: Test scroll (if available)
-            try {
-                const scrollResponse = await this.callMCPTool('mouse_control_scroll', {
-                    x: 500,
-                    y: 300,
-                    direction: 'up',
-                    clicks: 1
-                });
-                if (scrollResponse.success) {
-                    testResults.push("✅ Mouse scroll: SUCCESS");
-                    console.log('Scroll test completed');
-                } else {
-                    testResults.push("❌ Mouse scroll: FAILED");
-                }
-            } catch (e) {
-                testResults.push("❌ Mouse scroll: ERROR - " + e.message);
-            }
-            
-            // Display results
-            const successCount = testResults.filter(result => result.includes('✅')).length;
-            const totalTests = testResults.length;
-            
-            const resultMessage = `Mouse Control Test Complete!\n\n${testResults.join('\n')}\n\nResults: ${successCount}/${totalTests} tests passed`;
-            
-            this.addMessage("system", `🖱️ Mouse Control Test Results\n${resultMessage}`);
-            console.log('Mouse control test completed:', testResults);
-            
+            return {
+                success: true,
+                action: bestMatch,
+                similarity: bestSimilarity,
+                result: result
+            };
         } catch (error) {
-            console.error('Mouse control test error:', error);
-            this.addMessage("system", `❌ Mouse Control Test Error\nTest failed: ${error.message}`);
-        } finally {
-            // Re-enable button
-            this.elements.mouseControlTestButton.disabled = false;
-            this.elements.mouseControlTestButton.innerHTML = '<i class="fas fa-mouse-pointer"></i><span>Mouse Control Test</span>';
+            return {
+                success: false,
+                error: error.message,
+                action: bestMatch,
+                similarity: bestSimilarity
+            };
         }
     }
     

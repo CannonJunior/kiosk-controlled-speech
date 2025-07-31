@@ -52,6 +52,7 @@ app.add_middleware(
 
 # Static file serving for web interface
 app.mount("/static", StaticFiles(directory="web_app/static"), name="static")
+app.mount("/config", StaticFiles(directory="config"), name="config")
 
 class WebSocketConnectionManager:
     """Manages WebSocket connections for real-time communication"""
@@ -1021,6 +1022,91 @@ async def get_active_sessions():
             for client_id, session in connection_manager.user_sessions.items()
         }
     }
+
+@app.post("/api/feedback/command-history")
+async def update_command_history(request: Request):
+    """Update command history based on user feedback"""
+    try:
+        data = await request.json()
+        action = data.get("action")  # "add_pair" or "update_correction"
+        
+        command_history_path = Path("config/command_history.json")
+        
+        # Load existing command history
+        if command_history_path.exists():
+            with open(command_history_path, 'r') as f:
+                command_history = json.load(f)
+        else:
+            command_history = {"command_pairs": []}
+        
+        if action == "add_pair":
+            # User clicked "Yes" - add the successful command-action pair
+            user_command = data.get("user_command")
+            matched_action = data.get("matched_action")
+            
+            if user_command and matched_action:
+                # Check if this exact pair already exists
+                existing_pair = next((pair for pair in command_history["command_pairs"] 
+                                    if pair["user_command"].lower() == user_command.lower()), None)
+                
+                if not existing_pair:
+                    command_history["command_pairs"].append({
+                        "user_command": user_command,
+                        "action": matched_action,
+                        "added_via_feedback": True,
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    logger.info(f"Added new command pair via feedback: {user_command} -> {matched_action}")
+                else:
+                    logger.info(f"Command pair already exists: {user_command}")
+        
+        elif action == "update_correction":
+            # User clicked "No" and provided correct screen/element
+            user_command = data.get("user_command")
+            correct_screen = data.get("correct_screen")
+            correct_element = data.get("correct_element")
+            
+            if user_command and correct_screen and correct_element:
+                # Load kiosk data to get element details
+                kiosk_data_path = Path("config/kiosk_data.json")
+                if kiosk_data_path.exists():
+                    with open(kiosk_data_path, 'r') as f:
+                        kiosk_data = json.load(f)
+                    
+                    # Find the correct element
+                    screen_data = kiosk_data["screens"].get(correct_screen)
+                    if screen_data:
+                        element_data = next((elem for elem in screen_data["elements"] 
+                                           if elem["id"] == correct_element), None)
+                        
+                        if element_data:
+                            # Create corrected action
+                            corrected_action = {
+                                "type": element_data["action"],
+                                "element_id": element_data["id"],
+                                "coordinates": element_data["coordinates"],
+                                "method": "user_corrected",
+                                "description": f'corrected to {element_data["action"]} "{element_data["id"]}" at coordinates {element_data["coordinates"]}'
+                            }
+                            
+                            # Add corrected pair
+                            command_history["command_pairs"].append({
+                                "user_command": user_command,
+                                "action": corrected_action,
+                                "corrected_via_feedback": True,
+                                "timestamp": datetime.now().isoformat()
+                            })
+                            logger.info(f"Added corrected command pair: {user_command} -> {correct_element}")
+        
+        # Save updated command history
+        with open(command_history_path, 'w') as f:
+            json.dump(command_history, f, indent=2)
+        
+        return {"success": True, "message": "Command history updated"}
+        
+    except Exception as e:
+        logger.error(f"Error updating command history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 def main():
     """Run the web application"""

@@ -154,10 +154,18 @@
                 <div class="header-content">
                     <h1><i class="fas fa-microphone"></i> Kiosk Speech Chat</h1>
                     <div class="header-controls">
-                        <button id="mouseControlTestButton" class="mouse-control-test-button" title="Mouse Control Test">
-                            <i class="fas fa-mouse-pointer"></i>
-                            <span>Mouse Control Test</span>
-                        </button>
+                        <div class="processing-mode-toggle" id="processingModeToggle" title="Switch between LLM and Heuristic processing">
+                            <i class="fas fa-brain"></i>
+                            <span id="processingModeText">LLM Mode</span>
+                            <label class="toggle-label">
+                                <input type="checkbox" id="processingModeCheckbox">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-text">
+                                    <span class="llm-text">LLM</span>
+                                    <span class="heuristic-text">Heuristic</span>
+                                </span>
+                            </label>
+                        </div>
                         <div class="connection-status" id="connectionStatus">
                             <i class="fas fa-circle"></i>
                             <span>Connecting...</span>

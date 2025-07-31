@@ -82,8 +82,8 @@
           "id": "settingsToggle",
           "name": "Settings Button",
           "coordinates": {
-            "x": 750,
-            "y": 50
+            "x": 860,
+            "y": 161
           },
           "size": {
             "width": 50,

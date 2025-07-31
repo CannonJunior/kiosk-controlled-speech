@@ -1,0 +1,122 @@
+{
+  "command_pairs": [
+    {
+      "user_command": "Click the take screenshot button",
+      "action": {
+        "type": "click",
+        "element_id": "takeScreenshotButton",
+        "coordinates": {
+          "x": 1122,
+          "y": 313
+        },
+        "method": "WSL PowerShell interop",
+        "description": "clicked \"takeScreenshotButton\" at coordinates (1122, 313) using WSL PowerShell interop"
+      }
+    },
+    {
+      "user_command": "Take a screenshot",
+      "action": {
+        "type": "click",
+        "element_id": "takeScreenshotButton",
+        "coordinates": {
+          "x": 1122,
+          "y": 313
+        },
+        "method": "WSL PowerShell interop",
+        "description": "clicked \"takeScreenshotButton\" at coordinates (1122, 313) using WSL PowerShell interop"
+      }
+    },
+    {
+      "user_command": "Click start",
+      "action": {
+        "type": "click",
+        "element_id": "start_button",
+        "coordinates": {
+          "x": 400,
+          "y": 300
+        },
+        "method": "mouse_control",
+        "description": "clicked \"start_button\" at coordinates (400, 300) using mouse control"
+      }
+    },
+    {
+      "user_command": "Press the start button",
+      "action": {
+        "type": "click",
+        "element_id": "start_button",
+        "coordinates": {
+          "x": 400,
+          "y": 300
+        },
+        "method": "mouse_control",
+        "description": "clicked \"start_button\" at coordinates (400, 300) using mouse control"
+      }
+    },
+    {
+      "user_command": "Go back",
+      "action": {
+        "type": "click",
+        "element_id": "back_button",
+        "coordinates": {
+          "x": 50,
+          "y": 50
+        },
+        "method": "mouse_control",
+        "description": "clicked \"back_button\" at coordinates (50, 50) using mouse control"
+      }
+    },
+    {
+      "user_command": "Click the back button",
+      "action": {
+        "type": "click",
+        "element_id": "back_button",
+        "coordinates": {
+          "x": 50,
+          "y": 50
+        },
+        "method": "mouse_control",
+        "description": "clicked \"back_button\" at coordinates (50, 50) using mouse control"
+      }
+    },
+    {
+      "user_command": "Open menu",
+      "action": {
+        "type": "click",
+        "element_id": "menu_button",
+        "coordinates": {
+          "x": 100,
+          "y": 100
+        },
+        "method": "mouse_control",
+        "description": "clicked \"menu_button\" at coordinates (100, 100) using mouse control"
+      }
+    },
+    {
+      "user_command": "Click menu",
+      "action": {
+        "type": "click",
+        "element_id": "menu_button",
+        "coordinates": {
+          "x": 100,
+          "y": 100
+        },
+        "method": "mouse_control",
+        "description": "clicked \"menu_button\" at coordinates (100, 100) using mouse control"
+      }
+    },
+    {
+      "user_command": "Show help",
+      "action": {
+        "type": "help",
+        "description": "displayed help information with available commands"
+      }
+    },
+    {
+      "user_command": "What can I do",
+      "action": {
+        "type": "help",
+        "description": "displayed help information with available commands"
+      }
+    }
+  ]
+}
