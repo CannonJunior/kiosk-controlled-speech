@@ -584,7 +584,20 @@ async def analyze_intent(voice_text: str):
 @mcp.tool()
 async def check_ollama_health():
     """Check Ollama service health and model availability"""
-    return await ollama_server._check_ollama_health({})
+    return await ollama_server._health_check()
+
+@mcp.tool()
+async def configure_model(model: str = None, temperature: float = None, max_tokens: int = None):
+    """Configure Ollama model parameters"""
+    arguments = {}
+    if model is not None:
+        arguments["model"] = model
+    if temperature is not None:
+        arguments["temperature"] = temperature
+    if max_tokens is not None:
+        arguments["max_tokens"] = max_tokens
+    
+    return await ollama_server._configure_model(arguments)
 
 if __name__ == "__main__":
     mcp.run(show_banner=False)

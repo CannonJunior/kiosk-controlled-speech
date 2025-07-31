@@ -75,6 +75,7 @@ class KioskSpeechChat {
         this.loadVADConfig();
         this.loadKioskData();
         this.loadSettings();
+        this.loadOptimizationState();
         this.connectWebSocket();
         this.initializeAudio();
     }
@@ -2243,7 +2244,21 @@ class KioskSpeechChat {
             if (response.ok) {
                 const result = await response.json();
                 this.addMessage('system', `🚀 Performance preset set to "${preset}"\nModel: ${result.model.name}\nDescription: ${result.model.description}`);
-                this.updateCurrentModel(result.model);
+                
+                // Update current model display with preset-specific information
+                if (this.optimizationPresets && this.optimizationPresets[preset]) {
+                    const presetConfig = this.optimizationPresets[preset];
+                    const modelInfo = {
+                        name: `${presetConfig.name} Mode`,
+                        description: `Model: ${presetConfig.model}`,
+                        parameters: `Temperature: ${presetConfig.temperature}, Max Tokens: ${presetConfig.max_tokens}`,
+                        estimated_latency: preset === 'speed' ? '< 1s' : preset === 'balanced' ? '< 2s' : '< 3s'
+                    };
+                    this.updateCurrentModel(modelInfo);
+                } else {
+                    this.updateCurrentModel(result.model);
+                }
+                
                 this.updateActivePreset(preset);
             } else {
                 throw new Error(`Failed to set preset: ${response.statusText}`);
@@ -2310,6 +2325,55 @@ class KioskSpeechChat {
         }
     }
     
+    async loadOptimizationState() {
+        try {
+            // Load both current state and preset configurations
+            const [currentResponse, presetsResponse] = await Promise.all([
+                fetch('/api/optimization/current'),
+                fetch('/api/optimization/presets')
+            ]);
+            
+            if (currentResponse.ok && presetsResponse.ok) {
+                const currentResult = await currentResponse.json();
+                const presetsResult = await presetsResponse.json();
+                
+                if (currentResult.success && presetsResult.success) {
+                    // Store presets for later use
+                    this.optimizationPresets = presetsResult.presets;
+                    
+                    // Update active preset
+                    this.updateActivePreset(currentResult.current_preset);
+                    
+                    // Update model info display with preset-specific information
+                    const currentPreset = presetsResult.presets[currentResult.current_preset];
+                    if (currentPreset) {
+                        const modelInfo = {
+                            name: `${currentPreset.name} Mode`,
+                            description: `Model: ${currentPreset.model}`,
+                            parameters: `Temperature: ${currentPreset.temperature}, Max Tokens: ${currentPreset.max_tokens}`,
+                            estimated_latency: currentResult.current_preset === 'speed' ? '< 1s' :
+                                             currentResult.current_preset === 'balanced' ? '< 2s' : '< 3s'
+                        };
+                        this.updateCurrentModel(modelInfo);
+                    }
+                    
+                    // Update preset buttons with model information
+                    this.updatePresetButtons(presetsResult.presets);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading optimization state:', error);
+            // Set default state
+            this.updateActivePreset('balanced');
+            this.updateCurrentModel({
+                name: 'Balanced Mode',
+                description: 'Model: qwen2.5:1.5b',
+                parameters: 'Temperature: 0.1, Max Tokens: 512',
+                estimated_latency: '< 2s'
+            });
+        }
+    }
+    
     updateCurrentModel(modelInfo) {
         const currentModelDiv = document.getElementById('currentModel');
         if (currentModelDiv && modelInfo) {
@@ -2317,10 +2381,23 @@ class KioskSpeechChat {
                 <div><strong>${modelInfo.name}</strong></div>
                 <div style="font-size: 11px; color: #666; margin-top: 4px;">
                     ${modelInfo.description}<br>
+                    ${modelInfo.parameters ? modelInfo.parameters + '<br>' : ''}
                     Latency: ${modelInfo.estimated_latency}
                 </div>
             `;
         }
+    }
+    
+    updatePresetButtons(presets) {
+        const presetButtons = document.querySelectorAll('.preset-button');
+        presetButtons.forEach(button => {
+            const presetKey = button.dataset.preset;
+            const preset = presets[presetKey];
+            if (preset) {
+                // Update button title with model information
+                button.title = `${preset.name}: ${preset.description}\nModel: ${preset.model}\nTemperature: ${preset.temperature}, Max Tokens: ${preset.max_tokens}`;
+            }
+        });
     }
     
     updateActivePreset(activePreset) {

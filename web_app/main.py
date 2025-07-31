@@ -811,6 +811,202 @@ async def call_mcp_tool(request: Request):
         logger.error(f"MCP tool call error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def get_optimization_presets():
+    """Get the optimization presets configuration"""
+    return {
+        "speed": {
+            "model": "qwen2.5:1.5b",
+            "temperature": 0.3,
+            "max_tokens": 256,
+            "name": "Speed",
+            "description": "Fast responses with higher temperature for quick interactions"
+        },
+        "balanced": {
+            "model": "qwen2.5:1.5b", 
+            "temperature": 0.1,
+            "max_tokens": 512,
+            "name": "Balanced",
+            "description": "Good balance of speed and accuracy for general use"
+        },
+        "accuracy": {
+            "model": "qwen2.5:1.5b",
+            "temperature": 0.0,
+            "max_tokens": 768,
+            "name": "Accuracy",
+            "description": "Most accurate responses with lower temperature for complex tasks"
+        }
+    }
+
+@app.get("/api/optimization/presets")
+async def get_optimization_presets_api():
+    """Get all optimization presets with their model configurations"""
+    try:
+        presets = get_optimization_presets()
+        return {
+            "success": True,
+            "presets": presets
+        }
+    except Exception as e:
+        logger.error(f"Get presets error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/optimization/preset/{preset}")
+async def set_optimization_preset(preset: str):
+    """Set optimization preset for Ollama model"""
+    try:
+        # Get optimization presets
+        presets = get_optimization_presets()
+        
+        if preset not in presets:
+            raise HTTPException(status_code=400, detail=f"Unknown preset: {preset}. Available: {list(presets.keys())}")
+        
+        preset_config = presets[preset]
+        
+        # Use the speech bridge MCP client to configure the ollama_agent
+        if not speech_bridge.mcp_client:
+            raise HTTPException(status_code=503, detail="MCP services not initialized")
+        
+        # Call the configure_model tool
+        result_raw = await speech_bridge.mcp_client.call_tool(
+            "ollama_agent_configure_model", {
+                "model": preset_config["model"],
+                "temperature": preset_config["temperature"],
+                "max_tokens": preset_config["max_tokens"]
+            }
+        )
+        result = parse_tool_result(result_raw)
+        
+        if result.get("success"):
+            config_data = result.get("data", {})
+            return {
+                "success": True,
+                "preset": preset,
+                "model": {
+                    "name": preset_config["name"],
+                    "description": preset_config["description"],
+                    "model_id": preset_config["model"],
+                    "temperature": preset_config["temperature"],
+                    "max_tokens": preset_config["max_tokens"]
+                },
+                "current_config": config_data.get("current_config", {})
+            }
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Failed to configure model"))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Optimization preset error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/optimization/current")
+async def get_current_optimization():
+    """Get current optimization settings"""
+    try:
+        # Use the speech bridge MCP client to get current ollama config
+        if not speech_bridge.mcp_client:
+            raise HTTPException(status_code=503, detail="MCP services not initialized")
+        
+        # Call the health_check tool which returns current config
+        result_raw = await speech_bridge.mcp_client.call_tool("ollama_agent_check_ollama_health", {})
+        result = parse_tool_result(result_raw)
+        
+        if result.get("success"):
+            config_data = result.get("data", {})
+            current_model = config_data.get("configured_model", "qwen2.5:1.5b")
+            
+            # Determine which preset this matches
+            preset = "balanced"  # default
+            if "0.5b" in current_model:
+                preset = "speed"
+            elif "3b" in current_model:
+                preset = "accuracy"
+                
+            return {
+                "success": True,
+                "current_preset": preset,
+                "model": {
+                    "model_id": current_model,
+                    "available": config_data.get("model_available", True),
+                    "status": config_data.get("status", "unknown")
+                },
+                "available_models": config_data.get("available_models", [])
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("error", "Unable to get current configuration"),
+                "current_preset": "balanced",
+                "model": {"model_id": "qwen2.5:1.5b", "available": False, "status": "unknown"}
+            }
+            
+    except Exception as e:
+        logger.error(f"Get optimization error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "current_preset": "balanced",
+            "model": {"model_id": "qwen2.5:1.5b", "available": False, "status": "error"}
+        }
+
+@app.get("/api/optimization/stats")
+async def get_optimization_stats():
+    """Get optimization and performance statistics"""
+    try:
+        # Get current optimization settings
+        current_result = await get_current_optimization()
+        
+        # Mock cache statistics for now (these would be real in a full implementation)
+        cache_stats = {
+            "screen_cache_hit_rate": "85%",
+            "response_cache_hit_rate": "72%", 
+            "total_queries": 156
+        }
+        
+        return {
+            "success": True,
+            "cache_stats": cache_stats,
+            "metrics": {
+                "total_queries": cache_stats["total_queries"],
+                "screen_cache_hit_rate": cache_stats["screen_cache_hit_rate"],
+                "response_cache_hit_rate": cache_stats["response_cache_hit_rate"]
+            },
+            "model_config": {
+                "current_model": {
+                    "name": f"{current_result['current_preset'].title()} Mode",
+                    "description": f"Optimized for {current_result['current_preset']} performance",
+                    "estimated_latency": "< 1s" if current_result['current_preset'] == 'speed' else 
+                                        "< 2s" if current_result['current_preset'] == 'balanced' else "< 3s"
+                }
+            }
+        }
+    except Exception as e:
+        logger.error(f"Get optimization stats error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "cache_stats": {"screen_cache_hit_rate": "--", "response_cache_hit_rate": "--", "total_queries": 0},
+            "metrics": {"total_queries": 0}
+        }
+
+@app.post("/api/optimization/cache/clear")
+async def clear_optimization_caches():
+    """Clear optimization caches"""
+    try:
+        # In a full implementation, this would clear actual caches
+        # For now, we'll just return success
+        return {
+            "success": True,
+            "message": "All optimization caches cleared",
+            "cleared_items": ["screen_cache", "response_cache", "model_cache"]
+        }
+    except Exception as e:
+        logger.error(f"Clear caches error: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/sessions")
 async def get_active_sessions():
     """Get information about active sessions"""

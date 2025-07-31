@@ -152,8 +152,8 @@
           "id": "performanceButton",
           "name": "Performance Button",
           "coordinates": {
-            "x": 550,
-            "y": 500
+            "x": 858,
+            "y": 176
           },
           "size": {
             "width": 45,

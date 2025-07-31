@@ -1,0 +1,3 @@
+FROM steamdj/llama3.1-cpu-only:latest
+
+PARAMETER num_ctx 8096
