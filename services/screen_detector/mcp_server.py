@@ -41,4 +41,4 @@ async def analyze_screen_elements(screenshot_data: str):
     }
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(show_banner=False)

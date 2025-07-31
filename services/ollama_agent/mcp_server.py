@@ -487,15 +487,32 @@ Convert this voice command to a specific action. Respond with ONLY a valid JSON 
         """Configure model parameters"""
         updates = {}
         
-        if "model" in arguments:
+        if "model" in arguments and arguments["model"]:
+            old_model = self.config.model
             self.config.model = arguments["model"]
             updates["model"] = arguments["model"]
+            
+            # Test if new model is available
+            try:
+                test_response = await self.client.get(f"{self.base_url}/api/tags")
+                if test_response.status_code == 200:
+                    models = test_response.json().get("models", [])
+                    model_names = [model.get("name") for model in models]
+                    
+                    if self.config.model not in model_names:
+                        # Model not available, revert
+                        self.config.model = old_model
+                        return create_tool_response(False, 
+                            error=f"Model '{arguments['model']}' not available. Available models: {model_names}")
+            except Exception as e:
+                # Can't check availability, but proceed anyway
+                pass
         
-        if "temperature" in arguments:
+        if "temperature" in arguments and arguments["temperature"] is not None:
             self.config.temperature = float(arguments["temperature"])
             updates["temperature"] = arguments["temperature"]
         
-        if "max_tokens" in arguments:
+        if "max_tokens" in arguments and arguments["max_tokens"] is not None:
             self.config.max_tokens = int(arguments["max_tokens"])
             updates["max_tokens"] = arguments["max_tokens"]
         
@@ -570,4 +587,4 @@ async def check_ollama_health():
     return await ollama_server._check_ollama_health({})
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(show_banner=False)

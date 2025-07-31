@@ -2024,7 +2024,7 @@ class KioskSpeechChat {
             console.log('Calling MCP screenshot tool...');
             
             // Call the MCP screenshot tool via the web app backend
-            const response = await this.callMCPTool('screen_capture_screen_capture_take_screenshot', {});
+            const response = await this.callMCPTool('screen_capture_take_screenshot', {});
             
             if (response.success && response.data) {
                 const data = response.data;

@@ -9,6 +9,7 @@ import logging
 import base64
 import tempfile
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -167,16 +168,145 @@ class SpeechWebBridge:
             self.mcp_config = {
                 "mcpServers": {
                     "speech_to_text": {
-                        "command": "python",
-                        "args": ["../services/speech_to_text/mcp_server.py"]
+                        "command": "python3",
+                        "args": ["services/speech_to_text/mcp_server.py"]
                     },
                     "ollama_agent": {
-                        "command": "python", 
-                        "args": ["../services/ollama_agent/mcp_server.py"]
+                        "command": "python3", 
+                        "args": ["services/ollama_agent/mcp_server.py"]
+                    },
+                    "mouse_control": {
+                        "command": "python3",
+                        "args": ["services/mouse_control/mcp_server.py"]
+                    },
+                    "screen_capture": {
+                        "command": "python3",
+                        "args": ["services/screen_capture/mcp_server.py"]
+                    },
+                    "screen_detector": {
+                        "command": "python3",
+                        "args": ["services/screen_detector/mcp_server.py"]
                     }
                 }
             }
             
+    async def _load_kiosk_data_for_context(self) -> Dict[str, Any]:
+        """Load kiosk data to provide complete screen context"""
+        try:
+            config_paths = [
+                Path("../config/kiosk_data.json"),
+                Path("config/kiosk_data.json"),
+                Path("./config/kiosk_data.json")
+            ]
+            
+            for config_path in config_paths:
+                if config_path.exists():
+                    with open(config_path, 'r') as f:
+                        kiosk_data = json.load(f)
+                    
+                    # Return the web_app screen data which contains all the UI elements
+                    web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
+                    if web_app_screen:
+                        return web_app_screen
+                    break
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to load kiosk data for context: {e}")
+            return None
+    
+    async def _execute_suggested_action(self, ollama_response: Dict[str, Any], current_screen: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute action suggested by Ollama model"""
+        try:
+            action_type = ollama_response.get("action")
+            
+            if action_type == "click":
+                # Get element information
+                element_id = ollama_response.get("element_id")
+                coordinates = ollama_response.get("coordinates")
+                
+                # If coordinates are not provided by Ollama, look them up from current_screen
+                if not coordinates and element_id:
+                    for element in current_screen.get("elements", []):
+                        if element.get("id") == element_id:
+                            coordinates = element.get("coordinates")
+                            logger.info(f"Found coordinates for {element_id}: {coordinates}")
+                            break
+                
+                if coordinates:
+                    # Execute mouse click using MCP tool
+                    try:
+                        result_raw = await self.mcp_client.call_tool(
+                            "mouse_control_click", {
+                                "x": coordinates["x"],
+                                "y": coordinates["y"],
+                                "button": "left"
+                            }
+                        )
+                        click_result = parse_tool_result(result_raw)
+                        
+                        if click_result.get("success"):
+                            click_data = click_result.get("data", {})
+                            method = click_data.get("method", "unknown")
+                            is_mock = click_data.get("mock", True)
+                            
+                            logger.info(f"Successfully clicked {element_id} at {coordinates} using {method}")
+                            return {
+                                "action_executed": True,
+                                "action_type": "click",
+                                "element_id": element_id,
+                                "coordinates": coordinates,
+                                "result": "success",
+                                "method": method,
+                                "mock": is_mock,
+                                "message": f"Clicked {element_id} at coordinates {coordinates} using {method}"
+                            }
+                        else:
+                            logger.error(f"Click failed: {click_result.get('error')}")
+                            return {
+                                "action_executed": False,
+                                "action_type": "click",
+                                "error": f"Click failed: {click_result.get('error')}"
+                            }
+                            
+                    except Exception as e:
+                        logger.error(f"Mouse click execution error: {e}")
+                        return {
+                            "action_executed": False,
+                            "action_type": "click",
+                            "error": f"Mouse click error: {str(e)}"
+                        }
+                else:
+                    logger.warning(f"No coordinates found for element {element_id}")
+                    return {
+                        "action_executed": False,
+                        "action_type": "click",
+                        "error": f"No coordinates found for element {element_id}"
+                    }
+                    
+            elif action_type in ["help", "error", "clarify", "navigate"]:
+                # These are response-only actions, no execution needed
+                return {
+                    "action_executed": False,
+                    "action_type": action_type,
+                    "message": "Response-only action, no execution needed"
+                }
+            else:
+                # Unknown or unsupported action
+                return {
+                    "action_executed": False,
+                    "action_type": action_type,
+                    "error": f"Unsupported action type: {action_type}"
+                }
+                
+        except Exception as e:
+            logger.error(f"Action execution error: {e}")
+            return {
+                "action_executed": False,
+                "error": f"Action execution failed: {str(e)}"
+            }
+
     async def cleanup(self):
         """Cleanup MCP client"""
         if self.mcp_client:
@@ -243,24 +373,27 @@ class SpeechWebBridge:
     async def process_chat_message(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Process chat message through Ollama agent"""
         try:
-            # Create mock screen data for chat context
-            current_screen = {
-                "name": "Chat Interface",
-                "elements": [
-                    {
-                        "id": "chat_input",
-                        "name": "Message Input",
-                        "coordinates": {"x": 400, "y": 500},
-                        "voice_commands": ["send message", "type message"]
-                    },
-                    {
-                        "id": "voice_button", 
-                        "name": "Voice Input",
-                        "coordinates": {"x": 450, "y": 500},
-                        "voice_commands": ["start recording", "voice input"]
-                    }
-                ]
-            }
+            # Load actual kiosk data for complete screen context
+            current_screen = await self._load_kiosk_data_for_context()
+            if not current_screen:
+                # Fallback to basic screen data if kiosk data unavailable
+                current_screen = {
+                    "name": "Chat Interface",
+                    "elements": [
+                        {
+                            "id": "chat_input",
+                            "name": "Message Input",
+                            "coordinates": {"x": 400, "y": 500},
+                            "voice_commands": ["send message", "type message"]
+                        },
+                        {
+                            "id": "voice_button", 
+                            "name": "Voice Input",
+                            "coordinates": {"x": 450, "y": 500},
+                            "voice_commands": ["start recording", "voice input"]
+                        }
+                    ]
+                }
             
             # Process through Ollama agent using FastMCP with error recovery
             async def call_ollama_service():
@@ -278,9 +411,15 @@ class SpeechWebBridge:
             )
             
             if result.get("success"):
+                ollama_response = result.get("data", {})
+                
+                # Execute suggested action if applicable
+                action_result = await self._execute_suggested_action(ollama_response, current_screen)
+                
                 return {
                     "success": True,
-                    "response": result.get("data", {}),
+                    "response": ollama_response,
+                    "action_result": action_result,
                     "processing_time": "< 1s"
                 }
             else:
@@ -394,6 +533,134 @@ async def get_vad_configuration():
                     "timeoutRange": {"min": 1.5, "max": 6.0, "step": 0.5, "default": 2.5}
                 }
             }
+        }
+
+@app.get("/api/kiosk-data")
+async def get_kiosk_data():
+    """Get kiosk data configuration for the web client"""
+    try:
+        # Try to load kiosk_data.json from config directory
+        config_paths = [
+            Path("../config/kiosk_data.json"),
+            Path("config/kiosk_data.json"),
+            Path("./config/kiosk_data.json")
+        ]
+        
+        kiosk_data = None
+        for config_path in config_paths:
+            if config_path.exists():
+                with open(config_path, 'r') as f:
+                    kiosk_data = json.load(f)
+                logger.info(f"Loaded kiosk data from {config_path}")
+                break
+        
+        if not kiosk_data:
+            raise FileNotFoundError("Could not find kiosk_data.json in any expected location")
+        
+        return {
+            "success": True,
+            "data": kiosk_data
+        }
+    except Exception as e:
+        logger.error(f"Failed to load kiosk data: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "data": None
+        }
+
+@app.post("/api/kiosk-data")
+async def save_kiosk_data(request: Request):
+    """Save coordinate updates to kiosk_data.json"""
+    try:
+        data = await request.json()
+        updates = data.get("updates", {})
+        
+        if not updates:
+            raise ValueError("No updates provided")
+        
+        # Find the kiosk_data.json file
+        config_paths = [
+            Path("../config/kiosk_data.json"),
+            Path("config/kiosk_data.json"),
+            Path("./config/kiosk_data.json")
+        ]
+        
+        config_path = None
+        for path in config_paths:
+            if path.exists():
+                config_path = path
+                break
+        
+        if not config_path:
+            raise FileNotFoundError("Could not find kiosk_data.json file")
+        
+        # Create backup before modifying
+        backup_path = config_path.with_suffix('.json.backup')
+        shutil.copy2(config_path, backup_path)
+        logger.info(f"Created backup at {backup_path}")
+        
+        # Load current data
+        with open(config_path, 'r') as f:
+            kiosk_data = json.load(f)
+        
+        # Apply updates
+        updated_elements = []
+        for update_key, update_info in updates.items():
+            screen_name = update_info["screen"]
+            element_id = update_info["elementId"]
+            new_coords = update_info["newCoordinates"]
+            
+            # Validate screen exists
+            if screen_name not in kiosk_data.get("screens", {}):
+                raise ValueError(f"Screen '{screen_name}' not found in kiosk data")
+            
+            # Find and update element
+            screen_data = kiosk_data["screens"][screen_name]
+            element_found = False
+            
+            for element in screen_data.get("elements", []):
+                if element.get("id") == element_id:
+                    # Update coordinates
+                    if "coordinates" not in element:
+                        element["coordinates"] = {}
+                    
+                    old_coords = element["coordinates"].copy()
+                    element["coordinates"]["x"] = new_coords["x"]
+                    element["coordinates"]["y"] = new_coords["y"]
+                    
+                    updated_elements.append({
+                        "screen": screen_name,
+                        "element": element_id,
+                        "element_name": element.get("name", element_id),
+                        "old_coordinates": old_coords,
+                        "new_coordinates": new_coords
+                    })
+                    
+                    element_found = True
+                    break
+            
+            if not element_found:
+                raise ValueError(f"Element '{element_id}' not found in screen '{screen_name}'")
+        
+        # Write updated data back to file
+        with open(config_path, 'w') as f:
+            json.dump(kiosk_data, f, indent=2)
+        
+        logger.info(f"Successfully updated {len(updated_elements)} elements in {config_path}")
+        
+        return {
+            "success": True,
+            "message": f"Successfully updated {len(updated_elements)} element(s)",
+            "updated_elements": updated_elements,
+            "backup_path": str(backup_path)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to save kiosk data: {e}")
+        return {
+            "success": False,
+            "error": str(e)
         }
 
 @app.get("/health")
@@ -513,6 +780,36 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     except Exception as e:
         logger.error(f"WebSocket error for client {client_id}: {e}")
         connection_manager.disconnect(client_id)
+
+@app.post("/api/mcp-tool")
+async def call_mcp_tool(request: Request):
+    """Call MCP tool endpoint for web interface"""
+    try:
+        data = await request.json()
+        tool_name = data.get("tool")
+        parameters = data.get("parameters", {})
+        
+        if not tool_name:
+            raise HTTPException(status_code=400, detail="Tool name is required")
+        
+        # Use the speech bridge MCP client to call the tool
+        if not speech_bridge.mcp_client:
+            raise HTTPException(status_code=503, detail="MCP services not initialized")
+        
+        # Call the tool using FastMCP client
+        result_raw = await speech_bridge.mcp_client.call_tool(tool_name, parameters)
+        result = parse_tool_result(result_raw)
+        
+        if result.get("success"):
+            return result
+        else:
+            raise HTTPException(status_code=500, detail=result.get("error", "Tool call failed"))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"MCP tool call error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sessions")
 async def get_active_sessions():
