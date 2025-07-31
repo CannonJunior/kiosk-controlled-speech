@@ -9,7 +9,7 @@ import logging
 import base64
 import tempfile
 import os
-import time
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -25,34 +25,8 @@ import uvicorn
 import sys
 sys.path.append('..')
 from fastmcp import Client
-
-# Import optimization features
-from .optimization import optimization_manager
-
-# Try to import error recovery and vad config, with fallbacks
-try:
-    from error_recovery import error_recovery
-except ImportError:
-    # Create a mock error recovery object if not available
-    class MockErrorRecovery:
-        async def start(self): pass
-        async def stop(self): pass
-        async def execute_with_resilience(self, service, func): return await func()
-        def get_metrics(self): return {"status": "mock"}
-        class ResourceManager:
-            def register_temp_file(self, path): pass
-        resource_manager = ResourceManager()
-    error_recovery = MockErrorRecovery()
-
-try:
-    from vad_config import get_vad_config
-except ImportError:
-    # Create a mock vad config function
-    def get_vad_config():
-        class MockConfig:
-            def get_client_defaults(self): return {"vadEnabled": True, "vadSensitivity": 0.003}
-            def get_ui_settings(self): return {"timeoutRange": {"min": 1.5, "max": 6.0}}
-        return MockConfig()
+from web_app.error_recovery import error_recovery
+from web_app.vad_config import get_vad_config
 
 # Setup logging
 logging.basicConfig(
@@ -76,9 +50,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static file serving for web interface - handle both run contexts
-static_dir = "static" if Path("static").exists() else "web_app/static"
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+# Static file serving for web interface
+app.mount("/static", StaticFiles(directory="web_app/static"), name="static")
 
 class WebSocketConnectionManager:
     """Manages WebSocket connections for real-time communication"""
@@ -195,147 +168,53 @@ class SpeechWebBridge:
             self.mcp_config = {
                 "mcpServers": {
                     "speech_to_text": {
-                        "command": "python",
-                        "args": ["../services/speech_to_text/mcp_server.py"]
+                        "command": "python3",
+                        "args": ["services/speech_to_text/mcp_server.py"]
                     },
                     "ollama_agent": {
-                        "command": "python", 
-                        "args": ["../services/ollama_agent/mcp_server.py"]
+                        "command": "python3", 
+                        "args": ["services/ollama_agent/mcp_server.py"]
+                    },
+                    "mouse_control": {
+                        "command": "python3",
+                        "args": ["services/mouse_control/mcp_server.py"]
+                    },
+                    "screen_capture": {
+                        "command": "python3",
+                        "args": ["services/screen_capture/mcp_server.py"]
+                    },
+                    "screen_detector": {
+                        "command": "python3",
+                        "args": ["services/screen_detector/mcp_server.py"]
                     }
                 }
             }
             
-    async def cleanup(self):
-        """Cleanup MCP client"""
-        if self.mcp_client:
-            try:
-                await self.mcp_client.__aexit__(None, None, None)
-            except Exception as e:
-                logger.error(f"MCP client cleanup error: {e}")
-    
-    async def _update_ollama_model_config(self, model_config: Dict[str, Any]) -> None:
-        """Update Ollama model configuration if needed"""
+    async def _load_kiosk_data_for_context(self) -> Dict[str, Any]:
+        """Load kiosk data to provide complete screen context"""
         try:
-            # Call configure_model tool if available
-            await self.mcp_client.call_tool(
-                "ollama_agent_configure_model", {
-                    "model": model_config.get("name"),
-                    "temperature": model_config.get("temperature"),
-                    "max_tokens": model_config.get("max_tokens")
-                }
-            )
-        except Exception as e:
-            logger.warning(f"Failed to update Ollama model config: {e}")
-    
-    async def _load_current_screen_data(self) -> Dict[str, Any]:
-        """Load current screen data from kiosk_data.json with caching"""
-        try:
-            # Try to load kiosk_data.json from config directory
             config_paths = [
                 Path("../config/kiosk_data.json"),
                 Path("config/kiosk_data.json"),
                 Path("./config/kiosk_data.json")
             ]
             
-            # Find existing config file
-            config_path = None
-            for path in config_paths:
-                if path.exists():
-                    config_path = str(path)
+            for config_path in config_paths:
+                if config_path.exists():
+                    with open(config_path, 'r') as f:
+                        kiosk_data = json.load(f)
+                    
+                    # Return the web_app screen data which contains all the UI elements
+                    web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
+                    if web_app_screen:
+                        return web_app_screen
                     break
             
-            if not config_path:
-                logger.warning("Could not find kiosk_data.json, using fallback data")
-                optimization_manager.increment_metric("screen_cache_misses")
-                return self._get_fallback_screen_data()
+            return None
             
-            # Check cache first
-            cached_data = optimization_manager.screen_cache.get(config_path, "web_app")
-            if cached_data:
-                optimization_manager.increment_metric("screen_cache_hits")
-                return cached_data
-            
-            # Load from file
-            with open(config_path, 'r') as f:
-                kiosk_data = json.load(f)
-            logger.info(f"Loaded kiosk data from {config_path}")
-            
-            # Extract web_app screen data
-            web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
-            if web_app_screen:
-                screen_data = {
-                    "name": web_app_screen.get("name", "Kiosk Speech Chat Web Application"),
-                    "description": web_app_screen.get("description", "Web-based chat interface"),
-                    "elements": web_app_screen.get("elements", [])
-                }
-                
-                # Cache the data
-                optimization_manager.screen_cache.set(config_path, "web_app", screen_data)
-                optimization_manager.increment_metric("screen_cache_misses")
-                return screen_data
-            else:
-                logger.warning("web_app screen not found in kiosk_data.json, using fallback")
-                optimization_manager.increment_metric("screen_cache_misses")
-                return self._get_fallback_screen_data()
-                
         except Exception as e:
-            logger.error(f"Error loading kiosk data: {e}")
-            optimization_manager.increment_metric("screen_cache_misses")
-            return self._get_fallback_screen_data()
-    
-    def _get_fallback_screen_data(self) -> Dict[str, Any]:
-        """Fallback screen data when kiosk_data.json is not available"""
-        return {
-            "name": "Chat Interface",
-            "description": "Basic chat interface fallback",
-            "elements": [
-                {
-                    "id": "messageInput",
-                    "name": "Message Input Field",
-                    "coordinates": {"x": 400, "y": 500},
-                    "size": {"width": 600, "height": 40},
-                    "voice_commands": ["type message", "enter text", "input field"],
-                    "action": "focus",
-                    "description": "Text input field for typing messages"
-                },
-                {
-                    "id": "voiceButton", 
-                    "name": "Voice Input Button",
-                    "coordinates": {"x": 500, "y": 500},
-                    "size": {"width": 45, "height": 45},
-                    "voice_commands": ["start recording", "voice input", "microphone", "speak"],
-                    "action": "click",
-                    "description": "Click to start/stop voice recording"
-                },
-                {
-                    "id": "sendButton",
-                    "name": "Send Message Button", 
-                    "coordinates": {"x": 550, "y": 500},
-                    "size": {"width": 45, "height": 45},
-                    "voice_commands": ["send message", "send", "submit"],
-                    "action": "click",
-                    "description": "Send the typed or transcribed message"
-                },
-                {
-                    "id": "mouseControlTestButton",
-                    "name": "Mouse_Control_Test_Button",
-                    "coordinates": {"x": 600, "y": 50},
-                    "size": {"width": 160, "height": 35},
-                    "voice_commands": ["mouse control test", "test mouse", "mouse test", "control test"],
-                    "action": "click",
-                    "description": "Run mouse control functionality test"
-                },
-                {
-                    "id": "takeScreenshotButton",
-                    "name": "Take Screenshot Button",
-                    "coordinates": {"x": 1200, "y": 150},
-                    "size": {"width": 280, "height": 40},
-                    "voice_commands": ["take screenshot", "screenshot", "capture screen", "take picture"],
-                    "action": "click",
-                    "description": "Capture a screenshot of the current screen and add it to the gallery"
-                }
-            ]
-        }
+            logger.error(f"Failed to load kiosk data for context: {e}")
+            return None
     
     async def _execute_suggested_action(self, ollama_response: Dict[str, Any], current_screen: Dict[str, Any]) -> Dict[str, Any]:
         """Execute action suggested by Ollama model"""
@@ -418,7 +297,7 @@ class SpeechWebBridge:
                 return {
                     "action_executed": False,
                     "action_type": action_type,
-                    "message": f"Unsupported action type: {action_type}"
+                    "error": f"Unsupported action type: {action_type}"
                 }
                 
         except Exception as e:
@@ -427,6 +306,14 @@ class SpeechWebBridge:
                 "action_executed": False,
                 "error": f"Action execution failed: {str(e)}"
             }
+
+    async def cleanup(self):
+        """Cleanup MCP client"""
+        if self.mcp_client:
+            try:
+                await self.mcp_client.__aexit__(None, None, None)
+            except Exception as e:
+                logger.error(f"MCP client cleanup error: {e}")
     
     async def process_audio_data(self, audio_data: str, client_id: str) -> Dict[str, Any]:
         """Process base64 audio data and return transcription"""
@@ -484,41 +371,32 @@ class SpeechWebBridge:
             }
     
     async def process_chat_message(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Process chat message through Ollama agent with caching optimizations"""
-        start_time = time.time()
-        optimization_manager.increment_metric("total_queries")
-        
+        """Process chat message through Ollama agent"""
         try:
-            # Load actual screen data from kiosk_data.json (cached)
-            current_screen = await self._load_current_screen_data()
-            
-            # Check response cache first
-            cached_response = optimization_manager.response_cache.get(message, current_screen)
-            if cached_response:
-                optimization_manager.increment_metric("response_cache_hits")
-                
-                # Still execute suggested actions for cached responses
-                action_result = await self._execute_suggested_action(cached_response, current_screen)
-                
-                processing_time = time.time() - start_time
-                return {
-                    "success": True,
-                    "response": cached_response,
-                    "action_result": action_result,
-                    "processing_time": f"{processing_time:.2f}s",
-                    "cached": True
+            # Load actual kiosk data for complete screen context
+            current_screen = await self._load_kiosk_data_for_context()
+            if not current_screen:
+                # Fallback to basic screen data if kiosk data unavailable
+                current_screen = {
+                    "name": "Chat Interface",
+                    "elements": [
+                        {
+                            "id": "chat_input",
+                            "name": "Message Input",
+                            "coordinates": {"x": 400, "y": 500},
+                            "voice_commands": ["send message", "type message"]
+                        },
+                        {
+                            "id": "voice_button", 
+                            "name": "Voice Input",
+                            "coordinates": {"x": 450, "y": 500},
+                            "voice_commands": ["start recording", "voice input"]
+                        }
+                    ]
                 }
-            
-            optimization_manager.increment_metric("response_cache_misses")
-            
-            # Get current model configuration
-            model_config = optimization_manager.model_config.get_current_model_config()
             
             # Process through Ollama agent using FastMCP with error recovery
             async def call_ollama_service():
-                # Update model configuration if needed
-                await self._update_ollama_model_config(model_config)
-                
                 result_raw = await self.mcp_client.call_tool(
                     "ollama_agent_process_voice_command", {
                         "voice_text": message,
@@ -535,36 +413,26 @@ class SpeechWebBridge:
             if result.get("success"):
                 ollama_response = result.get("data", {})
                 
-                # Cache the response for future similar queries
-                if not ollama_response.get("fallback", False):
-                    optimization_manager.response_cache.set(message, current_screen, ollama_response)
-                
-                # Check if Ollama suggested an action to execute
+                # Execute suggested action if applicable
                 action_result = await self._execute_suggested_action(ollama_response, current_screen)
                 
-                processing_time = time.time() - start_time
                 return {
                     "success": True,
                     "response": ollama_response,
                     "action_result": action_result,
-                    "processing_time": f"{processing_time:.2f}s",
-                    "model_used": model_config.get("name", "unknown")
+                    "processing_time": "< 1s"
                 }
             else:
-                processing_time = time.time() - start_time
                 return {
                     "success": False,
-                    "error": result.get("error", "Message processing failed"),
-                    "processing_time": f"{processing_time:.2f}s"
+                    "error": result.get("error", "Message processing failed")
                 }
                 
         except Exception as e:
-            processing_time = time.time() - start_time
             logger.error(f"Chat processing error: {e}")
             return {
                 "success": False,
-                "error": f"Chat processing failed: {str(e)}",
-                "processing_time": f"{processing_time:.2f}s"
+                "error": f"Chat processing failed: {str(e)}"
             }
 
 # Global instances
@@ -599,8 +467,7 @@ async def shutdown_event():
 @app.get("/", response_class=HTMLResponse)
 async def get_chat_interface():
     """Serve the main chat interface"""
-    # Handle both run contexts  
-    html_file = Path("static/index.html") if Path("static").exists() else Path("web_app/static/index.html")
+    html_file = Path("web_app/static/index.html")
     if html_file.exists():
         return FileResponse(html_file)
     else:
@@ -730,7 +597,6 @@ async def save_kiosk_data(request: Request):
         
         # Create backup before modifying
         backup_path = config_path.with_suffix('.json.backup')
-        import shutil
         shutil.copy2(config_path, backup_path)
         logger.info(f"Created backup at {backup_path}")
         
@@ -959,94 +825,6 @@ async def get_active_sessions():
             for client_id, session in connection_manager.user_sessions.items()
         }
     }
-
-@app.get("/api/optimization/stats")
-async def get_optimization_stats():
-    """Get optimization performance statistics"""
-    return optimization_manager.get_performance_stats()
-
-@app.post("/api/optimization/model")
-async def set_optimization_model(request: Request):
-    """Set the current Ollama model for optimization"""
-    try:
-        data = await request.json()
-        model_key = data.get("model")
-        
-        if not model_key:
-            raise HTTPException(status_code=400, detail="Model key is required")
-        
-        success = optimization_manager.model_config.set_current_model(model_key)
-        
-        if success:
-            optimization_manager.increment_metric("model_switches")
-            return {
-                "success": True,
-                "model": optimization_manager.model_config.get_model_info(model_key)
-            }
-        else:
-            raise HTTPException(status_code=400, detail=f"Model '{model_key}' not found")
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Model switch error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/api/optimization/models")
-async def get_available_models():
-    """Get available optimization models"""
-    try:
-        models = {}
-        for model_key in optimization_manager.model_config.get_available_models():
-            models[model_key] = optimization_manager.model_config.get_model_info(model_key)
-        
-        return {
-            "success": True,
-            "models": models,
-            "current": optimization_manager.model_config.get_model_info()
-        }
-    except Exception as e:
-        logger.error(f"Failed to get models: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/optimization/cache/clear")
-async def clear_optimization_caches():
-    """Clear all optimization caches"""
-    try:
-        optimization_manager.clear_all_caches()
-        return {"success": True, "message": "All caches cleared"}
-    except Exception as e:
-        logger.error(f"Cache clear error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/optimization/preset/{preset}")
-async def set_optimization_preset(preset: str):
-    """Set optimization preset (speed, balanced, accuracy)"""
-    try:
-        if preset == "speed":
-            success = optimization_manager.optimize_for_speed()
-        elif preset == "balanced":
-            success = optimization_manager.optimize_balanced()
-        elif preset == "accuracy":
-            success = optimization_manager.optimize_for_accuracy()
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown preset: {preset}")
-        
-        if success:
-            optimization_manager.increment_metric("model_switches")
-            return {
-                "success": True,
-                "preset": preset,
-                "model": optimization_manager.model_config.get_model_info()
-            }
-        else:
-            raise HTTPException(status_code=500, detail=f"Failed to apply preset: {preset}")
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Preset error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 def main():
     """Run the web application"""

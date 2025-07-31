@@ -26,7 +26,7 @@ except ImportError:
 mcp = FastMCP("Screen Capture Server")
 
 @mcp.tool()
-async def screen_capture_take_screenshot():
+async def take_screenshot():
     """Take a screenshot and save it to file"""
     try:
         # Create screenshots directory
