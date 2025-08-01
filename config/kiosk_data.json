@@ -214,6 +214,36 @@
           "description": "Capture a screenshot of the current screen and add it to the gallery"
         }
       ]
+    },
+    "kiosk_test": {
+      "name": "Kiosk Test",
+      "description": "Screen configuration for Kiosk Test",
+      "detection_criteria": {
+        "title_text": "Kiosk Test",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "test_element",
+          "name": "Test Element",
+          "coordinates": {
+            "x": 500,
+            "y": 500
+          },
+          "size": {
+            "width": 100,
+            "height": 100
+          },
+          "voice_commands": [
+            "Click Button"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Test Element element"
+        }
+      ]
     }
   },
   "global_commands": {

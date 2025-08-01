@@ -63,6 +63,7 @@ class KioskSpeechChat {
         this.vadConfig = null;
         this.kioskData = null;
         this.pendingUpdates = {}; // Track coordinate updates before saving
+        this.pendingNewScreens = {}; // Track new screens before saving
         this.lastRectangleCoords = null; // Store last drawn rectangle coordinates
         
         // Processing mode settings
@@ -242,7 +243,32 @@ class KioskSpeechChat {
             modalTitle: document.getElementById('modalTitle'),
             modalImage: document.getElementById('modalImage'),
             downloadScreenshot: document.getElementById('downloadScreenshot'),
-            deleteScreenshot: document.getElementById('deleteScreenshot')
+            deleteScreenshot: document.getElementById('deleteScreenshot'),
+            // Add new screen modal elements
+            addScreenModal: document.getElementById('addScreenModal'),
+            addScreenModalBackdrop: document.getElementById('addScreenModalBackdrop'),
+            addScreenModalClose: document.getElementById('addScreenModalClose'),
+            screenId: document.getElementById('screenId'),
+            screenName: document.getElementById('screenName'),
+            screenDescription: document.getElementById('screenDescription'),
+            titleText: document.getElementById('titleText'),
+            cancelAddScreen: document.getElementById('cancelAddScreen'),
+            confirmAddScreen: document.getElementById('confirmAddScreen'),
+            // Add new element modal elements
+            addElementModal: document.getElementById('addElementModal'),
+            addElementModalBackdrop: document.getElementById('addElementModalBackdrop'),
+            addElementModalClose: document.getElementById('addElementModalClose'),
+            elementId: document.getElementById('elementId'),
+            elementName: document.getElementById('elementName'),
+            elementDescription: document.getElementById('elementDescription'),
+            elementAction: document.getElementById('elementAction'),
+            elementVoiceCommands: document.getElementById('elementVoiceCommands'),
+            elementX: document.getElementById('elementX'),
+            elementY: document.getElementById('elementY'),
+            elementWidth: document.getElementById('elementWidth'),
+            elementHeight: document.getElementById('elementHeight'),
+            cancelAddElement: document.getElementById('cancelAddElement'),
+            confirmAddElement: document.getElementById('confirmAddElement')
         };
     }
     
@@ -586,6 +612,14 @@ class KioskSpeechChat {
             this.elements.screenDropdown.appendChild(option);
         });
         
+        // Add "Add New Screen..." option at the end
+        const addNewOption = document.createElement('option');
+        addNewOption.value = '__add_new_screen__';
+        addNewOption.textContent = '+ Add New Screen...';
+        addNewOption.style.fontStyle = 'italic';
+        addNewOption.style.color = '#667eea';
+        this.elements.screenDropdown.appendChild(addNewOption);
+        
         console.log('Screen dropdown initialized with screens:', Object.keys(this.kioskData.screens));
     }
     
@@ -599,6 +633,13 @@ class KioskSpeechChat {
         const screenData = this.kioskData.screens[selectedScreen];
         if (!screenData || !screenData.elements) {
             this.elements.elementDropdown.innerHTML = '<option value="">Element</option>';
+            // Add "Add New Element..." option even if no elements exist
+            const addNewOption = document.createElement('option');
+            addNewOption.value = '__add_new_element__';
+            addNewOption.textContent = '+ Add New Element...';
+            addNewOption.style.fontStyle = 'italic';
+            addNewOption.style.color = '#667eea';
+            this.elements.elementDropdown.appendChild(addNewOption);
             return;
         }
         
@@ -613,6 +654,14 @@ class KioskSpeechChat {
             this.elements.elementDropdown.appendChild(option);
         });
         
+        // Add "Add New Element..." option at the end
+        const addNewOption = document.createElement('option');
+        addNewOption.value = '__add_new_element__';
+        addNewOption.textContent = '+ Add New Element...';
+        addNewOption.style.fontStyle = 'italic';
+        addNewOption.style.color = '#667eea';
+        this.elements.elementDropdown.appendChild(addNewOption);
+        
         console.log(`Element dropdown updated for screen "${selectedScreen}" with elements:`, 
                    screenData.elements.map(e => e.id));
     }
@@ -620,6 +669,15 @@ class KioskSpeechChat {
     handleScreenChange() {
         const selectedScreen = this.elements.screenDropdown.value;
         console.log('Screen changed to:', selectedScreen);
+        
+        // Check if "Add New Screen..." option was selected
+        if (selectedScreen === '__add_new_screen__') {
+            this.showAddScreenModal();
+            // Reset dropdown to empty selection
+            this.elements.screenDropdown.value = '';
+            this.updateElementDropdown('');
+            return;
+        }
         
         // Update element dropdown based on selected screen
         this.updateElementDropdown(selectedScreen);
@@ -639,6 +697,14 @@ class KioskSpeechChat {
         const selectedElement = this.elements.elementDropdown.value;
         
         console.log('Element changed to:', selectedElement, 'for screen:', selectedScreen);
+        
+        // Check if "Add New Element..." option was selected
+        if (selectedElement === '__add_new_element__') {
+            this.showAddElementModal();
+            // Reset dropdown to empty selection
+            this.elements.elementDropdown.value = '';
+            return;
+        }
         
         if (selectedElement && selectedScreen) {
             const screenData = this.kioskData.screens[selectedScreen];
@@ -746,8 +812,12 @@ class KioskSpeechChat {
     }
     
     async handleSaveCoordinates() {
-        if (Object.keys(this.pendingUpdates).length === 0) {
-            this.addMessage('system', '⚠️ No Changes to Save\nNo coordinate updates are pending.');
+        const hasUpdates = Object.keys(this.pendingUpdates).length > 0;
+        const hasNewScreens = this.pendingNewScreens && Object.keys(this.pendingNewScreens).length > 0;
+        const hasNewElements = this.pendingNewElements && Object.keys(this.pendingNewElements).length > 0;
+        
+        if (!hasUpdates && !hasNewScreens && !hasNewElements) {
+            this.addMessage('system', '⚠️ No Changes to Save\nNo coordinate updates, new screens, or new elements are pending.');
             return;
         }
         
@@ -757,14 +827,33 @@ class KioskSpeechChat {
             this.addMessage('system', '💾 Saving Changes\nUpdating kiosk_data.json...');
             
             // Send updates to backend
+            const requestBody = {
+                updates: this.pendingUpdates
+            };
+            
+            // Add new screens if any
+            if (hasNewScreens) {
+                requestBody.newScreens = this.pendingNewScreens;
+            }
+            
+            // Add new elements if any
+            if (hasNewElements) {
+                requestBody.newElements = this.pendingNewElements;
+            }
+            
+            console.log('Sending save request:', {
+                hasUpdates,
+                hasNewScreens,
+                hasNewElements,
+                requestBody: JSON.stringify(requestBody, null, 2)
+            });
+            
             const response = await fetch('/api/kiosk-data', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    updates: this.pendingUpdates
-                })
+                body: JSON.stringify(requestBody)
             });
             
             const result = await response.json();
@@ -772,16 +861,36 @@ class KioskSpeechChat {
             if (result.success) {
                 // Clear pending updates on successful save
                 const updateCount = Object.keys(this.pendingUpdates).length;
+                const newScreenCount = hasNewScreens ? Object.keys(this.pendingNewScreens).length : 0;
+                let newElementCount = 0;
+                if (hasNewElements) {
+                    newElementCount = Object.values(this.pendingNewElements).reduce((total, elements) => total + elements.length, 0);
+                }
+                
                 this.pendingUpdates = {};
+                if (this.pendingNewScreens) {
+                    this.pendingNewScreens = {};
+                }
+                if (this.pendingNewElements) {
+                    this.pendingNewElements = {};
+                }
                 
                 // Reload kiosk data to reflect changes
                 await this.loadKioskData();
                 
-                this.addMessage('system', 
-                    `✅ Changes Saved Successfully\n` +
-                    `Updated ${updateCount} element coordinate(s) in kiosk_data.json\n` +
-                    `Configuration reloaded.`
-                );
+                let successMessage = `✅ Changes Saved Successfully\n`;
+                if (updateCount > 0) {
+                    successMessage += `Updated ${updateCount} element coordinate(s)\n`;
+                }
+                if (newScreenCount > 0) {
+                    successMessage += `Added ${newScreenCount} new screen(s)\n`;
+                }
+                if (newElementCount > 0) {
+                    successMessage += `Added ${newElementCount} new element(s)\n`;
+                }
+                successMessage += `Configuration reloaded.`;
+                
+                this.addMessage('system', successMessage);
                 
                 console.log('Coordinate updates saved successfully');
             } else {
@@ -888,6 +997,54 @@ class KioskSpeechChat {
         // Screenshot panel toggle
         this.elements.screenshotToggle.addEventListener('click', () => {
             this.toggleScreenshotSidebar();
+        });
+        
+        // Add new screen modal event listeners
+        this.elements.addScreenModalClose.addEventListener('click', () => {
+            this.closeAddScreenModal();
+        });
+        
+        this.elements.addScreenModalBackdrop.addEventListener('click', () => {
+            this.closeAddScreenModal();
+        });
+        
+        this.elements.cancelAddScreen.addEventListener('click', () => {
+            this.closeAddScreenModal();
+        });
+        
+        this.elements.confirmAddScreen.addEventListener('click', () => {
+            this.handleAddNewScreen();
+        });
+        
+        // Form validation for add screen modal
+        [this.elements.screenId, this.elements.screenName].forEach(input => {
+            input.addEventListener('input', () => {
+                this.validateAddScreenForm();
+            });
+        });
+        
+        // Add new element modal event listeners
+        this.elements.addElementModalClose.addEventListener('click', () => {
+            this.closeAddElementModal();
+        });
+        
+        this.elements.addElementModalBackdrop.addEventListener('click', () => {
+            this.closeAddElementModal();
+        });
+        
+        this.elements.cancelAddElement.addEventListener('click', () => {
+            this.closeAddElementModal();
+        });
+        
+        this.elements.confirmAddElement.addEventListener('click', () => {
+            this.handleAddNewElement();
+        });
+        
+        // Form validation for add element modal
+        [this.elements.elementId, this.elements.elementName, this.elements.elementAction].forEach(input => {
+            input.addEventListener('input', () => {
+                this.validateAddElementForm();
+            });
         });
         
         // Take screenshot button
@@ -2572,6 +2729,237 @@ class KioskSpeechChat {
         
         // Restore body scroll
         document.body.style.overflow = '';
+    }
+    
+    // Add new screen modal methods
+    showAddScreenModal() {
+        // Clear form fields
+        this.elements.screenId.value = '';
+        this.elements.screenName.value = '';
+        this.elements.screenDescription.value = '';
+        this.elements.titleText.value = '';
+        
+        // Reset validation
+        this.validateAddScreenForm();
+        
+        // Show modal
+        this.elements.addScreenModal.style.display = 'flex';
+        
+        // Focus on first input
+        this.elements.screenId.focus();
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        console.log('Add screen modal opened');
+    }
+    
+    closeAddScreenModal() {
+        this.elements.addScreenModal.style.display = 'none';
+        
+        // Restore body scroll
+        document.body.style.overflow = '';
+        
+        console.log('Add screen modal closed');
+    }
+    
+    validateAddScreenForm() {
+        const screenId = this.elements.screenId.value.trim();
+        const screenName = this.elements.screenName.value.trim();
+        
+        // Check if required fields are filled and screenId is valid
+        const isValid = screenId && screenName && /^[a-zA-Z0-9_]+$/.test(screenId);
+        
+        // Check if screen ID already exists
+        const alreadyExists = this.kioskData && this.kioskData.screens && this.kioskData.screens[screenId];
+        
+        this.elements.confirmAddScreen.disabled = !isValid || alreadyExists;
+        
+        // Update screen ID input border color for validation feedback
+        if (!screenId) {
+            this.elements.screenId.style.borderColor = '';
+        } else if (!/^[a-zA-Z0-9_]+$/.test(screenId)) {
+            this.elements.screenId.style.borderColor = '#ff6b6b';
+        } else if (alreadyExists) {
+            this.elements.screenId.style.borderColor = '#ff6b6b';
+        } else {
+            this.elements.screenId.style.borderColor = '#4ecdc4';
+        }
+    }
+    
+    handleAddNewScreen() {
+        const screenId = this.elements.screenId.value.trim();
+        const screenName = this.elements.screenName.value.trim();
+        const screenDescription = this.elements.screenDescription.value.trim();
+        const titleText = this.elements.titleText.value.trim();
+        
+        if (!screenId || !screenName) {
+            console.error('Screen ID and Name are required');
+            return;
+        }
+        
+        // Create new screen object
+        const newScreen = {
+            name: screenName,
+            description: screenDescription || `Screen configuration for ${screenName}`,
+            detection_criteria: {
+                title_text: titleText || screenName,
+                elements: []
+            },
+            elements: []
+        };
+        
+        // Add to pending updates (this will be saved when Save button is clicked)
+        if (!this.pendingNewScreens) {
+            this.pendingNewScreens = {};
+        }
+        this.pendingNewScreens[screenId] = newScreen;
+        
+        // Enable save button
+        this.elements.saveButton.disabled = false;
+        
+        // Close modal
+        this.closeAddScreenModal();
+        
+        // Add success message
+        this.addMessage('system', 
+            `✅ New Screen Queued for Addition\n` +
+            `Screen ID: ${screenId}\n` +
+            `Name: ${screenName}\n` +
+            `Description: ${newScreen.description}\n` +
+            `Click Save to add this screen to the configuration.`
+        );
+        
+        console.log('New screen queued:', screenId, newScreen);
+    }
+    
+    showAddElementModal() {
+        // Check if a screen is selected
+        const selectedScreen = this.elements.screenDropdown.value;
+        if (!selectedScreen) {
+            this.addMessage('system', '⚠️ Please select a screen first before adding an element.');
+            return;
+        }
+        
+        // Clear form fields
+        this.elements.elementId.value = '';
+        this.elements.elementName.value = '';
+        this.elements.elementDescription.value = '';
+        this.elements.elementAction.value = '';
+        this.elements.elementVoiceCommands.value = '';
+        this.elements.elementX.value = '';
+        this.elements.elementY.value = '';
+        this.elements.elementWidth.value = '';
+        this.elements.elementHeight.value = '';
+        
+        // Reset validation
+        this.validateAddElementForm();
+        
+        // Show modal
+        this.elements.addElementModal.style.display = 'flex';
+        
+        // Focus on first input
+        this.elements.elementId.focus();
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        console.log('Add element modal opened for screen:', selectedScreen);
+    }
+    
+    closeAddElementModal() {
+        this.elements.addElementModal.style.display = 'none';
+        
+        // Restore body scroll
+        document.body.style.overflow = '';
+        
+        console.log('Add element modal closed');
+    }
+    
+    validateAddElementForm() {
+        const elementId = this.elements.elementId.value.trim();
+        const elementName = this.elements.elementName.value.trim();
+        const elementAction = this.elements.elementAction.value.trim();
+        
+        // Check if required fields are filled and elementId is valid
+        const isValid = elementId && elementName && elementAction && /^[a-zA-Z0-9_]+$/.test(elementId);
+        
+        this.elements.confirmAddElement.disabled = !isValid;
+    }
+    
+    handleAddNewElement() {
+        const selectedScreen = this.elements.screenDropdown.value;
+        if (!selectedScreen) {
+            console.error('No screen selected');
+            return;
+        }
+        
+        const elementId = this.elements.elementId.value.trim();
+        const elementName = this.elements.elementName.value.trim();
+        const elementDescription = this.elements.elementDescription.value.trim();
+        const elementAction = this.elements.elementAction.value.trim();
+        const elementVoiceCommands = this.elements.elementVoiceCommands.value.trim();
+        const elementX = parseInt(this.elements.elementX.value) || 0;
+        const elementY = parseInt(this.elements.elementY.value) || 0;
+        const elementWidth = parseInt(this.elements.elementWidth.value) || 50;
+        const elementHeight = parseInt(this.elements.elementHeight.value) || 50;
+        
+        if (!elementId || !elementName || !elementAction) {
+            console.error('Element ID, Name, and Action are required');
+            return;
+        }
+        
+        // Parse voice commands
+        const voiceCommands = elementVoiceCommands 
+            ? elementVoiceCommands.split(',').map(cmd => cmd.trim()).filter(cmd => cmd)
+            : [elementName.toLowerCase()];
+        
+        // Create new element object
+        const newElement = {
+            id: elementId,
+            name: elementName,
+            coordinates: {
+                x: elementX,
+                y: elementY
+            },
+            size: {
+                width: elementWidth,
+                height: elementHeight
+            },
+            voice_commands: voiceCommands,
+            conditions: ["always_visible"],
+            action: elementAction,
+            description: elementDescription || `${elementName} element`
+        };
+        
+        // Add to pending updates (this will be saved when Save button is clicked)
+        if (!this.pendingNewElements) {
+            this.pendingNewElements = {};
+        }
+        if (!this.pendingNewElements[selectedScreen]) {
+            this.pendingNewElements[selectedScreen] = [];
+        }
+        this.pendingNewElements[selectedScreen].push(newElement);
+        
+        // Enable save button
+        this.elements.saveButton.disabled = false;
+        
+        // Close modal
+        this.closeAddElementModal();
+        
+        // Add success message
+        this.addMessage('system', 
+            `✅ New Element Queued for Addition\n` +
+            `Screen: ${selectedScreen}\n` +
+            `Element ID: ${elementId}\n` +
+            `Name: ${elementName}\n` +
+            `Action: ${elementAction}\n` +
+            `Coordinates: (${elementX}, ${elementY})\n` +
+            `Voice Commands: ${voiceCommands.join(', ')}\n` +
+            `Click Save to add this element to the configuration.`
+        );
+        
+        console.log('New element queued for screen:', selectedScreen, newElement);
     }
     
     downloadCurrentScreenshot() {

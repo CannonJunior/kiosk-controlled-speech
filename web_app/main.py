@@ -576,9 +576,15 @@ async def save_kiosk_data(request: Request):
     try:
         data = await request.json()
         updates = data.get("updates", {})
+        new_screens = data.get("newScreens", {})
+        new_elements = data.get("newElements", {})
         
-        if not updates:
-            raise ValueError("No updates provided")
+        # Debug logging
+        logger.info(f"Received save request - updates: {len(updates)}, new_screens: {len(new_screens)}, new_elements: {len(new_elements)}")
+        logger.info(f"Request data keys: {list(data.keys())}")
+        
+        if not updates and not new_screens and not new_elements:
+            raise ValueError("No updates, new screens, or new elements provided")
         
         # Find the kiosk_data.json file
         config_paths = [
@@ -605,7 +611,7 @@ async def save_kiosk_data(request: Request):
         with open(config_path, 'r') as f:
             kiosk_data = json.load(f)
         
-        # Apply updates
+        # Apply coordinate updates
         updated_elements = []
         for update_key, update_info in updates.items():
             screen_name = update_info["screen"]
@@ -644,16 +650,75 @@ async def save_kiosk_data(request: Request):
             if not element_found:
                 raise ValueError(f"Element '{element_id}' not found in screen '{screen_name}'")
         
+        # Apply new screens
+        added_screens = []
+        for screen_id, screen_data in new_screens.items():
+            if screen_id in kiosk_data.get("screens", {}):
+                raise ValueError(f"Screen '{screen_id}' already exists")
+            
+            # Initialize screens section if it doesn't exist
+            if "screens" not in kiosk_data:
+                kiosk_data["screens"] = {}
+            
+            # Add the new screen
+            kiosk_data["screens"][screen_id] = screen_data
+            added_screens.append({
+                "screen_id": screen_id,
+                "name": screen_data.get("name", screen_id),
+                "description": screen_data.get("description", "")
+            })
+        
+        # Apply new elements
+        added_elements = []
+        for screen_name, elements in new_elements.items():
+            # Validate screen exists
+            if screen_name not in kiosk_data.get("screens", {}):
+                raise ValueError(f"Screen '{screen_name}' not found in kiosk data")
+            
+            # Initialize elements array if it doesn't exist
+            if "elements" not in kiosk_data["screens"][screen_name]:
+                kiosk_data["screens"][screen_name]["elements"] = []
+            
+            # Add each new element
+            for element_data in elements:
+                element_id = element_data.get("id")
+                
+                # Check if element already exists
+                existing_element = next((e for e in kiosk_data["screens"][screen_name]["elements"] if e.get("id") == element_id), None)
+                if existing_element:
+                    raise ValueError(f"Element '{element_id}' already exists in screen '{screen_name}'")
+                
+                # Add the new element
+                kiosk_data["screens"][screen_name]["elements"].append(element_data)
+                added_elements.append({
+                    "screen_name": screen_name,
+                    "element_id": element_id,
+                    "name": element_data.get("name", element_id),
+                    "action": element_data.get("action", ""),
+                    "coordinates": element_data.get("coordinates", {})
+                })
+        
         # Write updated data back to file
         with open(config_path, 'w') as f:
             json.dump(kiosk_data, f, indent=2)
         
-        logger.info(f"Successfully updated {len(updated_elements)} elements in {config_path}")
+        logger.info(f"Successfully updated {len(updated_elements)} elements, added {len(added_screens)} screens, and added {len(added_elements)} elements in {config_path}")
+        
+        # Build response message
+        messages = []
+        if updated_elements:
+            messages.append(f"Updated {len(updated_elements)} element(s)")
+        if added_screens:
+            messages.append(f"Added {len(added_screens)} screen(s)")
+        if added_elements:
+            messages.append(f"Added {len(added_elements)} new element(s)")
         
         return {
             "success": True,
-            "message": f"Successfully updated {len(updated_elements)} element(s)",
+            "message": "Successfully " + " and ".join(messages).lower(),
             "updated_elements": updated_elements,
+            "added_screens": added_screens,
+            "added_elements": added_elements,
             "backup_path": str(backup_path)
         }
         

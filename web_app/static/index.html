@@ -384,6 +384,100 @@
         </div>
     </div>
 
+    <!-- Add New Screen Modal -->
+    <div class="add-screen-modal" id="addScreenModal" style="display: none;">
+        <div class="modal-backdrop" id="addScreenModalBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Screen</h3>
+                <button class="modal-close" id="addScreenModalClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="screenId">Screen ID:</label>
+                    <input type="text" id="screenId" placeholder="e.g., new_screen_app" required>
+                </div>
+                <div class="form-group">
+                    <label for="screenName">Screen Name:</label>
+                    <input type="text" id="screenName" placeholder="e.g., New Application" required>
+                </div>
+                <div class="form-group">
+                    <label for="screenDescription">Description:</label>
+                    <textarea id="screenDescription" placeholder="Brief description of this screen"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="titleText">Title Text (for detection):</label>
+                    <input type="text" id="titleText" placeholder="Text that appears in the window title">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelAddScreen" class="modal-button secondary">Cancel</button>
+                <button id="confirmAddScreen" class="modal-button primary" disabled>Add Screen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Element Modal -->
+    <div class="add-element-modal" id="addElementModal" style="display: none;">
+        <div class="modal-backdrop" id="addElementModalBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Add New Element</h3>
+                <button class="modal-close" id="addElementModalClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="elementId">Element ID:</label>
+                    <input type="text" id="elementId" placeholder="e.g., newButton" required>
+                </div>
+                <div class="form-group">
+                    <label for="elementName">Element Name:</label>
+                    <input type="text" id="elementName" placeholder="e.g., New Button" required>
+                </div>
+                <div class="form-group">
+                    <label for="elementDescription">Description:</label>
+                    <textarea id="elementDescription" placeholder="Brief description of this element"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="elementAction">Action:</label>
+                    <select id="elementAction" required>
+                        <option value="">Select action...</option>
+                        <option value="click">Click</option>
+                        <option value="select">Select</option>
+                        <option value="toggle">Toggle</option>
+                        <option value="adjust">Adjust</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="elementVoiceCommands">Voice Commands (comma-separated):</label>
+                    <input type="text" id="elementVoiceCommands" placeholder="e.g., click button, press new, activate">
+                </div>
+                <div class="form-group">
+                    <label for="elementCoordinates">Coordinates:</label>
+                    <div class="coordinate-inputs">
+                        <input type="number" id="elementX" placeholder="X" min="0">
+                        <input type="number" id="elementY" placeholder="Y" min="0">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="elementSize">Size:</label>
+                    <div class="coordinate-inputs">
+                        <input type="number" id="elementWidth" placeholder="Width" min="1">
+                        <input type="number" id="elementHeight" placeholder="Height" min="1">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelAddElement" class="modal-button secondary">Cancel</button>
+                <button id="confirmAddElement" class="modal-button primary" disabled>Add Element</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Error Modal -->
     <div class="error-modal" id="errorModal" style="display: none;">
         <div class="error-content">
