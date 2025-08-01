@@ -715,21 +715,28 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 # Process text chat message
                 text = message_data.get("message", "")
                 context = message_data.get("context", {})
+                processing_mode = message_data.get("processing_mode", "llm")
                 
-                # Process through Ollama
-                result = await speech_bridge.process_chat_message(text, context)
-                
-                # Send response
-                await connection_manager.send_personal_message({
-                    "type": "chat_response",
-                    "original_message": text,
-                    "response": result,
-                    "timestamp": datetime.now().isoformat()
-                }, client_id)
+                # Only process with LLM if client is in LLM mode
+                if processing_mode == "llm":
+                    # Process through Ollama
+                    result = await speech_bridge.process_chat_message(text, context)
+                    
+                    # Send response
+                    await connection_manager.send_personal_message({
+                        "type": "chat_response",
+                        "original_message": text,
+                        "response": result,
+                        "timestamp": datetime.now().isoformat()
+                    }, client_id)
+                else:
+                    # Client is in heuristic mode, server should not process
+                    logger.debug(f"Ignoring chat message in heuristic mode: {text}")
                 
             elif message_type == "audio_data":
                 # Process audio data
                 audio_data = message_data.get("audio")
+                processing_mode = message_data.get("processing_mode", "llm")
                 
                 # Transcribe audio
                 transcription_result = await speech_bridge.process_audio_data(audio_data, client_id)
@@ -745,8 +752,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         "timestamp": datetime.now().isoformat()
                     }, client_id)
                     
-                    # Process transcription as chat message
-                    if transcription.strip():
+                    # Only process transcription as chat message if in LLM mode
+                    if transcription.strip() and processing_mode == "llm":
                         chat_result = await speech_bridge.process_chat_message(transcription)
                         
                         await connection_manager.send_personal_message({
@@ -756,6 +763,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                             "from_speech": True,
                             "timestamp": datetime.now().isoformat()
                         }, client_id)
+                    elif transcription.strip() and processing_mode == "heuristic":
+                        # Client is in heuristic mode, server should not process transcription
+                        logger.debug(f"Ignoring transcription in heuristic mode: {transcription}")
                 else:
                     # Send transcription error
                     await connection_manager.send_personal_message({

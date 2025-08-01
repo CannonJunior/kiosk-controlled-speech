@@ -1126,8 +1126,9 @@ class KioskSpeechChat {
                 
             case 'transcription':
                 this.showTranscription(data.text, data.confidence);
-                if (this.settings.autoSendVoice && data.text.trim()) {
-                    // Auto-send the transcribed text
+                if (this.settings.autoSendVoice && data.text.trim() && this.processingMode === 'heuristic') {
+                    // Auto-send the transcribed text only in heuristic mode
+                    // In LLM mode, server already processes transcription automatically
                     setTimeout(() => {
                         this.sendChatMessage(data.text);
                     }, 500);
@@ -1705,6 +1706,7 @@ class KioskSpeechChat {
             this.ws.send(JSON.stringify({
                 type: 'audio_data',
                 audio: base64Audio,
+                processing_mode: this.processingMode,
                 timestamp: new Date().toISOString()
             }));
         } else {
@@ -1745,6 +1747,7 @@ class KioskSpeechChat {
                 this.ws.send(JSON.stringify({
                     type: 'chat_message',
                     message: message,
+                    processing_mode: this.processingMode,
                     context: {
                         timestamp: new Date().toISOString(),
                         client_id: this.clientId
