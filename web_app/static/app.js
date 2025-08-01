@@ -1126,9 +1126,9 @@ class KioskSpeechChat {
                 
             case 'transcription':
                 this.showTranscription(data.text, data.confidence);
+                // Only process transcription on client-side in heuristic mode
+                // In LLM mode, server handles transcription processing automatically
                 if (this.settings.autoSendVoice && data.text.trim() && this.processingMode === 'heuristic') {
-                    // Auto-send the transcribed text only in heuristic mode
-                    // In LLM mode, server already processes transcription automatically
                     setTimeout(() => {
                         this.sendChatMessage(data.text);
                     }, 500);
@@ -1707,6 +1707,7 @@ class KioskSpeechChat {
                 type: 'audio_data',
                 audio: base64Audio,
                 processing_mode: this.processingMode,
+                transcription_only: this.processingMode === 'heuristic', // Only transcribe in heuristic mode
                 timestamp: new Date().toISOString()
             }));
         } else {
