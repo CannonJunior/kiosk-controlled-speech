@@ -487,6 +487,71 @@
         </div>
     </div>
 
+    <!-- Screenshot Annotation Modal -->
+    <div class="screenshot-annotation-modal" id="screenshotAnnotationModal" style="display: none;">
+        <!-- Screenshot Background Container -->
+        <div class="annotation-background" id="annotationBackground"></div>
+        
+        <!-- Draggable Navbar -->
+        <div class="annotation-navbar draggable" id="annotationNavbar">
+            <div class="drag-handle" title="Drag to move">
+                <i class="fas fa-grip-horizontal"></i>
+            </div>
+            <div class="annotation-navbar-content">
+                <div class="annotation-navbar-left">
+                    <span class="annotation-title">
+                        <i class="fas fa-draw-polygon"></i>
+                        Screenshot Annotation
+                    </span>
+                </div>
+                <div class="annotation-navbar-center">
+                    <div class="drawing-mode-selector">
+                        <i class="fas fa-draw-polygon"></i>
+                        <label for="annotationDrawingMode">Draw:</label>
+                        <select id="annotationDrawingMode" class="drawing-dropdown">
+                            <option value="none">None</option>
+                            <option value="rectangle">Rectangle</option>
+                        </select>
+                    </div>
+                    <button id="annotationSaveButton" class="save-button" disabled>
+                        <i class="fas fa-save"></i>
+                        <span>Save</span>
+                    </button>
+                    <div class="button-group">
+                        <div class="group-dropdown group-dropdown-left">
+                            <i class="fas fa-desktop"></i>
+                            <select id="annotationScreen" class="group-select">
+                                <option value="">Screen</option>
+                            </select>
+                        </div>
+                        <div class="group-dropdown group-dropdown-right">
+                            <i class="fas fa-cube"></i>
+                            <select id="annotationElement" class="group-select">
+                                <option value="">Element</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mouse-position-display">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <span class="mouse-coords">
+                            Mouse: <span id="annotationMouseX">0</span>, <span id="annotationMouseY">0</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Drawing Overlay -->
+        <div class="annotation-drawing-overlay" id="annotationDrawingOverlay">
+            <div class="drawing-rectangle" id="annotationDrawingRectangle"></div>
+        </div>
+        
+        <!-- Exit Controls -->
+        <button class="annotation-exit" id="annotationExit" title="Exit Annotation Mode (ESC)">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
     <!-- Error Modal -->
     <div class="error-modal" id="errorModal" style="display: none;">
         <div class="error-content">
@@ -499,6 +564,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=20250731-001"></script>
+    <script src="/static/app.js?v=20250801-002"></script>
 </body>
 </html>

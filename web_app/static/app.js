@@ -75,6 +75,10 @@ class KioskSpeechChat {
         
         // Initialize components
         this.initializeElements();
+        
+        // Initialize annotation mode after elements are available
+        this.annotationMode = new ScreenshotAnnotationMode(this);
+        
         this.initializeEventListeners();
         this.initializeNavbar();
         this.loadVADConfig();
@@ -268,7 +272,20 @@ class KioskSpeechChat {
             elementWidth: document.getElementById('elementWidth'),
             elementHeight: document.getElementById('elementHeight'),
             cancelAddElement: document.getElementById('cancelAddElement'),
-            confirmAddElement: document.getElementById('confirmAddElement')
+            confirmAddElement: document.getElementById('confirmAddElement'),
+            // Screenshot annotation modal elements
+            screenshotAnnotationModal: document.getElementById('screenshotAnnotationModal'),
+            annotationBackground: document.getElementById('annotationBackground'),
+            annotationNavbar: document.getElementById('annotationNavbar'),
+            annotationDrawingMode: document.getElementById('annotationDrawingMode'),
+            annotationSaveButton: document.getElementById('annotationSaveButton'),
+            annotationScreen: document.getElementById('annotationScreen'),
+            annotationElement: document.getElementById('annotationElement'),
+            annotationMouseX: document.getElementById('annotationMouseX'),
+            annotationMouseY: document.getElementById('annotationMouseY'),
+            annotationDrawingOverlay: document.getElementById('annotationDrawingOverlay'),
+            annotationDrawingRectangle: document.getElementById('annotationDrawingRectangle'),
+            annotationExit: document.getElementById('annotationExit')
         };
     }
     
@@ -2700,13 +2717,29 @@ class KioskSpeechChat {
         thumbnail.innerHTML = `
             <img src="${screenshot.path}" alt="Screenshot ${screenshot.id}" loading="lazy">
             <div class="thumbnail-overlay">
-                <span>View</span>
+                <div class="thumbnail-actions">
+                    <button class="thumbnail-action view-action" title="View Screenshot">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="thumbnail-action annotate-action" title="Annotate Screenshot">
+                        <i class="fas fa-draw-polygon"></i>
+                    </button>
+                </div>
             </div>
         `;
         
-        // Add click event to open modal
-        thumbnail.addEventListener('click', () => {
+        // Add click events for actions
+        const viewButton = thumbnail.querySelector('.view-action');
+        const annotateButton = thumbnail.querySelector('.annotate-action');
+        
+        viewButton.addEventListener('click', (e) => {
+            e.stopPropagation();
             this.openScreenshotModal(screenshot);
+        });
+        
+        annotateButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.annotationMode.enterMode(screenshot.path, screenshot);
         });
         
         // Add to gallery (newest first)
@@ -3209,6 +3242,465 @@ class KioskSpeechChat {
         });
     }
     
+}
+
+// Screenshot Annotation Mode Class
+class ScreenshotAnnotationMode {
+    constructor(kioskChat) {
+        this.kioskChat = kioskChat;
+        this.isActive = false;
+        this.currentScreenshot = null;
+        this.navbarPosition = { x: 50, y: 50 };
+        this.screenshotDimensions = null;
+        this.isDragging = false;
+        this.dragOffset = { x: 0, y: 0 };
+        this.isDrawing = false;
+        this.drawStart = { x: 0, y: 0 };
+        
+        this.initializeEventListeners();
+    }
+    
+    initializeEventListeners() {
+        // Exit annotation mode
+        this.kioskChat.elements.annotationExit.addEventListener('click', () => {
+            this.exitMode();
+        });
+        
+        // ESC key to exit
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isActive) {
+                this.exitMode();
+            }
+        });
+        
+        // Drawing mode change
+        this.kioskChat.elements.annotationDrawingMode.addEventListener('change', () => {
+            this.handleDrawingModeChange();
+        });
+        
+        // Save button
+        this.kioskChat.elements.annotationSaveButton.addEventListener('click', () => {
+            this.handleSave();
+        });
+        
+        // Screen/Element dropdowns
+        this.kioskChat.elements.annotationScreen.addEventListener('change', () => {
+            this.handleScreenChange();
+        });
+        
+        this.kioskChat.elements.annotationElement.addEventListener('change', () => {
+            this.handleElementChange();
+        });
+        
+        // Mouse position tracking
+        this.kioskChat.elements.annotationDrawingOverlay.addEventListener('mousemove', (e) => {
+            this.updateMousePosition(e);
+        });
+        
+        // Drawing events
+        this.kioskChat.elements.annotationDrawingOverlay.addEventListener('mousedown', (e) => {
+            this.startDrawing(e);
+        });
+        
+        this.kioskChat.elements.annotationDrawingOverlay.addEventListener('mousemove', (e) => {
+            this.updateDrawing(e);
+        });
+        
+        this.kioskChat.elements.annotationDrawingOverlay.addEventListener('mouseup', (e) => {
+            this.endDrawing(e);
+        });
+        
+        // Draggable navbar
+        this.initializeDraggableNavbar();
+    }
+    
+    initializeDraggableNavbar() {
+        const navbar = this.kioskChat.elements.annotationNavbar;
+        const dragHandle = navbar.querySelector('.drag-handle');
+        
+        const startDrag = (e) => {
+            this.isDragging = true;
+            const rect = navbar.getBoundingClientRect();
+            this.dragOffset.x = e.clientX - rect.left;
+            this.dragOffset.y = e.clientY - rect.top;
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', endDrag);
+            
+            navbar.style.cursor = 'grabbing';
+            dragHandle.style.cursor = 'grabbing';
+        };
+        
+        const drag = (e) => {
+            if (!this.isDragging) return;
+            
+            const newX = e.clientX - this.dragOffset.x;
+            const newY = e.clientY - this.dragOffset.y;
+            
+            // Constrain to viewport
+            const maxX = window.innerWidth - navbar.offsetWidth;
+            const maxY = window.innerHeight - navbar.offsetHeight;
+            
+            const constrainedX = Math.max(0, Math.min(newX, maxX));
+            const constrainedY = Math.max(0, Math.min(newY, maxY));
+            
+            navbar.style.left = constrainedX + 'px';
+            navbar.style.top = constrainedY + 'px';
+            
+            this.navbarPosition.x = constrainedX;
+            this.navbarPosition.y = constrainedY;
+        };
+        
+        const endDrag = () => {
+            this.isDragging = false;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', endDrag);
+            
+            navbar.style.cursor = 'move';
+            dragHandle.style.cursor = 'grab';
+        };
+        
+        dragHandle.addEventListener('mousedown', startDrag);
+        navbar.addEventListener('mousedown', (e) => {
+            if (e.target === navbar || e.target.closest('.annotation-navbar-content')) {
+                startDrag(e);
+            }
+        });
+    }
+    
+    enterMode(screenshotSrc, screenshotData = null) {
+        if (this.isActive) return;
+        
+        this.isActive = true;
+        this.currentScreenshot = { src: screenshotSrc, data: screenshotData };
+        
+        // Set screenshot as background
+        this.kioskChat.elements.annotationBackground.style.backgroundImage = `url(${screenshotSrc})`;
+        
+        // Reset position
+        this.kioskChat.elements.annotationNavbar.style.left = this.navbarPosition.x + 'px';
+        this.kioskChat.elements.annotationNavbar.style.top = this.navbarPosition.y + 'px';
+        
+        // Initialize dropdowns with current data
+        this.populateDropdowns();
+        
+        // Show modal
+        this.kioskChat.elements.screenshotAnnotationModal.style.display = 'block';
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        console.log('Entered screenshot annotation mode:', screenshotSrc);
+    }
+    
+    exitMode() {
+        if (!this.isActive) return;
+        
+        this.isActive = false;
+        this.currentScreenshot = null;
+        
+        // Hide modal
+        this.kioskChat.elements.screenshotAnnotationModal.style.display = 'none';
+        
+        // Restore body scroll
+        document.body.style.overflow = '';
+        
+        // Reset drawing state
+        this.resetDrawing();
+        
+        console.log('Exited screenshot annotation mode');
+    }
+    
+    populateDropdowns() {
+        // Clear existing options
+        this.kioskChat.elements.annotationScreen.innerHTML = '<option value="">Screen</option>';
+        this.kioskChat.elements.annotationElement.innerHTML = '<option value="">Element</option>';
+        
+        // Populate screen dropdown
+        if (this.kioskChat.kioskData && this.kioskChat.kioskData.screens) {
+            Object.entries(this.kioskChat.kioskData.screens).forEach(([screenKey, screen]) => {
+                const option = document.createElement('option');
+                option.value = screenKey;
+                option.textContent = screen.name || screenKey;
+                this.kioskChat.elements.annotationScreen.appendChild(option);
+            });
+            
+            // Add "Add New Screen..." option
+            const addNewOption = document.createElement('option');
+            addNewOption.value = '__add_new_screen__';
+            addNewOption.textContent = '+ Add New Screen...';
+            addNewOption.style.fontStyle = 'italic';
+            addNewOption.style.color = '#667eea';
+            this.kioskChat.elements.annotationScreen.appendChild(addNewOption);
+        }
+    }
+    
+    handleDrawingModeChange() {
+        const mode = this.kioskChat.elements.annotationDrawingMode.value;
+        const overlay = this.kioskChat.elements.annotationDrawingOverlay;
+        
+        if (mode === 'rectangle') {
+            overlay.classList.add('drawing-mode');
+        } else {
+            overlay.classList.remove('drawing-mode');
+            this.resetDrawing();
+        }
+    }
+    
+    handleScreenChange() {
+        const selectedScreen = this.kioskChat.elements.annotationScreen.value;
+        
+        if (selectedScreen === '__add_new_screen__') {
+            // Show add screen modal
+            this.kioskChat.showAddScreenModal();
+            this.kioskChat.elements.annotationScreen.value = '';
+            return;
+        }
+        
+        // Update element dropdown
+        this.updateElementDropdown(selectedScreen);
+    }
+    
+    updateElementDropdown(selectedScreen) {
+        this.kioskChat.elements.annotationElement.innerHTML = '<option value="">Element</option>';
+        
+        if (!selectedScreen || !this.kioskChat.kioskData?.screens?.[selectedScreen]) {
+            return;
+        }
+        
+        const screenData = this.kioskChat.kioskData.screens[selectedScreen];
+        if (screenData.elements) {
+            screenData.elements.forEach(element => {
+                const option = document.createElement('option');
+                option.value = element.id;
+                option.textContent = element.name || element.id;
+                this.kioskChat.elements.annotationElement.appendChild(option);
+            });
+        }
+        
+        // Add "Add New Element..." option
+        const addNewOption = document.createElement('option');
+        addNewOption.value = '__add_new_element__';
+        addNewOption.textContent = '+ Add New Element...';
+        addNewOption.style.fontStyle = 'italic';
+        addNewOption.style.color = '#667eea';
+        this.kioskChat.elements.annotationElement.appendChild(addNewOption);
+    }
+    
+    handleElementChange() {
+        const selectedElement = this.kioskChat.elements.annotationElement.value;
+        
+        if (selectedElement === '__add_new_element__') {
+            // Show add element modal
+            this.kioskChat.showAddElementModal();
+            this.kioskChat.elements.annotationElement.value = '';
+            return;
+        }
+    }
+    
+    updateMousePosition(e) {
+        const imageCoords = this.screenToImageCoordinates(e.clientX, e.clientY);
+        this.kioskChat.elements.annotationMouseX.textContent = Math.round(imageCoords.x);
+        this.kioskChat.elements.annotationMouseY.textContent = Math.round(imageCoords.y);
+    }
+    
+    startDrawing(e) {
+        if (this.kioskChat.elements.annotationDrawingMode.value !== 'rectangle') return;
+        
+        this.isDrawing = true;
+        const coords = this.screenToImageCoordinates(e.clientX, e.clientY);
+        this.drawStart = coords;
+        
+        const rect = this.kioskChat.elements.annotationDrawingRectangle;
+        const screenCoords = this.imageToScreenCoordinates(coords.x, coords.y);
+        
+        rect.style.left = screenCoords.x + 'px';
+        rect.style.top = screenCoords.y + 'px';
+        rect.style.width = '0px';
+        rect.style.height = '0px';
+        rect.style.display = 'block';
+    }
+    
+    updateDrawing(e) {
+        if (!this.isDrawing) return;
+        
+        const coords = this.screenToImageCoordinates(e.clientX, e.clientY);
+        const rect = this.kioskChat.elements.annotationDrawingRectangle;
+        
+        const left = Math.min(this.drawStart.x, coords.x);
+        const top = Math.min(this.drawStart.y, coords.y);
+        const width = Math.abs(coords.x - this.drawStart.x);
+        const height = Math.abs(coords.y - this.drawStart.y);
+        
+        const screenCoords = this.imageToScreenCoordinates(left, top);
+        const screenSize = this.imageToScreenSize(width, height);
+        
+        rect.style.left = screenCoords.x + 'px';
+        rect.style.top = screenCoords.y + 'px';
+        rect.style.width = screenSize.width + 'px';
+        rect.style.height = screenSize.height + 'px';
+    }
+    
+    endDrawing(e) {
+        if (!this.isDrawing) return;
+        
+        this.isDrawing = false;
+        const coords = this.screenToImageCoordinates(e.clientX, e.clientY);
+        
+        const left = Math.min(this.drawStart.x, coords.x);
+        const top = Math.min(this.drawStart.y, coords.y);
+        const width = Math.abs(coords.x - this.drawStart.x);
+        const height = Math.abs(coords.y - this.drawStart.y);
+        
+        // Only create rectangle if it has meaningful size
+        if (width > 10 && height > 10) {
+            this.kioskChat.elements.annotationSaveButton.disabled = false;
+            
+            // Store rectangle data
+            this.currentRectangle = {
+                x: Math.round(left),
+                y: Math.round(top),
+                width: Math.round(width),
+                height: Math.round(height)
+            };
+            
+            console.log('Rectangle drawn:', this.currentRectangle);
+        } else {
+            this.resetDrawing();
+        }
+    }
+    
+    resetDrawing() {
+        this.isDrawing = false;
+        this.kioskChat.elements.annotationDrawingRectangle.style.display = 'none';
+        this.kioskChat.elements.annotationSaveButton.disabled = true;
+        this.currentRectangle = null;
+    }
+    
+    screenToImageCoordinates(screenX, screenY) {
+        const background = this.kioskChat.elements.annotationBackground;
+        const rect = background.getBoundingClientRect();
+        
+        // Calculate the actual image dimensions and position within the container
+        const containerAspect = rect.width / rect.height;
+        let imageWidth, imageHeight, imageLeft, imageTop;
+        
+        // Assume 16:9 aspect ratio for screenshots (can be made dynamic)
+        const imageAspect = 16 / 9;
+        
+        if (containerAspect > imageAspect) {
+            // Container is wider than image - letterbox on sides
+            imageHeight = rect.height;
+            imageWidth = imageHeight * imageAspect;
+            imageLeft = rect.left + (rect.width - imageWidth) / 2;
+            imageTop = rect.top;
+        } else {
+            // Container is taller than image - letterbox on top/bottom
+            imageWidth = rect.width;
+            imageHeight = imageWidth / imageAspect;
+            imageLeft = rect.left;
+            imageTop = rect.top + (rect.height - imageHeight) / 2;
+        }
+        
+        // Convert screen coordinates to image coordinates
+        const relativeX = (screenX - imageLeft) / imageWidth;
+        const relativeY = (screenY - imageTop) / imageHeight;
+        
+        // Assume image resolution (can be made dynamic)
+        const imageResolutionX = 1920;
+        const imageResolutionY = 1080;
+        
+        return {
+            x: relativeX * imageResolutionX,
+            y: relativeY * imageResolutionY
+        };
+    }
+    
+    imageToScreenCoordinates(imageX, imageY) {
+        const background = this.kioskChat.elements.annotationBackground;
+        const rect = background.getBoundingClientRect();
+        
+        // Calculate the actual image dimensions and position within the container
+        const containerAspect = rect.width / rect.height;
+        let imageWidth, imageHeight, imageLeft, imageTop;
+        
+        const imageAspect = 16 / 9;
+        
+        if (containerAspect > imageAspect) {
+            imageHeight = rect.height;
+            imageWidth = imageHeight * imageAspect;
+            imageLeft = rect.left + (rect.width - imageWidth) / 2;
+            imageTop = rect.top;
+        } else {
+            imageWidth = rect.width;
+            imageHeight = imageWidth / imageAspect;
+            imageLeft = rect.left;
+            imageTop = rect.top + (rect.height - imageHeight) / 2;
+        }
+        
+        const imageResolutionX = 1920;
+        const imageResolutionY = 1080;
+        
+        const relativeX = imageX / imageResolutionX;
+        const relativeY = imageY / imageResolutionY;
+        
+        return {
+            x: imageLeft + relativeX * imageWidth,
+            y: imageTop + relativeY * imageHeight
+        };
+    }
+    
+    imageToScreenSize(imageWidth, imageHeight) {
+        const background = this.kioskChat.elements.annotationBackground;
+        const rect = background.getBoundingClientRect();
+        
+        const containerAspect = rect.width / rect.height;
+        const imageAspect = 16 / 9;
+        
+        let displayImageWidth, displayImageHeight;
+        
+        if (containerAspect > imageAspect) {
+            displayImageHeight = rect.height;
+            displayImageWidth = displayImageHeight * imageAspect;
+        } else {
+            displayImageWidth = rect.width;
+            displayImageHeight = displayImageWidth / imageAspect;
+        }
+        
+        const imageResolutionX = 1920;
+        const imageResolutionY = 1080;
+        
+        return {
+            width: (imageWidth / imageResolutionX) * displayImageWidth,
+            height: (imageHeight / imageResolutionY) * displayImageHeight
+        };
+    }
+    
+    handleSave() {
+        if (!this.currentRectangle) return;
+        
+        const selectedScreen = this.kioskChat.elements.annotationScreen.value;
+        if (!selectedScreen) {
+            alert('Please select a screen first');
+            return;
+        }
+        
+        // Use the existing coordinate update system
+        this.kioskChat.queueCoordinateUpdate(selectedScreen, 'screenshot_annotation', this.currentRectangle);
+        
+        // Reset and exit
+        this.resetDrawing();
+        this.exitMode();
+        
+        // Show success message
+        this.kioskChat.addMessage('system', 
+            `✅ Screenshot Annotation Saved\n` +
+            `Screen: ${selectedScreen}\n` +
+            `Coordinates: (${this.currentRectangle.x}, ${this.currentRectangle.y})\n` +
+            `Size: ${this.currentRectangle.width} × ${this.currentRectangle.height}\n` +
+            `Click Save to apply changes.`
+        );
+    }
 }
 
 // Initialize the application when DOM is loaded
