@@ -70,6 +70,11 @@ class KioskSpeechChat {
         this.processingMode = 'llm'; // 'llm' or 'heuristic'
         this.commandHistory = null;
         
+        // Wake word settings
+        this.wakeWordMode = 'default'; // 'default' | 'hey_optix'
+        this.wakeWordActive = false;
+        this.isListeningForWakeWord = false;
+        
         // Browser and URL detection
         this.detectBrowserAndURL();
         
@@ -87,6 +92,7 @@ class KioskSpeechChat {
         this.loadOptimizationState();
         this.loadCommandHistory();
         this.loadProcessingModePreference();
+        this.loadWakeWordModePreference();
         this.connectWebSocket();
         this.initializeAudio();
     }
@@ -206,6 +212,9 @@ class KioskSpeechChat {
             processingModeToggle: document.getElementById('processingModeToggle'),
             processingModeCheckbox: document.getElementById('processingModeCheckbox'),
             processingModeText: document.getElementById('processingModeText'),
+            wakeWordToggle: document.getElementById('wakeWordToggle'),
+            wakeWordCheckbox: document.getElementById('wakeWordModeCheckbox'),
+            wakeWordModeText: document.getElementById('wakeWordModeText'),
             settingsToggle: document.getElementById('settingsToggle'),
             settingsPanel: document.getElementById('settingsPanel'),
             vadSidebar: document.getElementById('vadSidebar'),
@@ -981,6 +990,11 @@ class KioskSpeechChat {
             this.toggleProcessingMode();
         });
         
+        // Wake Word Toggle
+        this.elements.wakeWordCheckbox.addEventListener('change', () => {
+            this.toggleWakeWordMode();
+        });
+        
         // Screen dropdown
         this.elements.screenDropdown.addEventListener('change', () => {
             this.handleScreenChange();
@@ -1300,6 +1314,13 @@ class KioskSpeechChat {
                 
             case 'transcription':
                 this.showTranscription(data.text, data.confidence);
+                
+                // Handle wake word detection if active
+                if (this.wakeWordActive && this.isListeningForWakeWord && data.text.trim()) {
+                    this.handleWakeWordTranscription(data.text);
+                    break;
+                }
+                
                 // Only process transcription on client-side in heuristic mode
                 // In LLM mode, server handles transcription processing automatically
                 if (this.settings.autoSendVoice && data.text.trim() && this.processingMode === 'heuristic') {
@@ -1354,11 +1375,17 @@ class KioskSpeechChat {
                         console.error('Chat response error:', data.response.error);
                     }
                 }
+                
+                // Resume wake word listening if in wake word mode
+                this.resumeWakeWordListeningIfActive();
                 break;
                 
             case 'error':
                 this.hideProcessingIndicator();
                 this.addMessage('system', `Error: ${data.message}`);
+                
+                // Resume wake word listening if in wake word mode
+                this.resumeWakeWordListeningIfActive();
                 break;
                 
             case 'pong':
@@ -1825,6 +1852,14 @@ class KioskSpeechChat {
                 this.audioStream = null;
             }
             
+            // If in wake word mode, immediately restart listening
+            if (this.wakeWordActive) {
+                setTimeout(() => {
+                    console.log('Restarting recording for wake word mode');
+                    this.toggleVoiceRecording();
+                }, 300); // Brief delay to allow current processing to complete
+            }
+            
             console.log('Recording stopped');
         }
     }
@@ -1875,18 +1910,32 @@ class KioskSpeechChat {
         });
     }
     
-    sendAudioData(base64Audio) {
-        if (this.ws && this.isConnected) {
-            this.ws.send(JSON.stringify({
-                type: 'audio_data',
-                audio: base64Audio,
-                processing_mode: this.processingMode,
-                transcription_only: this.processingMode === 'heuristic', // Only transcribe in heuristic mode
-                timestamp: new Date().toISOString()
-            }));
-        } else {
+    async sendAudioData(base64Audio) {
+        if (!this.ws || !this.isConnected) {
             this.hideProcessingIndicator();
             this.showError('Not connected to server');
+            return;
+        }
+
+        // Determine if we should only do transcription or full processing
+        const isWakeWordDetectionMode = this.wakeWordActive && this.isListeningForWakeWord;
+        const transcriptionOnly = this.processingMode === 'heuristic' || isWakeWordDetectionMode;
+        
+        this.ws.send(JSON.stringify({
+            type: 'audio_data',
+            audio: base64Audio,
+            processing_mode: this.processingMode,
+            transcription_only: transcriptionOnly,
+            wake_word_detection_mode: isWakeWordDetectionMode,
+            timestamp: new Date().toISOString()
+        }));
+
+        // If we just processed a command after wake word detection, return to wake word listening
+        if (this.wakeWordActive && !this.isListeningForWakeWord) {
+            setTimeout(() => {
+                this.isListeningForWakeWord = true;
+                console.log('Returning to wake word listening mode');
+            }, 1000); // Brief delay before returning to wake word listening
         }
     }
     
@@ -2272,6 +2321,34 @@ class KioskSpeechChat {
         
         console.log('Loaded processing mode preference:', this.processingMode);
     }
+
+    loadWakeWordModePreference() {
+        const savedMode = localStorage.getItem('wakeWordMode');
+        if (savedMode) {
+            this.wakeWordMode = savedMode;
+            this.wakeWordActive = (savedMode === 'hey_optix');
+            this.elements.wakeWordCheckbox.checked = this.wakeWordActive;
+        }
+        
+        // Update the label to match the current mode
+        const isWakeWordMode = this.wakeWordActive;
+        const modeText = isWakeWordMode ? 'Hey Optix' : 'Default';
+        const modeIcon = isWakeWordMode ? 'fas fa-magic' : 'fas fa-microphone-alt';
+        
+        this.elements.wakeWordModeText.textContent = modeText;
+        this.elements.wakeWordToggle.querySelector('i').className = modeIcon;
+        
+        // Update toggle container color class
+        if (isWakeWordMode) {
+            this.elements.wakeWordToggle.classList.add('wake-word-mode');
+            this.elements.voiceButton.classList.add('wake-word-active');
+        } else {
+            this.elements.wakeWordToggle.classList.remove('wake-word-mode');
+            this.elements.voiceButton.classList.remove('wake-word-active');
+        }
+        
+        console.log('Loaded wake word mode preference:', this.wakeWordMode);
+    }
     
     addMessage(sender, text) {
         const messageDiv = document.createElement('div');
@@ -2500,6 +2577,156 @@ class KioskSpeechChat {
         
         // Save preference to localStorage
         localStorage.setItem('processingMode', this.processingMode);
+    }
+
+    async toggleWakeWordMode() {
+        const isWakeWordMode = this.elements.wakeWordCheckbox.checked;
+        this.wakeWordMode = isWakeWordMode ? 'hey_optix' : 'default';
+        this.wakeWordActive = isWakeWordMode;
+        
+        console.log('Wake word mode changed to:', this.wakeWordMode);
+        
+        // Update the label text and styling
+        const modeText = isWakeWordMode ? 'Hey Optix' : 'Default';
+        const modeIcon = isWakeWordMode ? 'fas fa-magic' : 'fas fa-microphone-alt';
+        
+        this.elements.wakeWordModeText.textContent = modeText;
+        this.elements.wakeWordToggle.querySelector('i').className = modeIcon;
+        
+        // Update toggle container color class
+        if (isWakeWordMode) {
+            this.elements.wakeWordToggle.classList.add('wake-word-mode');
+            this.elements.voiceButton.classList.add('wake-word-active');
+            
+            // Start wake word listening immediately
+            await this.startWakeWordListening();
+            
+        } else {
+            this.elements.wakeWordToggle.classList.remove('wake-word-mode');
+            this.elements.voiceButton.classList.remove('wake-word-active');
+            
+            // Stop wake word listening
+            await this.stopWakeWordListening();
+        }
+        
+        // Add a status message to chat
+        const shortModeText = isWakeWordMode ? 'Hey Optix' : 'Default';
+        this.addMessage('system', `🎙️ Wake word mode switched to: ${shortModeText}`);
+        
+        // Save preference to localStorage
+        localStorage.setItem('wakeWordMode', this.wakeWordMode);
+    }
+
+    async startWakeWordListening() {
+        try {
+            // For now, use text-based wake word detection until OpenWakeWord is ready
+            this.isListeningForWakeWord = true;
+            
+            // Start voice recording immediately for continuous listening
+            if (!this.isRecording) {
+                this.toggleVoiceRecording();
+            }
+            
+            console.log('Wake word listening started (text-based fallback)');
+            this.addMessage('system', '🎙️ Wake word listening active (Say "Hey Optix" then your command)');
+            
+        } catch (error) {
+            console.error('Error starting wake word listening:', error);
+            this.addMessage('system', '❌ Failed to start wake word detection');
+        }
+    }
+
+    async stopWakeWordListening() {
+        try {
+            this.isListeningForWakeWord = false;
+            
+            // Temporarily disable wakeWordActive to prevent restart in stopRecording
+            const wasWakeWordActive = this.wakeWordActive;
+            this.wakeWordActive = false;
+            
+            // Stop voice recording if it's active
+            if (this.isRecording) {
+                this.toggleVoiceRecording();
+            }
+            
+            // Restore wakeWordActive state but keep it disabled since we're stopping
+            // (this will be set correctly by the toggle)
+            
+            console.log('Wake word listening stopped');
+            this.addMessage('system', '🎙️ Wake word listening disabled');
+            
+        } catch (error) {
+            console.error('Error stopping wake word listening:', error);
+            this.addMessage('system', '❌ Failed to stop wake word detection');
+        }
+    }
+
+    async processWakeWordDetection(transcription) {
+        try {
+            // Simple text-based wake word detection for now
+            const lowerText = transcription.toLowerCase().trim();
+            const wakeWords = ['hey optix', 'hey optics', 'hi optix', 'hey optimist'];
+            
+            const wakeWordDetected = wakeWords.some(phrase => lowerText.includes(phrase));
+            
+            if (wakeWordDetected) {
+                console.log('Wake word detected in text:', lowerText);
+                
+                // Wake word detected - switch to command listening mode
+                this.isListeningForWakeWord = false;
+                this.addMessage('system', '🎙️ Wake word detected! Listening for command...');
+                
+                // The next audio will be processed as a command
+                return true;
+            }
+            
+            return false;
+            
+        } catch (error) {
+            console.error('Error processing wake word detection:', error);
+            return false;
+        }
+    }
+
+    async handleWakeWordTranscription(transcription) {
+        const wakeWordDetected = await this.processWakeWordDetection(transcription);
+        
+        if (wakeWordDetected) {
+            // Wake word detected - next audio will be processed as command
+            // Continue listening for the actual command immediately
+            console.log('Wake word detected, waiting for command...');
+            
+            // Ensure we're still recording for the command
+            if (!this.isRecording) {
+                setTimeout(() => {
+                    this.toggleVoiceRecording();
+                }, 100);
+            }
+        } else {
+            // No wake word detected - continue listening for wake word
+            console.log('No wake word detected, continuing to listen...');
+            
+            // Immediately restart listening for wake word
+            if (!this.isRecording) {
+                setTimeout(() => {
+                    this.toggleVoiceRecording();
+                }, 100);
+            }
+        }
+    }
+
+    resumeWakeWordListeningIfActive() {
+        if (this.wakeWordActive && !this.isListeningForWakeWord) {
+            console.log('Resuming wake word listening after command processing');
+            this.isListeningForWakeWord = true;
+            
+            // Start voice recording immediately if not already recording
+            if (!this.isRecording) {
+                setTimeout(() => {
+                    this.toggleVoiceRecording();
+                }, 500); // Brief delay to allow UI updates
+            }
+        }
     }
 
     calculateTextSimilarity(text1, text2) {

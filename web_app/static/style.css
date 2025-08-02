@@ -1298,6 +1298,42 @@ body.drawing-mode * {
     transform: translateX(30px);
 }
 
+/* Wake Word Toggle */
+.wake-word-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.wake-word-toggle.hey-optix-mode {
+    color: #fd7e14;
+}
+
+.wake-word-toggle i {
+    font-size: 0.9rem;
+}
+
+.voice-button.wake-word-active {
+    background: #fd7e14;
+    animation: wake-word-pulse 2s infinite;
+    box-shadow: 0 0 15px rgba(253, 126, 20, 0.5);
+}
+
+@keyframes wake-word-pulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 0 15px rgba(253, 126, 20, 0.5);
+    }
+    50% { 
+        transform: scale(1.05);
+        box-shadow: 0 0 25px rgba(253, 126, 20, 0.8);
+    }
+}
+
 
 /* Feedback Buttons */
 .feedback-buttons {
