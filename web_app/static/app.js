@@ -79,19 +79,6 @@ class KioskSpeechChat {
         // Initialize annotation mode after elements are available
         this.annotationMode = new ScreenshotAnnotationMode(this);
         
-        // Debug: Check if rectangle report elements exist
-        console.log('Rectangle report elements check:', {
-            annotationRectangleReport: this.elements.annotationRectangleReport,
-            rectStartX: this.elements.rectStartX,
-            rectStartY: this.elements.rectStartY,
-            rectEndX: this.elements.rectEndX,
-            rectEndY: this.elements.rectEndY,
-            rectWidth: this.elements.rectWidth,
-            rectHeight: this.elements.rectHeight,
-            updateScreenCoordsBtn: this.elements.updateScreenCoordsBtn
-        });
-        
-        
         this.initializeEventListeners();
         this.initializeNavbar();
         this.loadVADConfig();
@@ -298,16 +285,7 @@ class KioskSpeechChat {
             annotationMouseY: document.getElementById('annotationMouseY'),
             annotationDrawingOverlay: document.getElementById('annotationDrawingOverlay'),
             annotationDrawingRectangle: document.getElementById('annotationDrawingRectangle'),
-            annotationExit: document.getElementById('annotationExit'),
-            // Rectangle report elements
-            annotationRectangleReport: document.getElementById('annotationRectangleReport'),
-            rectStartX: document.getElementById('rectStartX'),
-            rectStartY: document.getElementById('rectStartY'),
-            rectEndX: document.getElementById('rectEndX'),
-            rectEndY: document.getElementById('rectEndY'),
-            rectWidth: document.getElementById('rectWidth'),
-            rectHeight: document.getElementById('rectHeight'),
-            updateScreenCoordsBtn: document.getElementById('updateScreenCoordsBtn')
+            annotationExit: document.getElementById('annotationExit')
         };
     }
     
@@ -3278,10 +3256,6 @@ class ScreenshotAnnotationMode {
         this.dragOffset = { x: 0, y: 0 };
         this.isDrawing = false;
         this.drawStart = { x: 0, y: 0 };
-        this.previousDrawingMode = 'none';
-        this.rectangleStartCoords = null;
-        this.rectangleEndCoords = null;
-        this.currentRectangle = null;
         
         this.initializeEventListeners();
     }
@@ -3299,20 +3273,6 @@ class ScreenshotAnnotationMode {
             }
         });
         
-        // Handle fullscreen change events
-        const fullscreenChangeHandler = () => {
-            // If we exit fullscreen while annotation mode is active, exit annotation mode
-            if (this.isActive && !document.fullscreenElement && !document.webkitFullscreenElement && 
-                !document.msFullscreenElement && !document.mozFullScreenElement) {
-                this.exitMode();
-            }
-        };
-        
-        document.addEventListener('fullscreenchange', fullscreenChangeHandler);
-        document.addEventListener('webkitfullscreenchange', fullscreenChangeHandler);
-        document.addEventListener('msfullscreenchange', fullscreenChangeHandler);
-        document.addEventListener('mozfullscreenchange', fullscreenChangeHandler);
-        
         // Drawing mode change
         this.kioskChat.elements.annotationDrawingMode.addEventListener('change', () => {
             this.handleDrawingModeChange();
@@ -3320,7 +3280,6 @@ class ScreenshotAnnotationMode {
         
         // Save button
         this.kioskChat.elements.annotationSaveButton.addEventListener('click', () => {
-            console.log('Annotation save button clicked');
             this.handleSave();
         });
         
@@ -3353,11 +3312,6 @@ class ScreenshotAnnotationMode {
         
         // Draggable navbar
         this.initializeDraggableNavbar();
-        
-        // Update Screen Coords button
-        this.kioskChat.elements.updateScreenCoordsBtn.addEventListener('click', () => {
-            this.handleUpdateScreenCoords();
-        });
     }
     
     initializeDraggableNavbar() {
@@ -3414,7 +3368,7 @@ class ScreenshotAnnotationMode {
         });
     }
     
-    async enterMode(screenshotSrc, screenshotData = null) {
+    enterMode(screenshotSrc, screenshotData = null) {
         if (this.isActive) return;
         
         this.isActive = true;
@@ -3433,52 +3387,17 @@ class ScreenshotAnnotationMode {
         // Show modal
         this.kioskChat.elements.screenshotAnnotationModal.style.display = 'block';
         
-        // Request fullscreen mode
-        try {
-            const modal = this.kioskChat.elements.screenshotAnnotationModal;
-            if (modal.requestFullscreen) {
-                await modal.requestFullscreen();
-            } else if (modal.webkitRequestFullscreen) {
-                await modal.webkitRequestFullscreen();
-            } else if (modal.msRequestFullscreen) {
-                await modal.msRequestFullscreen();
-            } else if (modal.mozRequestFullScreen) {
-                await modal.mozRequestFullScreen();
-            }
-        } catch (error) {
-            console.warn('Fullscreen request failed:', error);
-            // Continue with normal modal if fullscreen fails
-        }
-        
         // Prevent body scroll
         document.body.style.overflow = 'hidden';
         
         console.log('Entered screenshot annotation mode:', screenshotSrc);
     }
     
-    async exitMode() {
+    exitMode() {
         if (!this.isActive) return;
         
         this.isActive = false;
         this.currentScreenshot = null;
-        
-        // Exit fullscreen mode
-        try {
-            if (document.fullscreenElement || document.webkitFullscreenElement || 
-                document.msFullscreenElement || document.mozFullScreenElement) {
-                if (document.exitFullscreen) {
-                    await document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    await document.webkitExitFullscreen();
-                } else if (document.msExitFullscreen) {
-                    await document.msExitFullscreen();
-                } else if (document.mozCancelFullScreen) {
-                    await document.mozCancelFullScreen();
-                }
-            }
-        } catch (error) {
-            console.warn('Exit fullscreen failed:', error);
-        }
         
         // Hide modal
         this.kioskChat.elements.screenshotAnnotationModal.style.display = 'none';
@@ -3520,65 +3439,11 @@ class ScreenshotAnnotationMode {
         const mode = this.kioskChat.elements.annotationDrawingMode.value;
         const overlay = this.kioskChat.elements.annotationDrawingOverlay;
         
-        console.log('Drawing mode changed:', this.previousDrawingMode, '->', mode);
-        
-        // Detect rectangle drawing completion (rectangle -> none transition)
-        if (this.previousDrawingMode === 'rectangle' && mode === 'none') {
-            console.log('Rectangle drawing completed, capturing coordinates');
-            this.captureRectangleCoordinates();
-        }
-        
         if (mode === 'rectangle') {
             overlay.classList.add('drawing-mode');
-            // Capture start coordinates when entering rectangle mode
-            this.rectangleStartCoords = {
-                x: parseInt(this.kioskChat.elements.annotationMouseX.textContent) || 0,
-                y: parseInt(this.kioskChat.elements.annotationMouseY.textContent) || 0
-            };
-            console.log('Rectangle drawing started, start coords:', this.rectangleStartCoords);
         } else {
             overlay.classList.remove('drawing-mode');
-            if (mode === 'none' && this.previousDrawingMode !== 'rectangle') {
-                this.resetDrawing();
-            }
-        }
-        
-        // Update previous mode for next change
-        this.previousDrawingMode = mode;
-    }
-    
-    captureRectangleCoordinates() {
-        // Capture end coordinates from current mouse position
-        this.rectangleEndCoords = {
-            x: parseInt(this.kioskChat.elements.annotationMouseX.textContent) || 0,
-            y: parseInt(this.kioskChat.elements.annotationMouseY.textContent) || 0
-        };
-        
-        // Calculate rectangle bounds
-        if (this.rectangleStartCoords && this.rectangleEndCoords) {
-            const left = Math.min(this.rectangleStartCoords.x, this.rectangleEndCoords.x);
-            const top = Math.min(this.rectangleStartCoords.y, this.rectangleEndCoords.y);
-            const width = Math.abs(this.rectangleEndCoords.x - this.rectangleStartCoords.x);
-            const height = Math.abs(this.rectangleEndCoords.y - this.rectangleStartCoords.y);
-            
-            this.currentRectangle = {
-                x: left,
-                y: top,
-                width: width,
-                height: height
-            };
-            
-            console.log('Rectangle coordinates captured:', {
-                start: this.rectangleStartCoords,
-                end: this.rectangleEndCoords,
-                rectangle: this.currentRectangle
-            });
-            
-            // Show rectangle report
-            this.showRectangleReport();
-            
-            // Enable save button
-            this.kioskChat.elements.annotationSaveButton.disabled = false;
+            this.resetDrawing();
         }
     }
     
@@ -3646,12 +3511,6 @@ class ScreenshotAnnotationMode {
         const coords = this.screenToImageCoordinates(e.clientX, e.clientY);
         this.drawStart = coords;
         
-        // Store start coordinates from current mouse position display
-        this.rectangleStartCoords = {
-            x: parseInt(this.kioskChat.elements.annotationMouseX.textContent),
-            y: parseInt(this.kioskChat.elements.annotationMouseY.textContent)
-        };
-        
         const rect = this.kioskChat.elements.annotationDrawingRectangle;
         const screenCoords = this.imageToScreenCoordinates(coords.x, coords.y);
         
@@ -3683,7 +3542,6 @@ class ScreenshotAnnotationMode {
     }
     
     endDrawing(e) {
-        console.log('endDrawing called', { isDrawing: this.isDrawing });
         if (!this.isDrawing) return;
         
         this.isDrawing = false;
@@ -3693,8 +3551,6 @@ class ScreenshotAnnotationMode {
         const top = Math.min(this.drawStart.y, coords.y);
         const width = Math.abs(coords.x - this.drawStart.x);
         const height = Math.abs(coords.y - this.drawStart.y);
-        
-        console.log('Rectangle dimensions:', { width, height, left, top });
         
         // Only create rectangle if it has meaningful size
         if (width > 10 && height > 10) {
@@ -3708,28 +3564,8 @@ class ScreenshotAnnotationMode {
                 height: Math.round(height)
             };
             
-            // Store end coordinates from current mouse position display
-            this.rectangleEndCoords = {
-                x: parseInt(this.kioskChat.elements.annotationMouseX.textContent),
-                y: parseInt(this.kioskChat.elements.annotationMouseY.textContent)
-            };
-            
-            console.log('Rectangle coordinates set:', {
-                rectangleStartCoords: this.rectangleStartCoords,
-                rectangleEndCoords: this.rectangleEndCoords,
-                currentRectangle: this.currentRectangle
-            });
-            
-            // Display rectangle report
-            this.showRectangleReport();
-            
-            // Reset drawing mode to normal cursor
-            this.kioskChat.elements.annotationDrawingMode.value = 'none';
-            this.handleDrawingModeChange();
-            
             console.log('Rectangle drawn:', this.currentRectangle);
         } else {
-            console.log('Rectangle too small, resetting');
             this.resetDrawing();
         }
     }
@@ -3738,75 +3574,7 @@ class ScreenshotAnnotationMode {
         this.isDrawing = false;
         this.kioskChat.elements.annotationDrawingRectangle.style.display = 'none';
         this.kioskChat.elements.annotationSaveButton.disabled = true;
-        this.kioskChat.elements.annotationRectangleReport.style.display = 'none';
         this.currentRectangle = null;
-        this.rectangleStartCoords = null;
-        this.rectangleEndCoords = null;
-    }
-    
-    showRectangleReport() {
-        console.log('showRectangleReport called', {
-            rectangleStartCoords: this.rectangleStartCoords,
-            rectangleEndCoords: this.rectangleEndCoords,
-            currentRectangle: this.currentRectangle
-        });
-        
-        if (!this.rectangleStartCoords || !this.rectangleEndCoords || !this.currentRectangle) {
-            console.warn('Missing rectangle data, cannot show report');
-            return;
-        }
-        
-        // Update the rectangle report display
-        this.kioskChat.elements.rectStartX.textContent = this.rectangleStartCoords.x;
-        this.kioskChat.elements.rectStartY.textContent = this.rectangleStartCoords.y;
-        this.kioskChat.elements.rectEndX.textContent = this.rectangleEndCoords.x;
-        this.kioskChat.elements.rectEndY.textContent = this.rectangleEndCoords.y;
-        this.kioskChat.elements.rectWidth.textContent = this.currentRectangle.width;
-        this.kioskChat.elements.rectHeight.textContent = this.currentRectangle.height;
-        
-        // Show the report
-        this.kioskChat.elements.annotationRectangleReport.style.display = 'block';
-        console.log('Rectangle report displayed');
-    }
-    
-    handleUpdateScreenCoords() {
-        if (!this.currentRectangle || !this.rectangleStartCoords || !this.rectangleEndCoords) return;
-        
-        const selectedScreen = this.kioskChat.elements.annotationScreen.value;
-        const selectedElement = this.kioskChat.elements.annotationElement.value;
-        
-        if (!selectedScreen || !selectedElement) {
-            alert('Please select both a screen and element before updating coordinates.');
-            return;
-        }
-        
-        // Use the existing coordinate update system with the rectangle bounds
-        const updateKey = `${selectedScreen}_${selectedElement}`;
-        this.kioskChat.queueCoordinateUpdate(selectedScreen, selectedElement, {
-            x: this.currentRectangle.x,
-            y: this.currentRectangle.y,
-            width: this.currentRectangle.width,
-            height: this.currentRectangle.height
-        });
-        
-        // Show feedback message in the main chat (will be visible when exiting annotation mode)
-        console.log('Coordinate update queued:', updateKey, this.currentRectangle);
-        
-        // Enable save button
-        this.kioskChat.elements.annotationSaveButton.disabled = false;
-        
-        // Provide visual feedback
-        this.kioskChat.elements.updateScreenCoordsBtn.style.background = 'rgba(40, 167, 69, 0.2)';
-        this.kioskChat.elements.updateScreenCoordsBtn.style.borderColor = 'rgba(40, 167, 69, 0.5)';
-        this.kioskChat.elements.updateScreenCoordsBtn.style.color = '#28a745';
-        this.kioskChat.elements.updateScreenCoordsBtn.innerHTML = '<i class="fas fa-check"></i> Coordinates Updated';
-        
-        setTimeout(() => {
-            this.kioskChat.elements.updateScreenCoordsBtn.style.background = '';
-            this.kioskChat.elements.updateScreenCoordsBtn.style.borderColor = '';
-            this.kioskChat.elements.updateScreenCoordsBtn.style.color = '';
-            this.kioskChat.elements.updateScreenCoordsBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Update with Screen Coords';
-        }, 2000);
     }
     
     screenToImageCoordinates(screenX, screenY) {
@@ -3908,70 +3676,30 @@ class ScreenshotAnnotationMode {
         };
     }
     
-    async handleSave() {
-        console.log('handleSave called with currentRectangle:', this.currentRectangle);
-        
-        if (!this.currentRectangle) {
-            console.log('No currentRectangle, returning');
-            return;
-        }
+    handleSave() {
+        if (!this.currentRectangle) return;
         
         const selectedScreen = this.kioskChat.elements.annotationScreen.value;
-        const selectedElement = this.kioskChat.elements.annotationElement.value;
-        
-        console.log('Selected screen:', selectedScreen, 'element:', selectedElement);
-        
         if (!selectedScreen) {
             alert('Please select a screen first');
             return;
         }
         
-        if (!selectedElement) {
-            alert('Please select an element first');
-            return;
-        }
+        // Use the existing coordinate update system
+        this.kioskChat.queueCoordinateUpdate(selectedScreen, 'screenshot_annotation', this.currentRectangle);
         
-        console.log('Queuing coordinate update...');
-        // Use the existing coordinate update system - add directly to pendingUpdates
-        const updateKey = `${selectedScreen}_${selectedElement}`;
-        this.kioskChat.pendingUpdates[updateKey] = {
-            screen: selectedScreen,
-            elementId: selectedElement,
-            newCoordinates: {
-                x: this.currentRectangle.x,
-                y: this.currentRectangle.y
-            },
-            newSize: {
-                width: this.currentRectangle.width,
-                height: this.currentRectangle.height
-            }
-        };
-        console.log('Pending update queued:', updateKey, this.kioskChat.pendingUpdates[updateKey]);
+        // Reset and exit
+        this.resetDrawing();
+        this.exitMode();
         
-        // Show queued message
+        // Show success message
         this.kioskChat.addMessage('system', 
-            `📋 Annotation Queued for Save\n` +
+            `✅ Screenshot Annotation Saved\n` +
             `Screen: ${selectedScreen}\n` +
-            `Element: ${selectedElement}\n` +
             `Coordinates: (${this.currentRectangle.x}, ${this.currentRectangle.y})\n` +
             `Size: ${this.currentRectangle.width} × ${this.currentRectangle.height}\n` +
-            `Changes will be saved to config/kiosk_data.json...`
+            `Click Save to apply changes.`
         );
-        
-        // Trigger the main save function to persist to file
-        try {
-            console.log('Calling handleSaveCoordinates...');
-            await this.kioskChat.handleSaveCoordinates();
-            console.log('Save completed successfully');
-            
-            // Reset and exit after successful save
-            this.resetDrawing();
-            this.exitMode();
-            
-        } catch (error) {
-            console.error('Save failed:', error);
-            this.kioskChat.addMessage('system', '❌ Save Failed\nError saving annotation coordinates.');
-        }
     }
 }
 

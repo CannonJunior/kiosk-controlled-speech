@@ -227,8 +227,8 @@
           "id": "test_element",
           "name": "Test Element",
           "coordinates": {
-            "x": 447,
-            "y": 237
+            "x": 500,
+            "y": 500
           },
           "size": {
             "width": 100,
