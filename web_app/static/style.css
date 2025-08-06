@@ -1252,6 +1252,55 @@ body.drawing-mode * {
     font-size: 0.9rem;
 }
 
+/* Elements Visibility Toggle */
+.elements-visibility-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.elements-visibility-toggle.elements-visible {
+    color: #17a2b8;
+}
+
+.elements-visibility-toggle i {
+    font-size: 0.9rem;
+}
+
+/* Element Overlay Rectangles */
+.element-overlay {
+    position: fixed;
+    border: 2px solid #17a2b8;
+    background: rgba(23, 162, 184, 0.1);
+    pointer-events: none;
+    z-index: 9999;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px rgba(23, 162, 184, 0.4);
+}
+
+.element-overlay.hidden {
+    display: none;
+}
+
+.element-overlay .element-label {
+    position: absolute;
+    top: -25px;
+    left: 0;
+    background: #17a2b8;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
 .toggle-label {
     display: flex;
     align-items: center;

@@ -313,6 +313,68 @@ class ModelConfigManager:
         current_key = self._config.get("current_model", "default")
         return self._config.get("models", {}).get(current_key, self._get_default_config()["models"]["default"])
     
+    def select_optimal_model(self, query: str) -> str:
+        """Select optimal model based on query complexity"""
+        complexity = self._analyze_query_complexity(query)
+        
+        if complexity <= 2:
+            # Simple commands - use fastest model
+            return "phi" if "phi" in self._config.get("models", {}) else "default"
+        elif complexity <= 4:
+            # Medium complexity - use default balanced model
+            return "default"
+        else:
+            # Complex queries - use accurate model
+            return "accurate" if "accurate" in self._config.get("models", {}) else "balanced"
+    
+    def _analyze_query_complexity(self, query: str) -> int:
+        """Analyze query complexity score (1-6)"""
+        if not query.strip():
+            return 1
+            
+        query_lower = query.lower().strip()
+        complexity_score = 1
+        
+        # Length-based scoring
+        word_count = len(query_lower.split())
+        if word_count > 10:
+            complexity_score += 2
+        elif word_count > 5:
+            complexity_score += 1
+            
+        # Simple command patterns (reduce complexity)
+        simple_patterns = [
+            r'^(click|tap|press|select)\s+\w+$',
+            r'^(open|close|start|stop)\s+\w+$',
+            r'^(go\s+to|navigate\s+to)\s+\w+$',
+            r'^(help|show|display)\s*$'
+        ]
+        
+        import re
+        for pattern in simple_patterns:
+            if re.match(pattern, query_lower):
+                return max(1, complexity_score - 1)
+        
+        # Complex operation keywords (increase complexity)
+        complex_keywords = [
+            'analyze', 'compare', 'calculate', 'generate', 'create', 'explain',
+            'troubleshoot', 'configure', 'customize', 'optimize', 'research'
+        ]
+        
+        for keyword in complex_keywords:
+            if keyword in query_lower:
+                complexity_score += 1
+                
+        # Question complexity indicators
+        if any(word in query_lower for word in ['why', 'how', 'what if', 'explain']):
+            complexity_score += 1
+            
+        # Multiple requirements (and, or, also, then)
+        if any(word in query_lower for word in [' and ', ' or ', ' also ', ' then ', ' after ']):
+            complexity_score += 1
+            
+        return min(6, complexity_score)
+    
     def set_current_model(self, model_key: str) -> bool:
         """Set current model"""
         if model_key in self._config.get("models", {}):

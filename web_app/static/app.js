@@ -39,6 +39,10 @@ class KioskSpeechChat {
         this.drawnShapes = [];
         this.drawingModeJustChanged = false;
         
+        // Heuristic processing cache for performance optimization
+        this.heuristicCache = {};
+        this.heuristicCacheSize = 100; // Limit cache size
+        
         // Settings (will be loaded from config)
         this.settings = {
             autoSendVoice: true,
@@ -70,10 +74,10 @@ class KioskSpeechChat {
         this.processingMode = 'llm'; // 'llm' or 'heuristic'
         this.commandHistory = null;
         
-        // Wake word settings
-        this.wakeWordMode = 'default'; // 'default' | 'hey_optix'
-        this.wakeWordActive = false;
-        this.isListeningForWakeWord = false;
+        // Element visibility settings
+        this.elementsVisible = false; // Default to hidden
+        this.currentElementOverlays = []; // Track current overlays
+        this.currentSelectedScreen = null; // Track selected screen
         
         // Browser and URL detection
         this.detectBrowserAndURL();
@@ -92,7 +96,7 @@ class KioskSpeechChat {
         this.loadOptimizationState();
         this.loadCommandHistory();
         this.loadProcessingModePreference();
-        this.loadWakeWordModePreference();
+        this.loadElementsVisibilityPreference();
         this.connectWebSocket();
         this.initializeAudio();
     }
@@ -212,9 +216,9 @@ class KioskSpeechChat {
             processingModeToggle: document.getElementById('processingModeToggle'),
             processingModeCheckbox: document.getElementById('processingModeCheckbox'),
             processingModeText: document.getElementById('processingModeText'),
-            wakeWordToggle: document.getElementById('wakeWordToggle'),
-            wakeWordCheckbox: document.getElementById('wakeWordModeCheckbox'),
-            wakeWordModeText: document.getElementById('wakeWordModeText'),
+            elementsVisibilityToggle: document.getElementById('elementsVisibilityToggle'),
+            elementsVisibilityCheckbox: document.getElementById('elementsVisibilityCheckbox'),
+            elementsVisibilityText: document.getElementById('elementsVisibilityText'),
             settingsToggle: document.getElementById('settingsToggle'),
             settingsPanel: document.getElementById('settingsPanel'),
             vadSidebar: document.getElementById('vadSidebar'),
@@ -696,17 +700,29 @@ class KioskSpeechChat {
         const selectedScreen = this.elements.screenDropdown.value;
         console.log('Screen changed to:', selectedScreen);
         
+        // Clear previous element overlays if screen changed
+        if (this.currentSelectedScreen !== selectedScreen) {
+            this.clearElementOverlays();
+            this.currentSelectedScreen = selectedScreen;
+        }
+        
         // Check if "Add New Screen..." option was selected
         if (selectedScreen === '__add_new_screen__') {
             this.showAddScreenModal();
             // Reset dropdown to empty selection
             this.elements.screenDropdown.value = '';
             this.updateElementDropdown('');
+            this.currentSelectedScreen = null;
             return;
         }
         
         // Update element dropdown based on selected screen
         this.updateElementDropdown(selectedScreen);
+        
+        // If elements are currently visible, redraw them for the new screen
+        if (this.elementsVisible && selectedScreen) {
+            this.showElementOverlays(selectedScreen);
+        }
         
         if (selectedScreen) {
             const screenData = this.kioskData.screens[selectedScreen];
@@ -990,9 +1006,9 @@ class KioskSpeechChat {
             this.toggleProcessingMode();
         });
         
-        // Wake Word Toggle
-        this.elements.wakeWordCheckbox.addEventListener('change', () => {
-            this.toggleWakeWordMode();
+        // Elements Visibility Toggle
+        this.elements.elementsVisibilityCheckbox.addEventListener('change', () => {
+            this.toggleElementsVisibility();
         });
         
         // Screen dropdown
@@ -1315,18 +1331,14 @@ class KioskSpeechChat {
             case 'transcription':
                 this.showTranscription(data.text, data.confidence);
                 
-                // Handle wake word detection if active
-                if (this.wakeWordActive && this.isListeningForWakeWord && data.text.trim()) {
-                    this.handleWakeWordTranscription(data.text);
-                    break;
-                }
                 
                 // Only process transcription on client-side in heuristic mode
                 // In LLM mode, server handles transcription processing automatically
                 if (this.settings.autoSendVoice && data.text.trim() && this.processingMode === 'heuristic') {
+                    // Reduced delay for faster heuristic processing
                     setTimeout(() => {
                         this.sendChatMessage(data.text);
-                    }, 500);
+                    }, 200);
                 }
                 break;
                 
@@ -1852,13 +1864,6 @@ class KioskSpeechChat {
                 this.audioStream = null;
             }
             
-            // If in wake word mode, immediately restart listening
-            if (this.wakeWordActive) {
-                setTimeout(() => {
-                    console.log('Restarting recording for wake word mode');
-                    this.toggleVoiceRecording();
-                }, 300); // Brief delay to allow current processing to complete
-            }
             
             console.log('Recording stopped');
         }
@@ -1918,25 +1923,15 @@ class KioskSpeechChat {
         }
 
         // Determine if we should only do transcription or full processing
-        const isWakeWordDetectionMode = this.wakeWordActive && this.isListeningForWakeWord;
-        const transcriptionOnly = this.processingMode === 'heuristic' || isWakeWordDetectionMode;
+        const transcriptionOnly = this.processingMode === 'heuristic';
         
         this.ws.send(JSON.stringify({
             type: 'audio_data',
             audio: base64Audio,
             processing_mode: this.processingMode,
             transcription_only: transcriptionOnly,
-            wake_word_detection_mode: isWakeWordDetectionMode,
             timestamp: new Date().toISOString()
         }));
-
-        // If we just processed a command after wake word detection, return to wake word listening
-        if (this.wakeWordActive && !this.isListeningForWakeWord) {
-            setTimeout(() => {
-                this.isListeningForWakeWord = true;
-                console.log('Returning to wake word listening mode');
-            }, 1000); // Brief delay before returning to wake word listening
-        }
     }
     
     sendMessage() {
@@ -2322,33 +2317,6 @@ class KioskSpeechChat {
         console.log('Loaded processing mode preference:', this.processingMode);
     }
 
-    loadWakeWordModePreference() {
-        const savedMode = localStorage.getItem('wakeWordMode');
-        if (savedMode) {
-            this.wakeWordMode = savedMode;
-            this.wakeWordActive = (savedMode === 'hey_optix');
-            this.elements.wakeWordCheckbox.checked = this.wakeWordActive;
-        }
-        
-        // Update the label to match the current mode
-        const isWakeWordMode = this.wakeWordActive;
-        const modeText = isWakeWordMode ? 'Hey Optix' : 'Default';
-        const modeIcon = isWakeWordMode ? 'fas fa-magic' : 'fas fa-microphone-alt';
-        
-        this.elements.wakeWordModeText.textContent = modeText;
-        this.elements.wakeWordToggle.querySelector('i').className = modeIcon;
-        
-        // Update toggle container color class
-        if (isWakeWordMode) {
-            this.elements.wakeWordToggle.classList.add('wake-word-mode');
-            this.elements.voiceButton.classList.add('wake-word-active');
-        } else {
-            this.elements.wakeWordToggle.classList.remove('wake-word-mode');
-            this.elements.voiceButton.classList.remove('wake-word-active');
-        }
-        
-        console.log('Loaded wake word mode preference:', this.wakeWordMode);
-    }
     
     addMessage(sender, text) {
         const messageDiv = document.createElement('div');
@@ -2579,191 +2547,152 @@ class KioskSpeechChat {
         localStorage.setItem('processingMode', this.processingMode);
     }
 
-    async toggleWakeWordMode() {
-        const isWakeWordMode = this.elements.wakeWordCheckbox.checked;
-        this.wakeWordMode = isWakeWordMode ? 'hey_optix' : 'default';
-        this.wakeWordActive = isWakeWordMode;
+    toggleElementsVisibility() {
+        this.elementsVisible = this.elements.elementsVisibilityCheckbox.checked;
         
-        console.log('Wake word mode changed to:', this.wakeWordMode);
+        console.log('Elements visibility changed to:', this.elementsVisible);
         
         // Update the label text and styling
-        const modeText = isWakeWordMode ? 'Hey Optix' : 'Default';
-        const modeIcon = isWakeWordMode ? 'fas fa-magic' : 'fas fa-microphone-alt';
+        const visibilityText = this.elementsVisible ? 'Elements Visible' : 'Elements Hidden';
+        const visibilityIcon = this.elementsVisible ? 'fas fa-eye' : 'fas fa-eye-slash';
         
-        this.elements.wakeWordModeText.textContent = modeText;
-        this.elements.wakeWordToggle.querySelector('i').className = modeIcon;
+        this.elements.elementsVisibilityText.textContent = visibilityText;
+        this.elements.elementsVisibilityToggle.querySelector('i').className = visibilityIcon;
         
         // Update toggle container color class
-        if (isWakeWordMode) {
-            this.elements.wakeWordToggle.classList.add('wake-word-mode');
-            this.elements.voiceButton.classList.add('wake-word-active');
-            
-            // Start wake word listening immediately
-            await this.startWakeWordListening();
-            
+        if (this.elementsVisible) {
+            this.elements.elementsVisibilityToggle.classList.add('elements-visible');
         } else {
-            this.elements.wakeWordToggle.classList.remove('wake-word-mode');
-            this.elements.voiceButton.classList.remove('wake-word-active');
-            
-            // Stop wake word listening
-            await this.stopWakeWordListening();
+            this.elements.elementsVisibilityToggle.classList.remove('elements-visible');
+        }
+        
+        // Show or hide element overlays based on current state
+        const selectedScreen = this.elements.screenDropdown.value;
+        if (this.elementsVisible && selectedScreen) {
+            this.showElementOverlays(selectedScreen);
+        } else {
+            this.clearElementOverlays();
         }
         
         // Add a status message to chat
-        const shortModeText = isWakeWordMode ? 'Hey Optix' : 'Default';
-        this.addMessage('system', `🎙️ Wake word mode switched to: ${shortModeText}`);
+        const statusText = this.elementsVisible ? 'shown' : 'hidden';
+        this.addMessage('system', `👁️ Element outlines ${statusText} for current screen`);
         
         // Save preference to localStorage
-        localStorage.setItem('wakeWordMode', this.wakeWordMode);
+        localStorage.setItem('elementsVisible', this.elementsVisible);
     }
 
-    async startWakeWordListening() {
-        try {
-            // For now, use text-based wake word detection until OpenWakeWord is ready
-            this.isListeningForWakeWord = true;
-            
-            // Start voice recording immediately for continuous listening
-            if (!this.isRecording) {
-                this.toggleVoiceRecording();
-            }
-            
-            console.log('Wake word listening started (text-based fallback)');
-            this.addMessage('system', '🎙️ Wake word listening active (Say "Hey Optix" then your command)');
-            
-        } catch (error) {
-            console.error('Error starting wake word listening:', error);
-            this.addMessage('system', '❌ Failed to start wake word detection');
-        }
-    }
-
-    async stopWakeWordListening() {
-        try {
-            this.isListeningForWakeWord = false;
-            
-            // Temporarily disable wakeWordActive to prevent restart in stopRecording
-            const wasWakeWordActive = this.wakeWordActive;
-            this.wakeWordActive = false;
-            
-            // Stop voice recording if it's active
-            if (this.isRecording) {
-                this.toggleVoiceRecording();
-            }
-            
-            // Restore wakeWordActive state but keep it disabled since we're stopping
-            // (this will be set correctly by the toggle)
-            
-            console.log('Wake word listening stopped');
-            this.addMessage('system', '🎙️ Wake word listening disabled');
-            
-        } catch (error) {
-            console.error('Error stopping wake word listening:', error);
-            this.addMessage('system', '❌ Failed to stop wake word detection');
-        }
-    }
-
-    async processWakeWordDetection(transcription) {
-        try {
-            // Simple text-based wake word detection for now
-            const lowerText = transcription.toLowerCase().trim();
-            const wakeWords = ['hey optix', 'hey optics', 'hi optix', 'hey optimist'];
-            
-            const wakeWordDetected = wakeWords.some(phrase => lowerText.includes(phrase));
-            
-            if (wakeWordDetected) {
-                console.log('Wake word detected in text:', lowerText);
-                
-                // Wake word detected - switch to command listening mode
-                this.isListeningForWakeWord = false;
-                this.addMessage('system', '🎙️ Wake word detected! Listening for command...');
-                
-                // The next audio will be processed as a command
-                return true;
-            }
-            
-            return false;
-            
-        } catch (error) {
-            console.error('Error processing wake word detection:', error);
-            return false;
-        }
-    }
-
-    async handleWakeWordTranscription(transcription) {
-        const wakeWordDetected = await this.processWakeWordDetection(transcription);
+    showElementOverlays(screenId) {
+        // Clear existing overlays first
+        this.clearElementOverlays();
         
-        if (wakeWordDetected) {
-            // Wake word detected - next audio will be processed as command
-            // Continue listening for the actual command immediately
-            console.log('Wake word detected, waiting for command...');
-            
-            // Ensure we're still recording for the command
-            if (!this.isRecording) {
-                setTimeout(() => {
-                    this.toggleVoiceRecording();
-                }, 100);
-            }
-        } else {
-            // No wake word detected - continue listening for wake word
-            console.log('No wake word detected, continuing to listen...');
-            
-            // Immediately restart listening for wake word
-            if (!this.isRecording) {
-                setTimeout(() => {
-                    this.toggleVoiceRecording();
-                }, 100);
-            }
+        if (!this.kioskData || !this.kioskData.screens || !screenId) {
+            return;
         }
+        
+        const screenData = this.kioskData.screens[screenId];
+        if (!screenData || !screenData.elements) {
+            console.log('No elements found for screen:', screenId);
+            return;
+        }
+        
+        console.log(`Showing ${screenData.elements.length} element overlays for screen: ${screenId}`);
+        
+        screenData.elements.forEach(element => {
+            this.createElementOverlay(element);
+        });
     }
 
-    resumeWakeWordListeningIfActive() {
-        if (this.wakeWordActive && !this.isListeningForWakeWord) {
-            console.log('Resuming wake word listening after command processing');
-            this.isListeningForWakeWord = true;
-            
-            // Start voice recording immediately if not already recording
-            if (!this.isRecording) {
-                setTimeout(() => {
-                    this.toggleVoiceRecording();
-                }, 500); // Brief delay to allow UI updates
-            }
-        }
+    createElementOverlay(element) {
+        const overlay = document.createElement('div');
+        overlay.className = 'element-overlay';
+        overlay.setAttribute('data-element-id', element.id);
+        
+        // Position and size the overlay
+        overlay.style.left = element.coordinates.x + 'px';
+        overlay.style.top = element.coordinates.y + 'px';
+        overlay.style.width = element.size.width + 'px';
+        overlay.style.height = element.size.height + 'px';
+        
+        // Create and add label
+        const label = document.createElement('div');
+        label.className = 'element-label';
+        label.textContent = element.name || element.id;
+        overlay.appendChild(label);
+        
+        // Add to page and track overlay
+        document.body.appendChild(overlay);
+        this.currentElementOverlays.push(overlay);
+        
+        console.log(`Created overlay for element: ${element.id} at (${element.coordinates.x}, ${element.coordinates.y})`);
     }
+
+    clearElementOverlays() {
+        this.currentElementOverlays.forEach(overlay => {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        });
+        this.currentElementOverlays = [];
+        console.log('Cleared all element overlays');
+    }
+
+    loadElementsVisibilityPreference() {
+        const savedVisibility = localStorage.getItem('elementsVisible');
+        if (savedVisibility !== null) {
+            this.elementsVisible = savedVisibility === 'true';
+            this.elements.elementsVisibilityCheckbox.checked = this.elementsVisible;
+        }
+        
+        // Update the label to match the current state
+        const visibilityText = this.elementsVisible ? 'Elements Visible' : 'Elements Hidden';
+        const visibilityIcon = this.elementsVisible ? 'fas fa-eye' : 'fas fa-eye-slash';
+        
+        this.elements.elementsVisibilityText.textContent = visibilityText;
+        this.elements.elementsVisibilityToggle.querySelector('i').className = visibilityIcon;
+        
+        // Update toggle container color class
+        if (this.elementsVisible) {
+            this.elements.elementsVisibilityToggle.classList.add('elements-visible');
+        } else {
+            this.elements.elementsVisibilityToggle.classList.remove('elements-visible');
+        }
+        
+        console.log('Loaded elements visibility preference:', this.elementsVisible);
+    }
+
 
     calculateTextSimilarity(text1, text2) {
-        // Simple similarity calculation using Levenshtein distance
         const normalize = (str) => str.toLowerCase().trim().replace(/[^\w\s]/g, '');
         const a = normalize(text1);
         const b = normalize(text2);
         
         if (a === b) return 1.0;
         
-        const matrix = [];
-        const n = a.length;
-        const m = b.length;
+        // Fast length difference check - early exit if too different
+        const maxLength = Math.max(a.length, b.length);
+        const minLength = Math.min(a.length, b.length);
+        if (maxLength === 0) return 1.0;
+        if (minLength / maxLength < 0.3) return 0; // Early exit for very different lengths
         
-        for (let i = 0; i <= n; i++) {
-            matrix[i] = [i];
-        }
-        for (let j = 0; j <= m; j++) {
-            matrix[0][j] = j;
-        }
+        // Use two-row optimization for Levenshtein distance
+        let previousRow = Array(b.length + 1).fill(0).map((_, i) => i);
+        let currentRow = Array(b.length + 1);
         
-        for (let i = 1; i <= n; i++) {
-            for (let j = 1; j <= m; j++) {
-                if (a[i - 1] === b[j - 1]) {
-                    matrix[i][j] = matrix[i - 1][j - 1];
-                } else {
-                    matrix[i][j] = Math.min(
-                        matrix[i - 1][j] + 1,
-                        matrix[i][j - 1] + 1,
-                        matrix[i - 1][j - 1] + 1
-                    );
-                }
+        for (let i = 0; i < a.length; i++) {
+            currentRow[0] = i + 1;
+            for (let j = 0; j < b.length; j++) {
+                const cost = a[i] === b[j] ? 0 : 1;
+                currentRow[j + 1] = Math.min(
+                    currentRow[j] + 1,      // insertion
+                    previousRow[j + 1] + 1, // deletion
+                    previousRow[j] + cost   // substitution
+                );
             }
+            [previousRow, currentRow] = [currentRow, previousRow];
         }
         
-        const maxLength = Math.max(n, m);
-        return maxLength === 0 ? 1 : 1 - (matrix[n][m] / maxLength);
+        return 1 - (previousRow[b.length] / maxLength);
     }
 
     async processHeuristicCommand(message) {
@@ -2774,19 +2703,34 @@ class KioskSpeechChat {
             };
         }
 
-        // Find the most similar command
+        // Check cache first for exact matches
+        const normalizedMessage = message.toLowerCase().trim().replace(/[^\w\s]/g, '');
+        if (this.heuristicCache && this.heuristicCache[normalizedMessage]) {
+            const cached = this.heuristicCache[normalizedMessage];
+            console.log(`Using cached match for: "${message}"`);
+            return cached;
+        }
+
+        // Find the most similar command with early exit optimization
         let bestMatch = null;
         let bestSimilarity = 0;
+        const threshold = 0.3;
         
         for (const pair of this.commandHistory.command_pairs) {
+            // Early exit if we find a very high similarity match
+            if (bestSimilarity > 0.95) break;
+            
             const similarity = this.calculateTextSimilarity(message, pair.user_command);
             if (similarity > bestSimilarity) {
                 bestSimilarity = similarity;
                 bestMatch = pair;
+                
+                // Early exit for exact or near-exact matches
+                if (similarity >= 0.98) break;
             }
         }
         
-        if (!bestMatch || bestSimilarity < 0.3) {
+        if (!bestMatch || bestSimilarity < threshold) {
             return {
                 success: false,
                 error: 'No similar command found',
@@ -2811,12 +2755,19 @@ class KioskSpeechChat {
                 result = { success: true, data: { message: 'Help information displayed' } };
             }
             
-            return {
+            const response = {
                 success: true,
                 action: bestMatch,
                 similarity: bestSimilarity,
                 result: result
             };
+            
+            // Cache successful responses for high-similarity matches
+            if (bestSimilarity > 0.7) {
+                this.cacheHeuristicResult(normalizedMessage, response);
+            }
+            
+            return response;
         } catch (error) {
             return {
                 success: false,
@@ -2825,6 +2776,17 @@ class KioskSpeechChat {
                 similarity: bestSimilarity
             };
         }
+    }
+    
+    cacheHeuristicResult(key, result) {
+        // Maintain cache size limit
+        const cacheKeys = Object.keys(this.heuristicCache);
+        if (cacheKeys.length >= this.heuristicCacheSize) {
+            // Remove oldest entry (simple FIFO)
+            delete this.heuristicCache[cacheKeys[0]];
+        }
+        
+        this.heuristicCache[key] = result;
     }
     
     async takeScreenshot() {

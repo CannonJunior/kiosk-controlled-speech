@@ -124,11 +124,11 @@
         "type": "click",
         "element_id": "settingsToggle",
         "coordinates": {
-          "x": 860,
-          "y": 161
+          "x": 1500,
+          "y": 176
         },
         "method": "user_corrected",
-        "description": "corrected to click \"settingsToggle\" at coordinates {'x': 860, 'y': 161}"
+        "description": "corrected to click \"settingsToggle\" at coordinates {'x': 1500, 'y': 176}"
       },
       "corrected_via_feedback": true,
       "timestamp": "2025-08-01T16:10:42.120151"

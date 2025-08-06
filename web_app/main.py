@@ -27,6 +27,7 @@ sys.path.append('..')
 from fastmcp import Client
 from web_app.error_recovery import error_recovery
 from web_app.vad_config import get_vad_config
+from web_app.optimization import ModelConfigManager
 
 # Setup logging
 logging.basicConfig(
@@ -112,6 +113,7 @@ class SpeechWebBridge:
         self.mcp_config = None
         self.temp_dir = Path("/tmp/web_audio")
         self.temp_dir.mkdir(exist_ok=True)
+        self.model_manager = ModelConfigManager()
         
     async def initialize(self):
         """Initialize MCP services using FastMCP client"""
@@ -396,13 +398,21 @@ class SpeechWebBridge:
                     ]
                 }
             
+            # Select optimal model based on query complexity
+            optimal_model = self.model_manager.select_optimal_model(message)
+            model_config = self.model_manager._config.get("models", {}).get(optimal_model, {})
+            
             # Process through Ollama agent using FastMCP with error recovery
             async def call_ollama_service():
+                request_context = context or {}
+                request_context["model_preference"] = optimal_model
+                request_context["estimated_latency"] = model_config.get("estimated_latency", "unknown")
+                
                 result_raw = await self.mcp_client.call_tool(
                     "ollama_agent_process_voice_command", {
                         "voice_text": message,
                         "current_screen": current_screen,
-                        "context": context or {}
+                        "context": request_context
                     }
                 )
                 return parse_tool_result(result_raw)
@@ -421,7 +431,9 @@ class SpeechWebBridge:
                     "success": True,
                     "response": ollama_response,
                     "action_result": action_result,
-                    "processing_time": "< 1s"
+                    "processing_time": model_config.get("estimated_latency", "< 1s"),
+                    "model_used": optimal_model,
+                    "query_complexity": self.model_manager._analyze_query_complexity(message)
                 }
             else:
                 return {
