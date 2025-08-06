@@ -7,13 +7,11 @@ import asyncio
 import json
 import logging
 import base64
-import tempfile
 import os
 import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-import uuid
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +26,9 @@ from fastmcp import Client
 from web_app.error_recovery import error_recovery
 from web_app.vad_config import get_vad_config
 from web_app.optimization import ModelConfigManager
+from web_app.path_resolver import path_resolver
+from web_app.websocket_error_handler import websocket_error_handler, WebSocketError, ErrorSeverity
+from web_app.text_reading_service import TextReadingService
 
 # Setup logging
 logging.basicConfig(
@@ -54,6 +55,11 @@ app.add_middleware(
 # Static file serving for web interface
 app.mount("/static", StaticFiles(directory="web_app/static"), name="static")
 app.mount("/config", StaticFiles(directory="config"), name="config")
+
+# Mount temporary audio files directory for TTS
+temp_audio_dir = path_resolver.temp_dir / "kiosk_tts"
+temp_audio_dir.mkdir(exist_ok=True)
+app.mount("/temp_audio", StaticFiles(directory=str(temp_audio_dir)), name="temp_audio")
 
 class WebSocketConnectionManager:
     """Manages WebSocket connections for real-time communication"""
@@ -111,9 +117,10 @@ class SpeechWebBridge:
     def __init__(self):
         self.mcp_client = None
         self.mcp_config = None
-        self.temp_dir = Path("/tmp/web_audio")
+        self.temp_dir = path_resolver.get_temp_path("web_audio")
         self.temp_dir.mkdir(exist_ok=True)
         self.model_manager = ModelConfigManager()
+        self.text_reading_service = None  # Will be initialized after MCP client is ready
         
     async def initialize(self):
         """Initialize MCP services using FastMCP client"""
@@ -132,6 +139,9 @@ class SpeechWebBridge:
             except Exception as e:
                 logger.warning(f"Could not list tools: {e}")
             
+            # Initialize text reading service
+            self.text_reading_service = TextReadingService(self.mcp_client)
+            
             logger.info("MCP services initialized successfully")
             
         except Exception as e:
@@ -140,9 +150,7 @@ class SpeechWebBridge:
     
     async def _load_mcp_config(self):
         """Load MCP configuration from config file"""
-        config_path = Path("../config/mcp_config.json")
-        if not config_path.exists():
-            config_path = Path("config/mcp_config.json")
+        config_path = path_resolver.resolve_config("mcp_config.json", required=True)
         
         try:
             with open(config_path, 'r') as f:
@@ -196,22 +204,16 @@ class SpeechWebBridge:
     async def _load_kiosk_data_for_context(self) -> Dict[str, Any]:
         """Load kiosk data to provide complete screen context"""
         try:
-            config_paths = [
-                Path("../config/kiosk_data.json"),
-                Path("config/kiosk_data.json"),
-                Path("./config/kiosk_data.json")
-            ]
+            config_path = path_resolver.resolve_config("kiosk_data.json", required=False)
             
-            for config_path in config_paths:
-                if config_path.exists():
-                    with open(config_path, 'r') as f:
-                        kiosk_data = json.load(f)
+            if config_path:
+                with open(config_path, 'r') as f:
+                    kiosk_data = json.load(f)
                     
-                    # Return the web_app screen data which contains all the UI elements
-                    web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
-                    if web_app_screen:
-                        return web_app_screen
-                    break
+                # Return the web_app screen data which contains all the UI elements
+                web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
+                if web_app_screen:
+                    return web_app_screen
             
             return None
             
@@ -374,8 +376,59 @@ class SpeechWebBridge:
             }
     
     async def process_chat_message(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Process chat message through Ollama agent"""
+        """Process chat message through Ollama agent or text reading service"""
         try:
+            # Check if this is a text reading request first
+            if self.text_reading_service and self.text_reading_service.is_text_reading_request(message):
+                logger.info(f"Processing text reading request: {message}")
+                result = await self.text_reading_service.process_text_reading_request(message)
+                
+                if result["success"]:
+                    response_text = f"📖 **Text Reading Results**\n\n"
+                    response_text += f"**Region:** {result['region']}\n"
+                    response_text += f"**Confidence:** {int(result['confidence'] * 100)}%\n"
+                    response_text += f"**Word Count:** {result['word_count']}\n\n"
+                    response_text += f"**Extracted Text:**\n{result['text']}\n\n"
+                    
+                    if result.get('audio_generated'):
+                        response_text += f"🔊 **Audio generated and ready to play**\n"
+                        response_text += f"Duration: ~{result.get('audio_duration', 0)}s"
+                    else:
+                        response_text += f"⚠️ Text extracted but audio generation failed: {result.get('audio_error', 'Unknown error')}"
+                    
+                    return {
+                        "success": True,
+                        "response": {
+                            "message": response_text,
+                            "text_reading_result": result
+                        },
+                        "processing_time": "< 3s",
+                        "model_used": "text_reading_service",
+                        "query_complexity": 3
+                    }
+                else:
+                    error_text = f"❌ **Text Reading Failed**\n\n"
+                    error_text += f"**Error:** {result['error']}\n\n"
+                    
+                    if "available_regions" in result:
+                        error_text += f"**Available regions:**\n"
+                        for region in result['available_regions']:
+                            error_text += f"• {region}\n"
+                        error_text += f"\n**Try:** 'Read the text in the bottom banner'"
+                    elif "suggestion" in result:
+                        error_text += f"**Suggestion:** {result['suggestion']}"
+                    
+                    return {
+                        "success": True,
+                        "response": {
+                            "message": error_text,
+                            "text_reading_error": result
+                        },
+                        "processing_time": "< 1s",
+                        "model_used": "text_reading_service",
+                        "query_complexity": 2
+                    }
+            
             # Load actual kiosk data for complete screen context
             current_screen = await self._load_kiosk_data_for_context()
             if not current_screen:
@@ -552,23 +605,12 @@ async def get_vad_configuration():
 async def get_kiosk_data():
     """Get kiosk data configuration for the web client"""
     try:
-        # Try to load kiosk_data.json from config directory
-        config_paths = [
-            Path("../config/kiosk_data.json"),
-            Path("config/kiosk_data.json"),
-            Path("./config/kiosk_data.json")
-        ]
+        # Load kiosk_data.json using path resolver
+        config_path = path_resolver.resolve_config("kiosk_data.json", required=True)
         
-        kiosk_data = None
-        for config_path in config_paths:
-            if config_path.exists():
-                with open(config_path, 'r') as f:
-                    kiosk_data = json.load(f)
-                logger.info(f"Loaded kiosk data from {config_path}")
-                break
-        
-        if not kiosk_data:
-            raise FileNotFoundError("Could not find kiosk_data.json in any expected location")
+        with open(config_path, 'r') as f:
+            kiosk_data = json.load(f)
+        logger.info(f"Loaded kiosk data from {config_path}")
         
         return {
             "success": True,
@@ -598,21 +640,8 @@ async def save_kiosk_data(request: Request):
         if not updates and not new_screens and not new_elements:
             raise ValueError("No updates, new screens, or new elements provided")
         
-        # Find the kiosk_data.json file
-        config_paths = [
-            Path("../config/kiosk_data.json"),
-            Path("config/kiosk_data.json"),
-            Path("./config/kiosk_data.json")
-        ]
-        
-        config_path = None
-        for path in config_paths:
-            if path.exists():
-                config_path = path
-                break
-        
-        if not config_path:
-            raise FileNotFoundError("Could not find kiosk_data.json file")
+        # Find the kiosk_data.json file using path resolver
+        config_path = path_resolver.resolve_config("kiosk_data.json", required=True)
         
         # Create backup before modifying
         backup_path = config_path.with_suffix('.json.backup')
@@ -782,92 +811,165 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         }, client_id)
         
         while True:
-            # Receive data from client
-            data = await websocket.receive_text()
-            message_data = json.loads(data)
+            try:
+                # Receive data from client
+                data = await websocket.receive_text()
+                
+                try:
+                    message_data = json.loads(data)
+                except json.JSONDecodeError as e:
+                    raise WebSocketError(
+                        f"Invalid JSON format: {e}",
+                        error_code="JSON_DECODE_ERROR",
+                        severity=ErrorSeverity.MEDIUM,
+                        context={"raw_data": data[:100]}  # Limit raw data for logging
+                    )
+                
+                message_type = message_data.get("type")
+                
+                if not message_type:
+                    raise WebSocketError(
+                        "Message type is required",
+                        error_code="MISSING_MESSAGE_TYPE",
+                        severity=ErrorSeverity.MEDIUM,
+                        context={"message_data": message_data}
+                    )
             
-            message_type = message_data.get("type")
-            
-            if message_type == "chat_message":
-                # Process text chat message
-                text = message_data.get("message", "")
-                context = message_data.get("context", {})
-                processing_mode = message_data.get("processing_mode", "llm")
-                
-                # Only process with LLM if client is in LLM mode
-                if processing_mode == "llm":
-                    # Process through Ollama
-                    result = await speech_bridge.process_chat_message(text, context)
-                    
-                    # Send response
-                    await connection_manager.send_personal_message({
-                        "type": "chat_response",
-                        "original_message": text,
-                        "response": result,
-                        "timestamp": datetime.now().isoformat()
-                    }, client_id)
-                else:
-                    # Client is in heuristic mode, server should not process
-                    logger.debug(f"Ignoring chat message in heuristic mode: {text}")
-                
-            elif message_type == "audio_data":
-                # Process audio data
-                audio_data = message_data.get("audio")
-                processing_mode = message_data.get("processing_mode", "llm")
-                
-                # Transcribe audio
-                transcription_result = await speech_bridge.process_audio_data(audio_data, client_id)
-                
-                if transcription_result.get("success"):
-                    transcription = transcription_result["transcription"]
-                    
-                    # Send transcription
-                    await connection_manager.send_personal_message({
-                        "type": "transcription",
-                        "text": transcription,
-                        "confidence": transcription_result.get("confidence", 0.0),
-                        "timestamp": datetime.now().isoformat()
-                    }, client_id)
-                    
-                    # Only process transcription as chat message if in LLM mode
-                    if transcription.strip() and processing_mode == "llm":
-                        chat_result = await speech_bridge.process_chat_message(transcription)
+                if message_type == "chat_message":
+                    try:
+                        # Process text chat message
+                        text = message_data.get("message", "")
+                        context = message_data.get("context", {})
+                        processing_mode = message_data.get("processing_mode", "llm")
                         
+                        if not text.strip():
+                            raise WebSocketError(
+                                "Empty message content",
+                                error_code="EMPTY_MESSAGE",
+                                severity=ErrorSeverity.LOW
+                            )
+                        
+                        # Only process with LLM if client is in LLM mode
+                        if processing_mode == "llm":
+                            # Process through Ollama
+                            result = await speech_bridge.process_chat_message(text, context)
+                            
+                            # Send response
+                            await connection_manager.send_personal_message({
+                                "type": "chat_response",
+                                "original_message": text,
+                                "response": result,
+                                "timestamp": datetime.now().isoformat()
+                            }, client_id)
+                        else:
+                            # Client is in heuristic mode, server should not process
+                            logger.debug(f"Ignoring chat message in heuristic mode: {text}")
+                        
+                        # Reset error count on successful processing
+                        websocket_error_handler.reset_error_count(client_id)
+                        
+                    except Exception as e:
+                        raise WebSocketError(
+                            f"Chat message processing failed: {str(e)}",
+                            error_code="CHAT_PROCESSING_ERROR",
+                            severity=ErrorSeverity.MEDIUM,
+                            context={"text": text[:100], "processing_mode": processing_mode}
+                        )
+                
+                elif message_type == "audio_data":
+                    # Process audio data
+                    audio_data = message_data.get("audio")
+                    processing_mode = message_data.get("processing_mode", "llm")
+                    
+                    # Transcribe audio
+                    transcription_result = await speech_bridge.process_audio_data(audio_data, client_id)
+                    
+                    if transcription_result.get("success"):
+                        transcription = transcription_result["transcription"]
+                        
+                        # Send transcription
                         await connection_manager.send_personal_message({
-                            "type": "chat_response", 
-                            "original_message": transcription,
-                            "response": chat_result,
-                            "from_speech": True,
+                            "type": "transcription",
+                            "text": transcription,
+                            "confidence": transcription_result.get("confidence", 0.0),
                             "timestamp": datetime.now().isoformat()
                         }, client_id)
-                    elif transcription.strip() and processing_mode == "heuristic":
-                        # Client is in heuristic mode, server should not process transcription
-                        logger.debug(f"Ignoring transcription in heuristic mode: {transcription}")
-                else:
-                    # Send transcription error
+                        
+                        # Only process transcription as chat message if in LLM mode
+                        if transcription.strip() and processing_mode == "llm":
+                            chat_result = await speech_bridge.process_chat_message(transcription)
+                            
+                            await connection_manager.send_personal_message({
+                                "type": "chat_response", 
+                                "original_message": transcription,
+                                "response": chat_result,
+                                "from_speech": True,
+                                "timestamp": datetime.now().isoformat()
+                            }, client_id)
+                        elif transcription.strip() and processing_mode == "heuristic":
+                            # Client is in heuristic mode, server should not process transcription
+                            logger.debug(f"Ignoring transcription in heuristic mode: {transcription}")
+                    else:
+                        # Send transcription error
+                        await connection_manager.send_personal_message({
+                            "type": "error",
+                            "message": transcription_result.get("error", "Speech recognition failed"),
+                            "timestamp": datetime.now().isoformat()
+                        }, client_id)
+                
+                elif message_type == "ping":
+                    # Respond to ping
                     await connection_manager.send_personal_message({
-                        "type": "error",
-                        "message": transcription_result.get("error", "Speech recognition failed"),
+                        "type": "pong",
                         "timestamp": datetime.now().isoformat()
                     }, client_id)
-                    
-            elif message_type == "ping":
-                # Respond to ping
-                await connection_manager.send_personal_message({
-                    "type": "pong",
-                    "timestamp": datetime.now().isoformat()
-                }, client_id)
                 
-            # Update session activity
-            if client_id in connection_manager.user_sessions:
-                connection_manager.user_sessions[client_id]["message_count"] += 1
-                connection_manager.user_sessions[client_id]["last_activity"] = datetime.now()
+                # Update session activity
+                if client_id in connection_manager.user_sessions:
+                    connection_manager.user_sessions[client_id]["message_count"] += 1
+                    connection_manager.user_sessions[client_id]["last_activity"] = datetime.now()
+                    
+            except WebSocketError as ws_error:
+                # Handle structured WebSocket errors
+                should_continue = await websocket_error_handler.handle_error(
+                    websocket, client_id, ws_error, connection_manager
+                )
+                if not should_continue:
+                    break  # Exit the message loop to disconnect
+            
+            except Exception as e:
+                # Handle unexpected errors
+                ws_error = WebSocketError(
+                    f"Unexpected error: {str(e)}",
+                    error_code="UNEXPECTED_ERROR", 
+                    severity=ErrorSeverity.HIGH,
+                    context={"error_type": type(e).__name__}
+                )
+                should_continue = await websocket_error_handler.handle_error(
+                    websocket, client_id, ws_error, connection_manager
+                )
+                if not should_continue:
+                    break  # Exit the message loop to disconnect
             
     except WebSocketDisconnect:
+        logger.info(f"Client {client_id} disconnected")
         connection_manager.disconnect(client_id)
     except Exception as e:
-        logger.error(f"WebSocket error for client {client_id}: {e}")
-        connection_manager.disconnect(client_id)
+        # Final catch-all for connection-level errors
+        logger.error(f"WebSocket connection error for client {client_id}: {e}")
+        try:
+            await websocket_error_handler.handle_error(
+                websocket, client_id,
+                WebSocketError(
+                    f"Connection error: {str(e)}",
+                    error_code="CONNECTION_ERROR",
+                    severity=ErrorSeverity.CRITICAL,
+                    recoverable=False
+                ),
+                connection_manager
+            )
+        finally:
+            connection_manager.disconnect(client_id)
 
 @app.post("/api/mcp-tool")
 async def call_mcp_tool(request: Request):

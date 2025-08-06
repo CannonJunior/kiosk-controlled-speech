@@ -1,5 +1,201 @@
 /* Kiosk Speech Chat Interface Styles */
 
+/* Text Reading Functionality Styles */
+.screenshot-container {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+}
+
+.region-selection-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    cursor: crosshair;
+    pointer-events: none;
+}
+
+.region-selection-overlay.active {
+    pointer-events: all;
+}
+
+.region-info {
+    position: absolute;
+    bottom: -30px;
+    left: 0;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.modal-button.text-read {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.modal-button.text-read:hover {
+    background-color: #45a049;
+}
+
+/* Text Reading Modal Styles */
+.text-reading-modal .modal-content {
+    max-width: 600px;
+    max-height: 80vh;
+}
+
+.text-reading-content {
+    padding: 20px 0;
+}
+
+.extraction-status {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.extraction-status i {
+    margin-right: 10px;
+    font-size: 18px;
+}
+
+.extracted-text-container {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.text-preview {
+    margin-bottom: 20px;
+}
+
+.text-preview label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.text-content {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.text-metadata {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+}
+
+.confidence {
+    font-weight: 500;
+}
+
+.audio-controls {
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+.audio-controls label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.audio-player {
+    margin-bottom: 15px;
+}
+
+.audio-settings {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.audio-settings label {
+    margin: 0;
+    font-size: 14px;
+    font-weight: normal;
+}
+
+.audio-settings select {
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: white;
+}
+
+.audio-settings input[type="range"] {
+    flex: 1;
+    max-width: 100px;
+}
+
+.extraction-error {
+    text-align: center;
+    padding: 40px;
+    color: #dc3545;
+}
+
+.extraction-error i {
+    margin-right: 10px;
+    font-size: 18px;
+}
+
+/* Region selection highlighting */
+.region-selection-highlight {
+    position: absolute;
+    border: 2px dashed #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.region-selection-handle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: #4CAF50;
+    border: 2px solid white;
+    border-radius: 50%;
+    cursor: se-resize;
+}
+
+/* Loading states */
+.text-reading-loading .modal-button {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.processing-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #666;
+    font-size: 14px;
+}
+
+.processing-indicator .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -1804,7 +2000,7 @@ body.drawing-mode * {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1000;
+    z-index: 1100;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1867,7 +2063,7 @@ body.drawing-mode * {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1000;
+    z-index: 1100;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2153,6 +2349,26 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
     align-items: center;
     gap: 15px;
     flex: 1;
+}
+
+/* Annotation Elements Toggle Adjustments */
+.annotation-elements-toggle {
+    font-size: 0.8rem;
+    min-width: 120px;
+}
+
+.annotation-elements-toggle .toggle-slider {
+    width: 50px;
+    height: 25px;
+}
+
+.annotation-elements-toggle .toggle-slider::before {
+    width: 21px;
+    height: 21px;
+}
+
+.annotation-elements-toggle .toggle-label input[type="checkbox"]:checked + .toggle-slider::before {
+    transform: translateX(25px);
 }
 
 /* Drawing Overlay */

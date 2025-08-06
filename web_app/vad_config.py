@@ -4,7 +4,6 @@ VAD Configuration Loader
 Centralized configuration management for Voice Activity Detection
 """
 import json
-import os
 from pathlib import Path
 from typing import Dict, Any
 

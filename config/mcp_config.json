@@ -34,6 +34,20 @@
       "env": {
         "PYTHONPATH": "."
       }
+    },
+    "ocr": {
+      "command": "python3",
+      "args": ["services/ocr/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    },
+    "text_to_speech": {
+      "command": "python3",
+      "args": ["services/text_to_speech/mcp_server.py"],
+      "env": {
+        "PYTHONPATH": "."
+      }
     }
   },
   "resources": {

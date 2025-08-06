@@ -212,6 +212,78 @@
           ],
           "action": "click",
           "description": "Capture a screenshot of the current screen and add it to the gallery"
+        },
+        {
+          "id": "chatMessages",
+          "name": "Chat Messages Area",
+          "type": "text_region",
+          "coordinates": {
+            "x": 50,
+            "y": 100
+          },
+          "size": {
+            "width": 800,
+            "height": 300
+          },
+          "voice_commands": [
+            "chat messages",
+            "message history",
+            "conversation",
+            "chat area"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "read_text",
+          "description": "Main chat conversation area containing message history"
+        },
+        {
+          "id": "bottomBanner",
+          "name": "Bottom Banner",
+          "type": "text_region",
+          "coordinates": {
+            "x": 0,
+            "y": 950
+          },
+          "size": {
+            "width": 1920,
+            "height": 100
+          },
+          "voice_commands": [
+            "bottom banner",
+            "footer",
+            "status bar",
+            "bottom text"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "read_text",
+          "description": "Bottom banner or status bar area"
+        },
+        {
+          "id": "titleArea",
+          "name": "Title Area",
+          "type": "text_region",
+          "coordinates": {
+            "x": 50,
+            "y": 20
+          },
+          "size": {
+            "width": 1820,
+            "height": 60
+          },
+          "voice_commands": [
+            "title",
+            "header",
+            "top text",
+            "title area"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "read_text",
+          "description": "Main title or header area at the top of the screen"
         }
       ]
     },
@@ -242,6 +314,46 @@
           ],
           "action": "click",
           "description": "Test Element element"
+        },
+        {
+          "id": "bannerText",
+          "name": "Banner Text",
+          "coordinates": {
+            "x": 100,
+            "y": 100
+          },
+          "size": {
+            "width": 100,
+            "height": 100
+          },
+          "voice_commands": [
+            "Read text"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Kiosk banner text"
+        },
+        {
+          "id": "textBannon",
+          "name": "Text Banner",
+          "coordinates": {
+            "x": 100,
+            "y": 100
+          },
+          "size": {
+            "width": 100,
+            "height": 100
+          },
+          "voice_commands": [
+            "Read text"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Text Banner element"
         }
       ]
     }

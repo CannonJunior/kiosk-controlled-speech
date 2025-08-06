@@ -99,6 +99,7 @@ class KioskSpeechChat {
         this.loadElementsVisibilityPreference();
         this.connectWebSocket();
         this.initializeAudio();
+        this.initializeTextReading();
     }
 
     detectBrowserAndURL() {
@@ -219,6 +220,9 @@ class KioskSpeechChat {
             elementsVisibilityToggle: document.getElementById('elementsVisibilityToggle'),
             elementsVisibilityCheckbox: document.getElementById('elementsVisibilityCheckbox'),
             elementsVisibilityText: document.getElementById('elementsVisibilityText'),
+            annotationElementsVisibilityToggle: document.getElementById('annotationElementsVisibilityToggle'),
+            annotationElementsVisibilityCheckbox: document.getElementById('annotationElementsVisibilityCheckbox'),
+            annotationElementsVisibilityText: document.getElementById('annotationElementsVisibilityText'),
             settingsToggle: document.getElementById('settingsToggle'),
             settingsPanel: document.getElementById('settingsPanel'),
             vadSidebar: document.getElementById('vadSidebar'),
@@ -708,6 +712,7 @@ class KioskSpeechChat {
         
         // Check if "Add New Screen..." option was selected
         if (selectedScreen === '__add_new_screen__') {
+            console.log('Add New Screen option selected');
             this.showAddScreenModal();
             // Reset dropdown to empty selection
             this.elements.screenDropdown.value = '';
@@ -742,6 +747,7 @@ class KioskSpeechChat {
         
         // Check if "Add New Element..." option was selected
         if (selectedElement === '__add_new_element__') {
+            console.log('Add New Element option selected');
             this.showAddElementModal();
             // Reset dropdown to empty selection
             this.elements.elementDropdown.value = '';
@@ -1008,8 +1014,15 @@ class KioskSpeechChat {
         
         // Elements Visibility Toggle
         this.elements.elementsVisibilityCheckbox.addEventListener('change', () => {
-            this.toggleElementsVisibility();
+            this.toggleElementsVisibility(this.elements.elementsVisibilityCheckbox);
         });
+        
+        // Annotation Elements Visibility Toggle (sync with main toggle)
+        if (this.elements.annotationElementsVisibilityCheckbox) {
+            this.elements.annotationElementsVisibilityCheckbox.addEventListener('change', () => {
+                this.toggleElementsVisibility(this.elements.annotationElementsVisibilityCheckbox);
+            });
+        }
         
         // Screen dropdown
         this.elements.screenDropdown.addEventListener('change', () => {
@@ -2547,23 +2560,51 @@ class KioskSpeechChat {
         localStorage.setItem('processingMode', this.processingMode);
     }
 
-    toggleElementsVisibility() {
-        this.elementsVisible = this.elements.elementsVisibilityCheckbox.checked;
+    toggleElementsVisibility(sourceCheckbox = null) {
+        // Determine visibility state from the checkbox that triggered the change
+        const mainCheckbox = this.elements.elementsVisibilityCheckbox;
+        const annotationCheckbox = this.elements.annotationElementsVisibilityCheckbox;
+        
+        // If sourceCheckbox is provided, use its state; otherwise use main checkbox
+        if (sourceCheckbox) {
+            this.elementsVisible = sourceCheckbox.checked;
+        } else {
+            this.elementsVisible = mainCheckbox.checked;
+        }
         
         console.log('Elements visibility changed to:', this.elementsVisible);
         
-        // Update the label text and styling
+        // Sync both checkboxes to the same state
+        mainCheckbox.checked = this.elementsVisible;
+        if (annotationCheckbox) {
+            annotationCheckbox.checked = this.elementsVisible;
+        }
+        
+        // Update the label text and styling for both toggles
         const visibilityText = this.elementsVisible ? 'Elements Visible' : 'Elements Hidden';
         const visibilityIcon = this.elementsVisible ? 'fas fa-eye' : 'fas fa-eye-slash';
         
+        // Update main toggle
         this.elements.elementsVisibilityText.textContent = visibilityText;
         this.elements.elementsVisibilityToggle.querySelector('i').className = visibilityIcon;
         
-        // Update toggle container color class
+        // Update annotation toggle
+        if (this.elements.annotationElementsVisibilityText) {
+            this.elements.annotationElementsVisibilityText.textContent = visibilityText;
+            this.elements.annotationElementsVisibilityToggle.querySelector('i').className = visibilityIcon;
+        }
+        
+        // Update toggle container color classes for both toggles
         if (this.elementsVisible) {
             this.elements.elementsVisibilityToggle.classList.add('elements-visible');
+            if (this.elements.annotationElementsVisibilityToggle) {
+                this.elements.annotationElementsVisibilityToggle.classList.add('elements-visible');
+            }
         } else {
             this.elements.elementsVisibilityToggle.classList.remove('elements-visible');
+            if (this.elements.annotationElementsVisibilityToggle) {
+                this.elements.annotationElementsVisibilityToggle.classList.remove('elements-visible');
+            }
         }
         
         // Show or hide element overlays based on current state
@@ -2642,20 +2683,36 @@ class KioskSpeechChat {
         if (savedVisibility !== null) {
             this.elementsVisible = savedVisibility === 'true';
             this.elements.elementsVisibilityCheckbox.checked = this.elementsVisible;
+            if (this.elements.annotationElementsVisibilityCheckbox) {
+                this.elements.annotationElementsVisibilityCheckbox.checked = this.elementsVisible;
+            }
         }
         
         // Update the label to match the current state
         const visibilityText = this.elementsVisible ? 'Elements Visible' : 'Elements Hidden';
         const visibilityIcon = this.elementsVisible ? 'fas fa-eye' : 'fas fa-eye-slash';
         
+        // Update main toggle
         this.elements.elementsVisibilityText.textContent = visibilityText;
         this.elements.elementsVisibilityToggle.querySelector('i').className = visibilityIcon;
         
-        // Update toggle container color class
+        // Update annotation toggle
+        if (this.elements.annotationElementsVisibilityText) {
+            this.elements.annotationElementsVisibilityText.textContent = visibilityText;
+            this.elements.annotationElementsVisibilityToggle.querySelector('i').className = visibilityIcon;
+        }
+        
+        // Update toggle container color classes for both toggles
         if (this.elementsVisible) {
             this.elements.elementsVisibilityToggle.classList.add('elements-visible');
+            if (this.elements.annotationElementsVisibilityToggle) {
+                this.elements.annotationElementsVisibilityToggle.classList.add('elements-visible');
+            }
         } else {
             this.elements.elementsVisibilityToggle.classList.remove('elements-visible');
+            if (this.elements.annotationElementsVisibilityToggle) {
+                this.elements.annotationElementsVisibilityToggle.classList.remove('elements-visible');
+            }
         }
         
         console.log('Loaded elements visibility preference:', this.elementsVisible);
@@ -2955,6 +3012,15 @@ class KioskSpeechChat {
     
     // Add new screen modal methods
     showAddScreenModal() {
+        console.log('showAddScreenModal called');
+        
+        // Check if modal elements exist
+        if (!this.elements.addScreenModal) {
+            console.error('Add screen modal element not found');
+            this.addMessage('system', '❌ Error: Add screen modal not available');
+            return;
+        }
+        
         // Clear form fields
         this.elements.screenId.value = '';
         this.elements.screenName.value = '';
@@ -3056,6 +3122,15 @@ class KioskSpeechChat {
     }
     
     showAddElementModal() {
+        console.log('showAddElementModal called');
+        
+        // Check if modal elements exist
+        if (!this.elements.addElementModal) {
+            console.error('Add element modal element not found');
+            this.addMessage('system', '❌ Error: Add element modal not available');
+            return;
+        }
+        
         // Check if a screen is selected
         const selectedScreen = this.elements.screenDropdown.value;
         if (!selectedScreen) {
@@ -3458,7 +3533,18 @@ class ScreenshotAnnotationMode {
         // ESC key to exit
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isActive) {
-                this.exitMode();
+                // Check if we're in drawing mode first
+                const currentDrawingMode = this.kioskChat.elements.annotationDrawingMode.value;
+                if (currentDrawingMode !== 'none') {
+                    // Exit drawing mode first
+                    this.kioskChat.elements.annotationDrawingMode.value = 'none';
+                    this.handleDrawingModeChange();
+                    console.log('Escaped from drawing mode in annotation mode');
+                } else {
+                    // Only exit annotation mode if we're not in drawing mode
+                    this.exitMode();
+                    console.log('Escaped from annotation mode');
+                }
             }
         });
         
@@ -3889,6 +3975,417 @@ class ScreenshotAnnotationMode {
             `Size: ${this.currentRectangle.width} × ${this.currentRectangle.height}\n` +
             `Click Save to apply changes.`
         );
+    }
+
+    // Text Reading Functionality
+    initializeTextReading() {
+        // Get elements
+        this.elements.readTextButton = document.getElementById('readTextButton');
+        this.elements.regionSelectionCanvas = document.getElementById('regionSelectionCanvas');
+        this.elements.regionSelectionInfo = document.getElementById('regionSelectionInfo');
+        this.elements.regionCoordinates = document.getElementById('regionCoordinates');
+        
+        // Text reading modal elements
+        this.elements.textReadingModal = document.getElementById('textReadingModal');
+        this.elements.textReadingBackdrop = document.getElementById('textReadingBackdrop');
+        this.elements.textReadingClose = document.getElementById('textReadingClose');
+        this.elements.extractionStatus = document.getElementById('extractionStatus');
+        this.elements.extractedTextContainer = document.getElementById('extractedTextContainer');
+        this.elements.extractedText = document.getElementById('extractedText');
+        this.elements.textConfidence = document.getElementById('textConfidence');
+        this.elements.wordCount = document.getElementById('wordCount');
+        this.elements.audioControls = document.getElementById('audioControls');
+        this.elements.textAudio = document.getElementById('textAudio');
+        this.elements.speechRate = document.getElementById('speechRate');
+        this.elements.speechVolume = document.getElementById('speechVolume');
+        this.elements.extractionError = document.getElementById('extractionError');
+        this.elements.errorMessage = document.getElementById('errorMessage');
+        this.elements.regenerateAudioButton = document.getElementById('regenerateAudioButton');
+        this.elements.copyTextButton = document.getElementById('copyTextButton');
+        this.elements.retryExtractionButton = document.getElementById('retryExtractionButton');
+
+        // Initialize text reading state
+        this.textReading = {
+            isSelecting: false,
+            selectionStart: null,
+            selectionEnd: null,
+            selectedRegion: null,
+            currentScreenshot: null,
+            extractedText: null,
+            audioPath: null
+        };
+
+        // Bind events
+        this.bindTextReadingEvents();
+    }
+
+    bindTextReadingEvents() {
+        // Read text button
+        this.elements.readTextButton?.addEventListener('click', () => {
+            this.startRegionSelection();
+        });
+
+        // Canvas events for region selection
+        this.elements.regionSelectionCanvas?.addEventListener('mousedown', (e) => {
+            if (this.textReading.isSelecting) {
+                this.startSelection(e);
+            }
+        });
+
+        this.elements.regionSelectionCanvas?.addEventListener('mousemove', (e) => {
+            if (this.textReading.isSelecting) {
+                this.updateSelection(e);
+            }
+        });
+
+        this.elements.regionSelectionCanvas?.addEventListener('mouseup', (e) => {
+            if (this.textReading.isSelecting) {
+                this.endSelection(e);
+            }
+        });
+
+        // Text reading modal events
+        this.elements.textReadingClose?.addEventListener('click', () => {
+            this.closeTextReadingModal();
+        });
+
+        this.elements.textReadingBackdrop?.addEventListener('click', () => {
+            this.closeTextReadingModal();
+        });
+
+        // Button events
+        this.elements.regenerateAudioButton?.addEventListener('click', () => {
+            this.regenerateAudio();
+        });
+
+        this.elements.copyTextButton?.addEventListener('click', () => {
+            this.copyExtractedText();
+        });
+
+        this.elements.retryExtractionButton?.addEventListener('click', () => {
+            this.retryTextExtraction();
+        });
+
+        // Audio settings events
+        this.elements.speechRate?.addEventListener('change', () => {
+            if (this.textReading.extractedText) {
+                this.regenerateAudio();
+            }
+        });
+
+        this.elements.speechVolume?.addEventListener('change', (e) => {
+            const audio = this.elements.textAudio;
+            if (audio) {
+                audio.volume = e.target.value / 100;
+            }
+        });
+    }
+
+    startRegionSelection() {
+        const modalImage = this.elements.modalImage;
+        const canvas = this.elements.regionSelectionCanvas;
+        const infoDiv = this.elements.regionSelectionInfo;
+
+        if (!modalImage || !canvas) return;
+
+        // Set canvas size to match image
+        canvas.width = modalImage.offsetWidth;
+        canvas.height = modalImage.offsetHeight;
+        canvas.style.width = modalImage.offsetWidth + 'px';
+        canvas.style.height = modalImage.offsetHeight + 'px';
+
+        // Show canvas and info
+        canvas.style.display = 'block';
+        canvas.classList.add('active');
+        infoDiv.style.display = 'block';
+
+        // Update button state
+        this.elements.readTextButton.innerHTML = '<i class="fas fa-times"></i> Cancel Selection';
+        this.elements.readTextButton.onclick = () => this.cancelRegionSelection();
+
+        // Set selection state
+        this.textReading.isSelecting = true;
+        this.textReading.currentScreenshot = this.currentScreenshot;
+
+        // Update info text
+        this.elements.regionCoordinates.textContent = 'Click and drag to select text region';
+    }
+
+    cancelRegionSelection() {
+        const canvas = this.elements.regionSelectionCanvas;
+        const infoDiv = this.elements.regionSelectionInfo;
+
+        // Hide canvas and info
+        canvas.style.display = 'none';
+        canvas.classList.remove('active');
+        infoDiv.style.display = 'none';
+
+        // Clear canvas
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Reset button
+        this.elements.readTextButton.innerHTML = '<i class="fas fa-font"></i> Read Text';
+        this.elements.readTextButton.onclick = () => this.startRegionSelection();
+
+        // Reset state
+        this.textReading.isSelecting = false;
+        this.textReading.selectionStart = null;
+        this.textReading.selectionEnd = null;
+        this.textReading.selectedRegion = null;
+    }
+
+    startSelection(e) {
+        const rect = this.elements.regionSelectionCanvas.getBoundingClientRect();
+        this.textReading.selectionStart = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    }
+
+    updateSelection(e) {
+        if (!this.textReading.selectionStart) return;
+
+        const rect = this.elements.regionSelectionCanvas.getBoundingClientRect();
+        const currentPos = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+
+        this.drawSelectionRectangle(this.textReading.selectionStart, currentPos);
+        this.updateSelectionInfo(this.textReading.selectionStart, currentPos);
+    }
+
+    endSelection(e) {
+        if (!this.textReading.selectionStart) return;
+
+        const rect = this.elements.regionSelectionCanvas.getBoundingClientRect();
+        this.textReading.selectionEnd = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+
+        // Calculate region
+        const region = this.calculateRegion(this.textReading.selectionStart, this.textReading.selectionEnd);
+        
+        if (region.width > 10 && region.height > 10) { // Minimum size
+            this.textReading.selectedRegion = region;
+            this.processTextExtraction(region);
+        } else {
+            alert('Selected region is too small. Please select a larger area.');
+        }
+    }
+
+    drawSelectionRectangle(start, end) {
+        const canvas = this.elements.regionSelectionCanvas;
+        const ctx = canvas.getContext('2d');
+
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw selection rectangle
+        ctx.strokeStyle = '#4CAF50';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.1)';
+
+        const x = Math.min(start.x, end.x);
+        const y = Math.min(start.y, end.y);
+        const width = Math.abs(end.x - start.x);
+        const height = Math.abs(end.y - start.y);
+
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeRect(x, y, width, height);
+    }
+
+    calculateRegion(start, end) {
+        const modalImage = this.elements.modalImage;
+        
+        // Convert canvas coordinates to image coordinates
+        const scaleX = modalImage.naturalWidth / modalImage.offsetWidth;
+        const scaleY = modalImage.naturalHeight / modalImage.offsetHeight;
+
+        const x = Math.min(start.x, end.x) * scaleX;
+        const y = Math.min(start.y, end.y) * scaleY;
+        const width = Math.abs(end.x - start.x) * scaleX;
+        const height = Math.abs(end.y - start.y) * scaleY;
+
+        return {
+            x: Math.round(x),
+            y: Math.round(y),
+            width: Math.round(width),
+            height: Math.round(height)
+        };
+    }
+
+    updateSelectionInfo(start, current) {
+        const region = this.calculateRegion(start, current);
+        this.elements.regionCoordinates.textContent = 
+            `Region: ${region.x}, ${region.y} (${region.width} × ${region.height})`;
+    }
+
+    async processTextExtraction(region) {
+        // Hide selection UI
+        this.cancelRegionSelection();
+
+        // Show text reading modal
+        this.showTextReadingModal();
+        this.showExtractionStatus('Extracting text from selected region...');
+
+        try {
+            // Extract text using OCR MCP service
+            const ocrResult = await this.callMCPTool('extract_text_from_region', {
+                image_path: this.textReading.currentScreenshot.path,
+                region: region,
+                language: 'eng',
+                preprocess: true
+            });
+
+            if (!ocrResult.success) {
+                throw new Error(ocrResult.error || 'OCR extraction failed');
+            }
+
+            const textData = ocrResult.data;
+            if (!textData.text || textData.text.trim().length === 0) {
+                throw new Error('No text found in selected region');
+            }
+
+            this.textReading.extractedText = textData.text;
+
+            // Show extracted text
+            this.showExtractedText(textData);
+
+            // Generate audio
+            await this.generateTextAudio(textData.text);
+
+        } catch (error) {
+            console.error('Text extraction failed:', error);
+            this.showExtractionError(error.message);
+        }
+    }
+
+    async generateTextAudio(text) {
+        this.updateExtractionStatus('Generating audio...');
+
+        try {
+            const rate = parseInt(this.elements.speechRate.value) || 200;
+            const volume = parseFloat(this.elements.speechVolume.value) / 100 || 0.8;
+
+            const ttsResult = await this.callMCPTool('text_to_speech', {
+                text: text,
+                rate: rate,
+                volume: volume
+            });
+
+            if (!ttsResult.success) {
+                throw new Error(ttsResult.error || 'Audio generation failed');
+            }
+
+            this.textReading.audioPath = ttsResult.data.audio_path;
+            
+            // Load audio
+            const audioUrl = `/temp_audio/${ttsResult.data.audio_path.split('/').pop()}`;
+            this.elements.textAudio.src = audioUrl;
+            this.elements.textAudio.volume = volume;
+
+            // Show audio controls
+            this.elements.audioControls.style.display = 'block';
+            this.elements.regenerateAudioButton.style.display = 'inline-block';
+
+            this.hideExtractionStatus();
+
+        } catch (error) {
+            console.error('Audio generation failed:', error);
+            this.showExtractionError(`Audio generation failed: ${error.message}`);
+        }
+    }
+
+    showTextReadingModal() {
+        this.elements.textReadingModal.style.display = 'flex';
+    }
+
+    closeTextReadingModal() {
+        this.elements.textReadingModal.style.display = 'none';
+        this.resetTextReadingState();
+    }
+
+    showExtractionStatus(message) {
+        this.elements.extractionStatus.querySelector('span').textContent = message;
+        this.elements.extractionStatus.style.display = 'block';
+        this.elements.extractedTextContainer.style.display = 'none';
+        this.elements.extractionError.style.display = 'none';
+    }
+
+    updateExtractionStatus(message) {
+        this.elements.extractionStatus.querySelector('span').textContent = message;
+    }
+
+    hideExtractionStatus() {
+        this.elements.extractionStatus.style.display = 'none';
+    }
+
+    showExtractedText(textData) {
+        this.elements.extractedText.textContent = textData.text;
+        this.elements.textConfidence.textContent = `${Math.round(textData.confidence * 100)}%`;
+        this.elements.wordCount.textContent = textData.word_count || textData.text.split(' ').length;
+
+        this.elements.extractedTextContainer.style.display = 'block';
+        this.elements.copyTextButton.style.display = 'inline-block';
+        this.hideExtractionStatus();
+    }
+
+    showExtractionError(message) {
+        this.elements.errorMessage.textContent = message;
+        this.elements.extractionError.style.display = 'block';
+        this.elements.retryExtractionButton.style.display = 'inline-block';
+        this.elements.extractedTextContainer.style.display = 'none';
+        this.hideExtractionStatus();
+    }
+
+    async regenerateAudio() {
+        if (!this.textReading.extractedText) return;
+        await this.generateTextAudio(this.textReading.extractedText);
+    }
+
+    copyExtractedText() {
+        if (!this.textReading.extractedText) return;
+        
+        navigator.clipboard.writeText(this.textReading.extractedText).then(() => {
+            // Show temporary success message
+            const originalText = this.elements.copyTextButton.innerHTML;
+            this.elements.copyTextButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            setTimeout(() => {
+                this.elements.copyTextButton.innerHTML = originalText;
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy text:', err);
+            alert('Failed to copy text to clipboard');
+        });
+    }
+
+    retryTextExtraction() {
+        if (this.textReading.selectedRegion) {
+            this.processTextExtraction(this.textReading.selectedRegion);
+        }
+    }
+
+    resetTextReadingState() {
+        this.textReading.isSelecting = false;
+        this.textReading.selectionStart = null;
+        this.textReading.selectionEnd = null;
+        this.textReading.selectedRegion = null;
+        this.textReading.currentScreenshot = null;
+        this.textReading.extractedText = null;
+        this.textReading.audioPath = null;
+
+        // Reset UI
+        if (this.elements.textAudio) {
+            this.elements.textAudio.src = '';
+        }
+        this.elements.audioControls.style.display = 'none';
+        this.elements.regenerateAudioButton.style.display = 'none';
+        this.elements.copyTextButton.style.display = 'none';
+        this.elements.retryExtractionButton.style.display = 'none';
     }
 }
 

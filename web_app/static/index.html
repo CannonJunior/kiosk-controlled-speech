@@ -52,6 +52,14 @@
                 </div>
             </div>
             <div class="navbar-right">
+                <div class="elements-visibility-toggle" id="elementsVisibilityToggle" title="Show/Hide element outlines for selected screen">
+                    <i class="fas fa-eye-slash"></i>
+                    <span id="elementsVisibilityText">Elements Hidden</span>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="elementsVisibilityCheckbox">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
                 <div class="navbar-stats">
                     <span class="stat-item">
                         <i class="fas fa-clock"></i>
@@ -159,14 +167,6 @@
                             <span id="processingModeText">LLM Mode</span>
                             <label class="toggle-label">
                                 <input type="checkbox" id="processingModeCheckbox">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                        <div class="elements-visibility-toggle" id="elementsVisibilityToggle" title="Show/Hide element outlines for selected screen">
-                            <i class="fas fa-eye-slash"></i>
-                            <span id="elementsVisibilityText">Elements Hidden</span>
-                            <label class="toggle-label">
-                                <input type="checkbox" id="elementsVisibilityCheckbox">
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
@@ -388,14 +388,88 @@
                 </button>
             </div>
             <div class="modal-body">
-                <img id="modalImage" src="" alt="Screenshot" />
+                <div class="screenshot-container">
+                    <img id="modalImage" src="" alt="Screenshot" />
+                    <canvas id="regionSelectionCanvas" class="region-selection-overlay" style="display: none;"></canvas>
+                    <div id="regionSelectionInfo" class="region-info" style="display: none;">
+                        <span id="regionCoordinates">Select region to read text</span>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button id="downloadScreenshot" class="modal-button">
                     <i class="fas fa-download"></i> Download
                 </button>
+                <button id="readTextButton" class="modal-button text-read">
+                    <i class="fas fa-font"></i> Read Text
+                </button>
                 <button id="deleteScreenshot" class="modal-button delete">
                     <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Reading Results Modal -->
+    <div class="text-reading-modal" id="textReadingModal" style="display: none;">
+        <div class="modal-backdrop" id="textReadingBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-font"></i> Extracted Text</h3>
+                <button class="modal-close" id="textReadingClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="text-reading-content">
+                    <div class="extraction-status" id="extractionStatus">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Processing screenshot...</span>
+                    </div>
+                    <div class="extracted-text-container" id="extractedTextContainer" style="display: none;">
+                        <div class="text-preview">
+                            <label>Extracted Text:</label>
+                            <div class="text-content" id="extractedText"></div>
+                            <div class="text-metadata">
+                                <span class="confidence">Confidence: <span id="textConfidence">--</span></span>
+                                <span class="word-count">Words: <span id="wordCount">--</span></span>
+                            </div>
+                        </div>
+                        <div class="audio-controls" id="audioControls" style="display: none;">
+                            <label>Audio Playback:</label>
+                            <div class="audio-player">
+                                <audio id="textAudio" controls style="width: 100%;">
+                                    Your browser does not support audio playback.
+                                </audio>
+                            </div>
+                            <div class="audio-settings">
+                                <label for="speechRate">Speed:</label>
+                                <select id="speechRate">
+                                    <option value="100">Slow</option>
+                                    <option value="175">Normal</option>
+                                    <option value="250" selected>Fast</option>
+                                    <option value="350">Very Fast</option>
+                                </select>
+                                <label for="speechVolume">Volume:</label>
+                                <input type="range" id="speechVolume" min="0" max="100" value="80" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="extraction-error" id="extractionError" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <span id="errorMessage">Failed to extract text</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="regenerateAudioButton" class="modal-button" style="display: none;">
+                    <i class="fas fa-redo"></i> Regenerate Audio
+                </button>
+                <button id="copyTextButton" class="modal-button" style="display: none;">
+                    <i class="fas fa-copy"></i> Copy Text
+                </button>
+                <button id="retryExtractionButton" class="modal-button" style="display: none;">
+                    <i class="fas fa-redo"></i> Retry
                 </button>
             </div>
         </div>
@@ -545,6 +619,14 @@
                             Mouse: <span id="annotationMouseX">0</span>, <span id="annotationMouseY">0</span>
                         </span>
                     </div>
+                    <div class="elements-visibility-toggle annotation-elements-toggle" id="annotationElementsVisibilityToggle" title="Show/Hide element outlines for selected screen">
+                        <i class="fas fa-eye-slash"></i>
+                        <span id="annotationElementsVisibilityText">Elements Hidden</span>
+                        <label class="toggle-label">
+                            <input type="checkbox" id="annotationElementsVisibilityCheckbox">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                 </div>
             </div>
         </div>
@@ -572,6 +654,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=20250801-002"></script>
+    <script src="/static/app.js?v=20250802-012"></script>
 </body>
 </html>
