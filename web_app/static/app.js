@@ -99,7 +99,19 @@ class KioskSpeechChat {
         this.loadElementsVisibilityPreference();
         this.connectWebSocket();
         this.initializeAudio();
-        this.initializeTextReading();
+        
+        // Temporarily commented out to fix instantiation
+        try {
+            this.initializeTextReading();
+        } catch (error) {
+            console.error('initializeTextReading failed:', error);
+            console.log('Continuing without text reading functionality');
+        }
+        
+        // Debug: Verify method is available on this instance
+        console.log('Constructor finished. Checking method availability:');
+        console.log('handleUpdateCoordinatesScreen on this:', typeof this.handleUpdateCoordinatesScreen);
+        console.log('handleUpdateCoordinates on this:', typeof this.handleUpdateCoordinates);
     }
 
     detectBrowserAndURL() {
@@ -296,6 +308,7 @@ class KioskSpeechChat {
             annotationNavbar: document.getElementById('annotationNavbar'),
             annotationDrawingMode: document.getElementById('annotationDrawingMode'),
             annotationSaveButton: document.getElementById('annotationSaveButton'),
+            annotationUpdateButton: document.getElementById('annotationUpdateButton'),
             annotationScreen: document.getElementById('annotationScreen'),
             annotationElement: document.getElementById('annotationElement'),
             annotationMouseX: document.getElementById('annotationMouseX'),
@@ -519,9 +532,11 @@ class KioskSpeechChat {
         const screenOffsetX = this.lastMouseX - this.lastClientX;
         const screenOffsetY = this.lastMouseY - this.lastClientY;
         
-        // Calculate screen coordinates
+        // Calculate screen coordinates  
         const screenCenterX = Math.round(centerX + screenOffsetX);
         const screenCenterY = Math.round(centerY + screenOffsetY);
+        const screenX = Math.round(left + screenOffsetX);
+        const screenY = Math.round(top + screenOffsetY);
         
         // Record the shape
         const rectangle = {
@@ -549,10 +564,17 @@ class KioskSpeechChat {
         
         // Store the last rectangle coordinates for potential updates
         this.lastRectangleCoords = {
+            // Use drawn rectangle bounds coordinates instead of center
+            x: left,
+            y: top,
+            screenX: screenX,
+            screenY: screenY,
             centerX: centerX,
             centerY: centerY,
             screenCenterX: screenCenterX,
-            screenCenterY: screenCenterY
+            screenCenterY: screenCenterY,
+            width: width,
+            height: height
         };
         
         // Hide the drawing rectangle
@@ -576,8 +598,8 @@ class KioskSpeechChat {
             `Center (Client): (${centerX}, ${centerY})\n` +
             `Center (Screen): (${screenCenterX}, ${screenCenterY})\n` +
             `Total shapes drawn: ${this.drawnShapes.length}\n` +
-            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinates('${messageId}')" style="margin-right: 8px;">📍 Update with Client Coords</button>` +
-            `<button class="update-button" data-message-id="${messageId}" onclick="window.kioskChat.handleUpdateCoordinatesScreen('${messageId}')">📍 Update with Screen Coords</button>`
+            `<button class="update-button" data-message-id="${messageId}" onclick="window.handleUpdateCoordinates('${messageId}')" style="margin-right: 8px;">📍 Update with Client Coords</button>` +
+            `<button class="update-button" data-message-id="${messageId}" onclick="window.handleUpdateCoordinatesScreen('${messageId}')">📍 Update with Screen Coords</button>`
         );
     }
     
@@ -789,8 +811,12 @@ class KioskSpeechChat {
             screen: selectedScreen,
             elementId: selectedElement,
             newCoordinates: {
-                x: this.lastRectangleCoords.centerX,
-                y: this.lastRectangleCoords.centerY
+                x: this.lastRectangleCoords.x,
+                y: this.lastRectangleCoords.y
+            },
+            newSize: {
+                width: this.lastRectangleCoords.width,
+                height: this.lastRectangleCoords.height
             },
             timestamp: new Date().toISOString()
         };
@@ -807,7 +833,7 @@ class KioskSpeechChat {
             `✅ Client Coordinate Update Queued\n` +
             `Element: ${elementName}\n` +
             `Screen: ${screenData.name || selectedScreen}\n` +
-            `New Coordinates: (${this.lastRectangleCoords.centerX}, ${this.lastRectangleCoords.centerY}) [Client]\n` +
+            `New Coordinates: (${this.lastRectangleCoords.x}, ${this.lastRectangleCoords.y}) [Client] New bounds: width ${this.lastRectangleCoords.width} height ${this.lastRectangleCoords.height}\n` +
             `Click Save to apply changes to config file.`
         );
         
@@ -815,10 +841,20 @@ class KioskSpeechChat {
     }
     
     handleUpdateCoordinatesScreen(messageId) {
+        console.log('handleUpdateCoordinatesScreen method is being defined');
+        console.log('handleUpdateCoordinatesScreen called with messageId:', messageId);
+        console.log('Save button element:', this.elements.saveButton);
+        console.log('Save button current disabled state:', this.elements.saveButton?.disabled);
+        
         const selectedScreen = this.elements.screenDropdown.value;
         const selectedElement = this.elements.elementDropdown.value;
         
+        console.log('Selected screen:', selectedScreen);
+        console.log('Selected element:', selectedElement);
+        console.log('lastRectangleCoords:', this.lastRectangleCoords);
+        
         if (!selectedScreen || !selectedElement) {
+            console.log('Missing screen or element selection, showing error');
             this.addMessage('system', '⚠️ Update Failed\nPlease select both a Screen and Element before updating coordinates.');
             return;
         }
@@ -834,14 +870,20 @@ class KioskSpeechChat {
             screen: selectedScreen,
             elementId: selectedElement,
             newCoordinates: {
-                x: this.lastRectangleCoords.screenCenterX,
-                y: this.lastRectangleCoords.screenCenterY
+                x: this.lastRectangleCoords.screenX,
+                y: this.lastRectangleCoords.screenY
+            },
+            newSize: {
+                width: this.lastRectangleCoords.width,
+                height: this.lastRectangleCoords.height
             },
             timestamp: new Date().toISOString()
         };
         
         // Enable the save button
         this.elements.saveButton.disabled = false;
+        console.log('Main interface: Save button enabled after Update with Screen Coords');
+        console.log('Save button disabled state after enabling:', this.elements.saveButton.disabled);
         
         // Show confirmation message
         const screenData = this.kioskData.screens[selectedScreen];
@@ -852,7 +894,7 @@ class KioskSpeechChat {
             `✅ Screen Coordinate Update Queued\n` +
             `Element: ${elementName}\n` +
             `Screen: ${screenData.name || selectedScreen}\n` +
-            `New Coordinates: (${this.lastRectangleCoords.screenCenterX}, ${this.lastRectangleCoords.screenCenterY}) [Screen]\n` +
+            `New Coordinates: (${this.lastRectangleCoords.screenX}, ${this.lastRectangleCoords.screenY}) [Screen] New bounds: width ${this.lastRectangleCoords.width} height ${this.lastRectangleCoords.height}\n` +
             `Click Save to apply changes to config file.`
         );
         
@@ -2608,7 +2650,11 @@ class KioskSpeechChat {
         }
         
         // Show or hide element overlays based on current state
-        const selectedScreen = this.elements.screenDropdown.value;
+        // Use annotation screen dropdown if in annotation mode, otherwise use main screen dropdown
+        const selectedScreen = (this.annotationMode && this.annotationMode.isActive) 
+            ? this.elements.annotationScreen.value 
+            : this.elements.screenDropdown.value;
+            
         if (this.elementsVisible && selectedScreen) {
             this.showElementOverlays(selectedScreen);
         } else {
@@ -2655,6 +2701,10 @@ class KioskSpeechChat {
         overlay.style.width = element.size.width + 'px';
         overlay.style.height = element.size.height + 'px';
         
+        // Debug: Log overlay creation and check if in annotation mode
+        const isInAnnotationMode = document.body.classList.contains('annotation-mode-active');
+        console.log(`Creating element overlay for ${element.id}, annotation mode: ${isInAnnotationMode}`);
+        
         // Create and add label
         const label = document.createElement('div');
         label.className = 'element-label';
@@ -2665,7 +2715,9 @@ class KioskSpeechChat {
         document.body.appendChild(overlay);
         this.currentElementOverlays.push(overlay);
         
-        console.log(`Created overlay for element: ${element.id} at (${element.coordinates.x}, ${element.coordinates.y})`);
+        // Debug: Check computed z-index after adding to DOM
+        const computedStyle = window.getComputedStyle(overlay);
+        console.log(`Created overlay for element: ${element.id} at (${element.coordinates.x}, ${element.coordinates.y}), z-index: ${computedStyle.zIndex}`);
     }
 
     clearElementOverlays() {
@@ -3538,7 +3590,7 @@ class ScreenshotAnnotationMode {
                 if (currentDrawingMode !== 'none') {
                     // Exit drawing mode first
                     this.kioskChat.elements.annotationDrawingMode.value = 'none';
-                    this.handleDrawingModeChange();
+                    this.handleAnnotationDrawingModeChange();
                     console.log('Escaped from drawing mode in annotation mode');
                 } else {
                     // Only exit annotation mode if we're not in drawing mode
@@ -3550,12 +3602,17 @@ class ScreenshotAnnotationMode {
         
         // Drawing mode change
         this.kioskChat.elements.annotationDrawingMode.addEventListener('change', () => {
-            this.handleDrawingModeChange();
+            this.handleAnnotationDrawingModeChange();
         });
         
         // Save button
         this.kioskChat.elements.annotationSaveButton.addEventListener('click', () => {
             this.handleSave();
+        });
+        
+        // Update with Screen Coords button
+        this.kioskChat.elements.annotationUpdateButton.addEventListener('click', () => {
+            this.handleUpdateClientCoords();
         });
         
         // Screen/Element dropdowns
@@ -3649,6 +3706,9 @@ class ScreenshotAnnotationMode {
         this.isActive = true;
         this.currentScreenshot = { src: screenshotSrc, data: screenshotData };
         
+        // Add annotation mode class to body for CSS styling
+        document.body.classList.add('annotation-mode-active');
+        
         // Set screenshot as background
         this.kioskChat.elements.annotationBackground.style.backgroundImage = `url(${screenshotSrc})`;
         
@@ -3674,11 +3734,24 @@ class ScreenshotAnnotationMode {
         this.isActive = false;
         this.currentScreenshot = null;
         
+        // Remove annotation mode class from body
+        document.body.classList.remove('annotation-mode-active');
+        
+        // Clean up drawing mode
+        document.body.classList.remove('drawing-mode');
+        this.kioskChat.elements.annotationDrawingOverlay.classList.remove('drawing-mode');
+        this.kioskChat.elements.annotationDrawingMode.value = 'none';
+        
         // Hide modal
         this.kioskChat.elements.screenshotAnnotationModal.style.display = 'none';
         
         // Restore body scroll
         document.body.style.overflow = '';
+        
+        // Clean up annotation-specific state
+        this.currentRectangle = null;
+        this.kioskChat.elements.annotationUpdateButton.style.display = 'none';
+        this.kioskChat.elements.annotationSaveButton.disabled = true;
         
         // Reset drawing state
         this.resetDrawing();
@@ -3710,18 +3783,6 @@ class ScreenshotAnnotationMode {
         }
     }
     
-    handleDrawingModeChange() {
-        const mode = this.kioskChat.elements.annotationDrawingMode.value;
-        const overlay = this.kioskChat.elements.annotationDrawingOverlay;
-        
-        if (mode === 'rectangle') {
-            overlay.classList.add('drawing-mode');
-        } else {
-            overlay.classList.remove('drawing-mode');
-            this.resetDrawing();
-        }
-    }
-    
     handleScreenChange() {
         const selectedScreen = this.kioskChat.elements.annotationScreen.value;
         
@@ -3734,6 +3795,13 @@ class ScreenshotAnnotationMode {
         
         // Update element dropdown
         this.updateElementDropdown(selectedScreen);
+        
+        // Update element overlays if elements are currently visible
+        if (this.kioskChat.elementsVisible && selectedScreen) {
+            this.kioskChat.showElementOverlays(selectedScreen);
+        } else if (!selectedScreen) {
+            this.kioskChat.clearElementOverlays();
+        }
     }
     
     updateElementDropdown(selectedScreen) {
@@ -3829,9 +3897,7 @@ class ScreenshotAnnotationMode {
         
         // Only create rectangle if it has meaningful size
         if (width > 10 && height > 10) {
-            this.kioskChat.elements.annotationSaveButton.disabled = false;
-            
-            // Store rectangle data
+            // Store rectangle data but don't enable save button yet
             this.currentRectangle = {
                 x: Math.round(left),
                 y: Math.round(top),
@@ -3840,6 +3906,9 @@ class ScreenshotAnnotationMode {
             };
             
             console.log('Rectangle drawn:', this.currentRectangle);
+            
+            // Show the update button in navbar when rectangle is drawn
+            this.showUpdateButton();
         } else {
             this.resetDrawing();
         }
@@ -3848,8 +3917,96 @@ class ScreenshotAnnotationMode {
     resetDrawing() {
         this.isDrawing = false;
         this.kioskChat.elements.annotationDrawingRectangle.style.display = 'none';
-        this.kioskChat.elements.annotationSaveButton.disabled = true;
-        this.currentRectangle = null;
+        
+        // Only disable save button if there are no pending updates
+        const hasPendingUpdates = Object.keys(this.kioskChat.pendingUpdates || {}).length > 0;
+        console.log('resetDrawing called, pendingUpdates:', this.kioskChat.pendingUpdates, 'hasPendingUpdates:', hasPendingUpdates);
+        if (!hasPendingUpdates) {
+            this.kioskChat.elements.annotationSaveButton.disabled = true;
+            console.log('Annotation mode: Save button disabled by resetDrawing (no pending updates)');
+        } else {
+            console.log('Annotation mode: Save button kept enabled by resetDrawing (has pending updates)');
+        }
+        
+        // Don't hide the update button in resetDrawing - it should only be hidden
+        // when annotation mode is exited or when Save is clicked
+        // The currentRectangle is kept so the update button can still be used
+        console.log('resetDrawing: keeping currentRectangle and update button visible');
+    }
+    
+    showUpdateButton() {
+        this.kioskChat.elements.annotationUpdateButton.style.display = 'inline-flex';
+    }
+    
+    handleUpdateClientCoords() {
+        if (!this.currentRectangle) {
+            alert('No rectangle data available');
+            return;
+        }
+        
+        const selectedScreen = this.kioskChat.elements.annotationScreen.value;
+        const selectedElement = this.kioskChat.elements.annotationElement.value;
+        
+        if (!selectedScreen || !selectedElement) {
+            alert('Please select both a screen and element from the dropdowns before updating coordinates.');
+            return;
+        }
+        
+        // Use bounds coordinates from rectangle (consistent with main interface)
+        // Main interface uses this.lastRectangleCoords.x/y which are bounds coordinates
+        
+        // Use the existing coordinate update system (use dot separator to match main interface)
+        const updateKey = `${selectedScreen}.${selectedElement}`;
+        this.kioskChat.pendingUpdates[updateKey] = {
+            screen: selectedScreen,
+            elementId: selectedElement,
+            newCoordinates: {
+                x: this.currentRectangle.x,
+                y: this.currentRectangle.y
+            },
+            newSize: {
+                width: this.currentRectangle.width,
+                height: this.currentRectangle.height
+            }
+        };
+        
+        // Enable the save button
+        this.kioskChat.elements.annotationSaveButton.disabled = false;
+        console.log('Annotation mode: Save button enabled after Update with Client Coords');
+        
+        // Show feedback message in chat
+        this.kioskChat.addMessage('system', 
+            `✅ Client Coordinate Update Queued\n` +
+            `Screen: ${selectedScreen}\n` +
+            `Element: ${selectedElement}\n` +
+            `Bounds: ${this.currentRectangle.width}×${this.currentRectangle.height} at (${this.currentRectangle.x}, ${this.currentRectangle.y})\n` +
+            `New Coordinates: (${this.currentRectangle.x}, ${this.currentRectangle.y}) [Client] New bounds: width ${this.currentRectangle.width} height ${this.currentRectangle.height}\n` +
+            `Use the Save button in annotation mode to apply changes.`
+        );
+        
+        console.log('Coordinates queued from navbar button:', updateKey, this.kioskChat.pendingUpdates[updateKey]);
+        
+        // Don't hide the update button here - it should only disappear when Save is clicked
+    }
+    
+    handleAnnotationDrawingModeChange() {
+        const mode = this.kioskChat.elements.annotationDrawingMode.value;
+        const overlay = this.kioskChat.elements.annotationDrawingOverlay;
+        
+        console.log('Annotation drawing mode changed to:', mode);
+        
+        if (mode === 'rectangle') {
+            // Enable drawing mode
+            overlay.classList.add('drawing-mode');
+            document.body.classList.add('drawing-mode');
+            console.log('Annotation drawing mode enabled');
+        } else {
+            // Disable drawing mode
+            overlay.classList.remove('drawing-mode');
+            document.body.classList.remove('drawing-mode');
+            this.resetDrawing();
+            console.log('Annotation drawing mode disabled');
+        }
     }
     
     screenToImageCoordinates(screenX, screenY) {
@@ -3952,28 +4109,25 @@ class ScreenshotAnnotationMode {
     }
     
     handleSave() {
-        if (!this.currentRectangle) return;
+        // Check if there are pending updates to save
+        const hasPendingUpdates = Object.keys(this.kioskChat.pendingUpdates || {}).length > 0;
         
-        const selectedScreen = this.kioskChat.elements.annotationScreen.value;
-        if (!selectedScreen) {
-            alert('Please select a screen first');
+        if (!hasPendingUpdates) {
+            alert('No pending updates to save. Please click "Update with Screen Coords" first.');
             return;
         }
         
-        // Use the existing coordinate update system
-        this.kioskChat.queueCoordinateUpdate(selectedScreen, 'screenshot_annotation', this.currentRectangle);
+        // Call the main save handler to process pending updates
+        this.kioskChat.handleSaveCoordinates();
         
-        // Reset and exit
-        this.resetDrawing();
-        this.exitMode();
+        // Hide the update button and disable save button after successful save
+        this.kioskChat.elements.annotationUpdateButton.style.display = 'none';
+        this.kioskChat.elements.annotationSaveButton.disabled = true;
         
         // Show success message
         this.kioskChat.addMessage('system', 
-            `✅ Screenshot Annotation Saved\n` +
-            `Screen: ${selectedScreen}\n` +
-            `Coordinates: (${this.currentRectangle.x}, ${this.currentRectangle.y})\n` +
-            `Size: ${this.currentRectangle.width} × ${this.currentRectangle.height}\n` +
-            `Click Save to apply changes.`
+            `✅ Pending coordinate updates saved to config file\n` +
+            `All queued changes have been applied.`
         );
     }
 
@@ -4389,10 +4543,224 @@ class ScreenshotAnnotationMode {
     }
 }
 
+// Debug: Check if script is loading
+console.log('JavaScript file loading...');
+console.log('Document ready state:', document.readyState);
+console.log('DOMContentLoaded listener about to be added');
+
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.kioskChat = new KioskSpeechChat();
+    console.log('DOMContentLoaded event fired!');
+    console.log('DOM loaded, creating KioskSpeechChat instance...');
+    
+    // Clear any existing instance
+    if (window.kioskChat) {
+        console.log('Existing kioskChat found, clearing it');
+        window.kioskChat = null;
+    }
+    
+    try {
+        const instance = new KioskSpeechChat();
+        window.kioskChat = instance;
+        console.log('KioskSpeechChat instantiated successfully');
+        console.log('window.kioskChat assigned:', window.kioskChat);
+        
+        // Make it even more persistent
+        Object.defineProperty(window, 'kioskChatBackup', {
+            value: instance,
+            writable: false,
+            configurable: false
+        });
+        console.log('Backup reference created');
+        
+        // Test the object periodically
+        setInterval(() => {
+            if (!window.kioskChat) {
+                console.error('window.kioskChat has been lost! Timestamp:', new Date().toISOString());
+                console.log('Attempting to restore from backup...');
+                if (window.kioskChatBackup) {
+                    window.kioskChat = window.kioskChatBackup;
+                    console.log('Restored from backup');
+                } else {
+                    console.error('Backup is also missing!');
+                }
+            }
+        }, 5000); // Check every 5 seconds
+        
+    } catch (error) {
+        console.error('Error creating KioskSpeechChat instance:', error);
+        console.error('Error stack:', error.stack);
+        return;
+    }
+    
+    // Debug: Check if methods are accessible
+    console.log('window.kioskChat created:', window.kioskChat);
+    console.log('handleUpdateCoordinatesScreen available:', typeof window.kioskChat.handleUpdateCoordinatesScreen);
+    console.log('handleUpdateCoordinates available:', typeof window.kioskChat.handleUpdateCoordinates);
+    
+    // Try to access method directly
+    try {
+        console.log('Direct method access:', window.kioskChat.handleUpdateCoordinatesScreen);
+    } catch (e) {
+        console.error('Error accessing method:', e);
+    }
+    
+    // List all methods available on kioskChat
+    console.log('Available methods on kioskChat:');
+    for (let method in window.kioskChat) {
+        if (typeof window.kioskChat[method] === 'function') {
+            console.log('- ' + method);
+        }
+    }
+    
+    // Also check prototype
+    console.log('Prototype methods:');
+    const proto = Object.getPrototypeOf(window.kioskChat);
+    const props = Object.getOwnPropertyNames(proto);
+    props.forEach(prop => {
+        if (typeof window.kioskChat[prop] === 'function') {
+            console.log('- ' + prop + ' (from prototype)');
+        }
+    });
 });
+
+// Alternative initialization - run immediately if DOM is already loaded
+if (document.readyState === 'loading') {
+    console.log('Document still loading, DOMContentLoaded listener should work');
+} else {
+    console.log('Document already loaded, running initialization immediately');
+    try {
+        if (!window.kioskChat) {
+            const instance = new KioskSpeechChat();
+            window.kioskChat = instance;
+            Object.defineProperty(window, 'kioskChatBackup', {
+                value: instance,
+                writable: false,
+                configurable: false
+            });
+            console.log('KioskSpeechChat created immediately (DOM already loaded)');
+        } else {
+            console.log('KioskSpeechChat already exists');
+        }
+    } catch (error) {
+        console.error('Error creating KioskSpeechChat immediately:', error);
+    }
+}
 
 // Export for potential external use
 window.KioskSpeechChat = KioskSpeechChat;
+
+// Global wrapper functions for onclick handlers
+window.handleUpdateCoordinatesScreen = function(messageId) {
+    console.log('Global wrapper called for handleUpdateCoordinatesScreen with messageId:', messageId);
+    
+    // Try to get kioskChat instance, with backup fallback
+    let kioskChatInstance = window.kioskChat;
+    if (!kioskChatInstance && window.kioskChatBackup) {
+        console.log('Main kioskChat not available, using backup');
+        kioskChatInstance = window.kioskChatBackup;
+        window.kioskChat = kioskChatInstance; // Restore the main reference
+    }
+    
+    if (!kioskChatInstance) {
+        console.error('No kioskChat instance available (neither main nor backup)');
+        console.log('window.kioskChat:', window.kioskChat);
+        console.log('window.kioskChatBackup:', window.kioskChatBackup);
+        console.log('Available window properties:', Object.keys(window).filter(k => k.includes('kiosk')));
+        
+        // Last resort: try to create the instance now
+        console.log('Attempting emergency instance creation...');
+        try {
+            if (window.KioskSpeechChat) {
+                const emergencyInstance = new window.KioskSpeechChat();
+                window.kioskChat = emergencyInstance;
+                kioskChatInstance = emergencyInstance;
+                console.log('Emergency instance created successfully');
+            } else {
+                console.error('KioskSpeechChat class not available for emergency creation');
+                return;
+            }
+        } catch (error) {
+            console.error('Emergency instance creation failed:', error);
+            return;
+        }
+    }
+    
+    // Try to find the method on the instance
+    if (typeof kioskChatInstance.handleUpdateCoordinatesScreen === 'function') {
+        return kioskChatInstance.handleUpdateCoordinatesScreen(messageId);
+    }
+    
+    // Try to find it on the prototype
+    const proto = Object.getPrototypeOf(kioskChatInstance);
+    if (proto && typeof proto.handleUpdateCoordinatesScreen === 'function') {
+        console.log('Found method on prototype, calling it');
+        return proto.handleUpdateCoordinatesScreen.call(kioskChatInstance, messageId);
+    }
+    
+    // Manual fallback - call the method logic directly
+    console.log('Method not found, implementing fallback logic');
+    
+    const selectedScreen = kioskChatInstance.elements.screenDropdown.value;
+    const selectedElement = kioskChatInstance.elements.elementDropdown.value;
+    
+    console.log('Selected screen:', selectedScreen);
+    console.log('Selected element:', selectedElement);
+    console.log('lastRectangleCoords:', kioskChatInstance.lastRectangleCoords);
+    
+    if (!selectedScreen || !selectedElement) {
+        console.log('Missing screen or element selection, showing error');
+        kioskChatInstance.addMessage('system', '⚠️ Update Failed\nPlease select both a Screen and Element before updating coordinates.');
+        return;
+    }
+    
+    if (!kioskChatInstance.lastRectangleCoords) {
+        kioskChatInstance.addMessage('system', '⚠️ Update Failed\nNo rectangle coordinates available. Draw a rectangle first.');
+        return;
+    }
+    
+    // Store the pending update with screen coordinates
+    const updateKey = `${selectedScreen}.${selectedElement}`;
+    kioskChatInstance.pendingUpdates[updateKey] = {
+        screen: selectedScreen,
+        elementId: selectedElement,
+        newCoordinates: {
+            x: kioskChatInstance.lastRectangleCoords.screenX,
+            y: kioskChatInstance.lastRectangleCoords.screenY
+        },
+        newSize: {
+            width: kioskChatInstance.lastRectangleCoords.width,
+            height: kioskChatInstance.lastRectangleCoords.height
+        },
+        timestamp: new Date().toISOString()
+    };
+    
+    // Enable the save button
+    kioskChatInstance.elements.saveButton.disabled = false;
+    console.log('Main interface: Save button enabled after Update with Screen Coords (fallback)');
+    console.log('Save button disabled state after enabling:', kioskChatInstance.elements.saveButton.disabled);
+    
+    // Show confirmation message
+    const screenData = kioskChatInstance.kioskData.screens[selectedScreen];
+    const elementData = screenData.elements.find(e => e.id === selectedElement);
+    const elementName = elementData?.name || selectedElement;
+    
+    kioskChatInstance.addMessage('system', 
+        `✅ Screen Coordinate Update Queued (Fallback)\n` +
+        `Element: ${elementName}\n` +
+        `Screen: ${screenData.name || selectedScreen}\n` +
+        `New Coordinates: (${kioskChatInstance.lastRectangleCoords.screenX}, ${kioskChatInstance.lastRectangleCoords.screenY}) [Screen] New bounds: width ${kioskChatInstance.lastRectangleCoords.width} height ${kioskChatInstance.lastRectangleCoords.height}\n` +
+        `Click Save to apply changes to config file.`
+    );
+    
+    console.log('Pending screen coordinate update queued (fallback):', updateKey, kioskChatInstance.pendingUpdates[updateKey]);
+};
+
+window.handleUpdateCoordinates = function(messageId) {
+    console.log('Global wrapper called for handleUpdateCoordinates with messageId:', messageId);
+    if (window.kioskChat && typeof window.kioskChat.handleUpdateCoordinates === 'function') {
+        return window.kioskChat.handleUpdateCoordinates(messageId);
+    } else {
+        console.error('window.kioskChat.handleUpdateCoordinates not available');
+    }
+};

@@ -658,6 +658,11 @@ async def save_kiosk_data(request: Request):
             screen_name = update_info["screen"]
             element_id = update_info["elementId"]
             new_coords = update_info["newCoordinates"]
+            new_size = update_info.get("newSize")  # Get newSize if present
+            
+            # Debug logging
+            logger.info(f"Processing update for {element_id}: coords={new_coords}, size={new_size}")
+            logger.info(f"Full update_info: {update_info}")
             
             # Validate screen exists
             if screen_name not in kiosk_data.get("screens", {}):
@@ -677,13 +682,32 @@ async def save_kiosk_data(request: Request):
                     element["coordinates"]["x"] = new_coords["x"]
                     element["coordinates"]["y"] = new_coords["y"]
                     
-                    updated_elements.append({
+                    # Update size if provided
+                    if new_size:
+                        if "size" not in element:
+                            element["size"] = {}
+                        
+                        old_size = element["size"].copy() if "size" in element else {}
+                        element["size"]["width"] = new_size["width"]
+                        element["size"]["height"] = new_size["height"]
+                        logger.info(f"Updated size for {element_id}: {old_size} -> {new_size}")
+                    else:
+                        logger.info(f"No newSize provided for {element_id}, keeping existing size")
+                    
+                    element_update_info = {
                         "screen": screen_name,
                         "element": element_id,
                         "element_name": element.get("name", element_id),
                         "old_coordinates": old_coords,
                         "new_coordinates": new_coords
-                    })
+                    }
+                    
+                    # Add size information if it was updated
+                    if new_size:
+                        element_update_info["old_size"] = old_size
+                        element_update_info["new_size"] = new_size
+                    
+                    updated_elements.append(element_update_info)
                     
                     element_found = True
                     break

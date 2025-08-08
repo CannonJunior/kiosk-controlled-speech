@@ -319,12 +319,12 @@
           "id": "bannerText",
           "name": "Banner Text",
           "coordinates": {
-            "x": 100,
-            "y": 100
+            "x": 599,
+            "y": 498
           },
           "size": {
-            "width": 100,
-            "height": 100
+            "width": 791,
+            "height": 113
           },
           "voice_commands": [
             "Read text"

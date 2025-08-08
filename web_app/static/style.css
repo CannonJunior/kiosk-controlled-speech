@@ -446,6 +446,48 @@ body {
     transform: scale(0.98);
 }
 
+/* Update Coordinates Button in Navbar */
+.update-coords-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 15px;
+    background: rgba(255, 193, 7, 0.1);
+    color: #555;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    margin-right: 8px;
+}
+
+.update-coords-button:hover {
+    background: rgba(255, 193, 7, 0.2);
+    border-color: rgba(255, 193, 7, 0.5);
+    color: #333;
+}
+
+.update-coords-button:active {
+    background: rgba(255, 193, 7, 0.3);
+    transform: scale(0.98);
+}
+
+.update-coords-button i {
+    color: #ffc107;
+    font-size: 0.9rem;
+}
+
+/* Ensure update coords button is clickable even in drawing mode */
+body.drawing-mode .update-coords-button {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    z-index: 1050;
+    position: relative;
+}
+
 .navbar-title {
     font-size: 1.1rem;
     font-weight: 600;
@@ -1477,6 +1519,16 @@ body.drawing-mode * {
     border-radius: 4px;
     transition: all 0.3s ease;
     box-shadow: 0 0 10px rgba(23, 162, 184, 0.4);
+}
+
+/* Ensure element overlays appear above annotation mode */
+body:has(.screenshot-annotation-modal[style*="display: block"]) .element-overlay {
+    z-index: 1010 !important;
+}
+
+/* Alternative selector for better browser compatibility */
+.annotation-mode-active .element-overlay {
+    z-index: 1010 !important;
 }
 
 .element-overlay.hidden {

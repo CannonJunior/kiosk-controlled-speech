@@ -1,0 +1,28 @@
+{
+  "models": {
+    "default": {
+      "name": "qwen2.5:1.5b",
+      "description": "Fast lightweight model",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "0.5-1.5s"
+    },
+    "balanced": {
+      "name": "llama3.1:8b",
+      "description": "Balanced speed and accuracy",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "1-3s"
+    },
+    "accurate": {
+      "name": "llama3.1:70b",
+      "description": "High accuracy, slower",
+      "temperature": 0.1,
+      "max_tokens": 512,
+      "estimated_latency": "3-8s"
+    }
+  },
+  "current_model": "default",
+  "fallback_model": "default",
+  "auto_fallback": true
+}
