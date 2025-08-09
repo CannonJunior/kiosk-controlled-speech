@@ -3952,7 +3952,7 @@ class ScreenshotAnnotationMode {
             return;
         }
         
-        // Use bounds coordinates from rectangle (consistent with main interface)
+        // Use client bounds coordinates same as main interface
         // Main interface uses this.lastRectangleCoords.x/y which are bounds coordinates
         
         // Use the existing coordinate update system (use dot separator to match main interface)
