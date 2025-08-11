@@ -2690,14 +2690,35 @@ class KioskSpeechChat {
         });
     }
 
+    calculateLayoutOffset() {
+        // The key insight: overlay elements are positioned using screen coordinates from config/kiosk_data.json,
+        // but they need to be positioned relative to the browser's client coordinate system.
+        // We need to convert from screen coordinates to client coordinates.
+        
+        // Calculate the offset between screen coordinates and client coordinates
+        // This is the same approach used in rectangle drawing for coordinate conversion
+        const screenOffsetX = this.lastMouseX - this.lastClientX;
+        const screenOffsetY = this.lastMouseY - this.lastClientY;
+        
+        // To position overlays correctly, we need the inverse offset:
+        // screenCoord + offset = clientCoord, so offset = clientCoord - screenCoord
+        const offsetX = -screenOffsetX;  // Negative because we're converting FROM screen TO client
+        const offsetY = -screenOffsetY;
+        
+        return { x: offsetX, y: offsetY };
+    }
+
     createElementOverlay(element) {
         const overlay = document.createElement('div');
         overlay.className = 'element-overlay';
         overlay.setAttribute('data-element-id', element.id);
         
-        // Position and size the overlay
-        overlay.style.left = element.coordinates.x + 'px';
-        overlay.style.top = element.coordinates.y + 'px';
+        // Calculate proper positioning offset for layout
+        const layoutOffset = this.calculateLayoutOffset();
+        
+        // Position and size the overlay with layout offset applied
+        overlay.style.left = (element.coordinates.x + layoutOffset.x) + 'px';
+        overlay.style.top = (element.coordinates.y + layoutOffset.y) + 'px';
         overlay.style.width = element.size.width + 'px';
         overlay.style.height = element.size.height + 'px';
         
