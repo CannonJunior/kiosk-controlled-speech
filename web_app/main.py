@@ -9,6 +9,7 @@ import logging
 import base64
 import os
 import shutil
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -122,6 +123,30 @@ class SpeechWebBridge:
         self.model_manager = ModelConfigManager()
         self.text_reading_service = None  # Will be initialized after MCP client is ready
         
+        # Performance optimizations: caching
+        self._kiosk_data_cache = None
+        self._kiosk_data_cache_time = 0
+        self._kiosk_data_cache_duration = 5.0  # Cache for 5 seconds
+        self._screen_context_cache = None
+        
+        # Response caching for common queries
+        self._response_cache = {}
+        self._response_cache_duration = 30.0  # Cache responses for 30 seconds
+        self._common_patterns = [
+            "take screenshot", "click", "help", "what can i do", 
+            "start recording", "stop recording", "open settings"
+        ]
+        
+        # Fast-path heuristic patterns for instant response (<100ms)
+        self._fast_patterns = {
+            "take screenshot": {"action": "click", "element_id": "takeScreenshotButton", "confidence": 0.95},
+            "screenshot": {"action": "click", "element_id": "takeScreenshotButton", "confidence": 0.9},
+            "help": {"action": "help", "confidence": 0.99},
+            "what can i do": {"action": "help", "confidence": 0.95},
+            "open settings": {"action": "click", "element_id": "settingsToggle", "confidence": 0.9},
+            "settings": {"action": "click", "element_id": "settingsToggle", "confidence": 0.85}
+        }
+        
     async def initialize(self):
         """Initialize MCP services using FastMCP client"""
         try:
@@ -202,18 +227,68 @@ class SpeechWebBridge:
             }
             
     async def _load_kiosk_data_for_context(self) -> Dict[str, Any]:
-        """Load kiosk data to provide complete screen context"""
+        """Load kiosk data to provide complete screen context with caching"""
         try:
+            # Check cache first for performance optimization
+            current_time = time.time()
+            if (self._kiosk_data_cache and 
+                current_time - self._kiosk_data_cache_time < self._kiosk_data_cache_duration):
+                return self._kiosk_data_cache
+                
             config_path = path_resolver.resolve_config("kiosk_data.json", required=False)
             
             if config_path:
+                # Check file modification time to avoid unnecessary reads
+                file_stat = config_path.stat()
+                if (self._screen_context_cache and 
+                    hasattr(self, '_last_file_mtime') and 
+                    file_stat.st_mtime <= self._last_file_mtime):
+                    # File hasn't changed, use cached context
+                    self._kiosk_data_cache = self._screen_context_cache
+                    self._kiosk_data_cache_time = current_time
+                    return self._screen_context_cache
+                
+                # File changed or no cache, reload
                 with open(config_path, 'r') as f:
                     kiosk_data = json.load(f)
                     
-                # Return the web_app screen data which contains all the UI elements
-                web_app_screen = kiosk_data.get("screens", {}).get("web_app", {})
-                if web_app_screen:
-                    return web_app_screen
+                # Create merged screen view for performance (avoid screen detection overhead)
+                all_screens = kiosk_data.get("screens", {})
+                merged_screen = {
+                    "name": "All Screens (Merged)",
+                    "description": "Merged view of all available screens",
+                    "elements": []
+                }
+                
+                # Optimize: pre-calculate total elements for better performance
+                total_elements = sum(len(screen.get("elements", [])) for screen in all_screens.values())
+                merged_screen["elements"] = []
+                
+                # Collect all elements with batch processing
+                for screen_id, screen_data in all_screens.items():
+                    screen_name = screen_data.get("name", screen_id)
+                    elements = screen_data.get("elements", [])
+                    
+                    # Batch process elements for better performance
+                    enhanced_elements = []
+                    for element in elements:
+                        element_copy = {
+                            **element,  # Faster than element.copy()
+                            "source_screen": screen_name,
+                            "source_screen_id": screen_id
+                        }
+                        enhanced_elements.append(element_copy)
+                    
+                    merged_screen["elements"].extend(enhanced_elements)
+                
+                # Cache the result
+                self._screen_context_cache = merged_screen
+                self._kiosk_data_cache = merged_screen
+                self._kiosk_data_cache_time = current_time
+                self._last_file_mtime = file_stat.st_mtime
+                
+                logger.debug(f"Cached {len(merged_screen['elements'])} elements from {len(all_screens)} screens")
+                return merged_screen
             
             return None
             
@@ -229,15 +304,37 @@ class SpeechWebBridge:
             if action_type == "click":
                 # Get element information
                 element_id = ollama_response.get("element_id")
-                coordinates = ollama_response.get("coordinates")
+                config_coordinates = None
+                config_element_info = None
                 
-                # If coordinates are not provided by Ollama, look them up from current_screen
-                if not coordinates and element_id:
+                # Always validate against config - only use coordinates from kiosk_data.json
+                if element_id:
                     for element in current_screen.get("elements", []):
                         if element.get("id") == element_id:
-                            coordinates = element.get("coordinates")
-                            logger.info(f"Found coordinates for {element_id}: {coordinates}")
+                            config_coordinates = element.get("coordinates")
+                            config_element_info = {
+                                "id": element.get("id"),
+                                "name": element.get("name", element_id),
+                                "screen": element.get("source_screen", current_screen.get("name", "unknown")),
+                                "screen_id": element.get("source_screen_id", "unknown")
+                            }
+                            logger.info(f"Found coordinates for {element_id} in config: {config_coordinates}")
                             break
+                
+                # Reject any coordinates not from config
+                ollama_coordinates = ollama_response.get("coordinates")
+                if ollama_coordinates and not config_coordinates:
+                    logger.warning(f"Ollama suggested coordinates {ollama_coordinates} for {element_id}, but element not found in config. Rejecting click.")
+                    return {
+                        "action_executed": False,
+                        "action_type": "click",
+                        "error": f"Element '{element_id}' not found in configuration. Cannot execute click with unvalidated coordinates."
+                    }
+                elif ollama_coordinates and config_coordinates:
+                    # Log when Ollama provides coordinates but we're using config instead
+                    logger.info(f"Ollama suggested coordinates {ollama_coordinates} for {element_id}, but using validated config coordinates {config_coordinates}")
+                
+                coordinates = config_coordinates
                 
                 if coordinates:
                     # Execute mouse click using MCP tool
@@ -256,6 +353,10 @@ class SpeechWebBridge:
                             method = click_data.get("method", "unknown")
                             is_mock = click_data.get("mock", True)
                             
+                            # Create descriptive message indicating source from config
+                            element_name = config_element_info["name"] if config_element_info else element_id
+                            screen_name = config_element_info["screen"] if config_element_info else "unknown screen"
+                            
                             logger.info(f"Successfully clicked {element_id} at {coordinates} using {method}")
                             return {
                                 "action_executed": True,
@@ -265,7 +366,8 @@ class SpeechWebBridge:
                                 "result": "success",
                                 "method": method,
                                 "mock": is_mock,
-                                "message": f"Clicked {element_id} at coordinates {coordinates} using {method}"
+                                "config_source": config_element_info,
+                                "message": f"🖱️ Successfully clicked \"{element_name}\" at coordinates ({coordinates['x']}, {coordinates['y']}) using {method}. Coordinates from config element '{element_id}' on screen '{screen_name}'."
                             }
                         else:
                             logger.error(f"Click failed: {click_result.get('error')}")
@@ -375,9 +477,107 @@ class SpeechWebBridge:
                 "error": f"Audio processing failed: {str(e)}"
             }
     
+    def _get_cache_key(self, message: str) -> str:
+        """Generate cache key for response caching"""
+        return f"chat:{message.lower().strip()}"
+    
+    def _is_cacheable_query(self, message: str) -> bool:
+        """Check if query should be cached"""
+        message_lower = message.lower().strip()
+        return any(pattern in message_lower for pattern in self._common_patterns)
+    
+    async def _try_fast_path_response(self, message: str, current_screen: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Try to handle simple commands instantly without LLM"""
+        message_lower = message.lower().strip()
+        
+        # Check for exact or close matches in fast patterns
+        for pattern, response_data in self._fast_patterns.items():
+            if pattern in message_lower:
+                logger.debug(f"Fast-path match for '{message}': {pattern}")
+                
+                # Create instant response
+                if response_data["action"] == "help":
+                    return {
+                        "success": True,
+                        "response": {
+                            "message": "🎤 **Available Commands**\n\n• 'Take screenshot' - Capture screen\n• 'Click [element name]' - Click interface elements\n• 'Open settings' - Open settings panel\n• 'Help' - Show this help message\n\nYou can use voice or text input!",
+                            "action": "help",
+                            "confidence": response_data["confidence"]
+                        },
+                        "action_result": {"action_executed": False, "message": "Help displayed"},
+                        "processing_time": "< 0.1s",
+                        "model_used": "fast_heuristic",
+                        "query_complexity": 1,
+                        "fast_path": True
+                    }
+                elif response_data["action"] == "click":
+                    # Execute the click action immediately
+                    ollama_response = {
+                        "action": "click",
+                        "element_id": response_data["element_id"],
+                        "confidence": response_data["confidence"],
+                        "message": f"Fast-path click on {response_data['element_id']}"
+                    }
+                    
+                    action_result = await self._execute_suggested_action(ollama_response, current_screen)
+                    
+                    return {
+                        "success": True,
+                        "response": ollama_response,
+                        "action_result": action_result,
+                        "processing_time": "< 0.5s", 
+                        "model_used": "fast_heuristic",
+                        "query_complexity": 1,
+                        "fast_path": True
+                    }
+        
+        return None  # No fast-path match
+    
     async def process_chat_message(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Process chat message through Ollama agent or text reading service"""
+        """Process chat message through Ollama agent or text reading service with caching"""
         try:
+            # Performance optimization: Check response cache for common queries
+            if self._is_cacheable_query(message):
+                cache_key = self._get_cache_key(message)
+                if cache_key in self._response_cache:
+                    cached_entry = self._response_cache[cache_key]
+                    if time.time() - cached_entry["time"] < self._response_cache_duration:
+                        logger.debug(f"Returning cached response for: {message}")
+                        cached_response = cached_entry["response"].copy()
+                        cached_response["from_cache"] = True
+                        return cached_response
+                    else:
+                        # Remove expired cache entry
+                        del self._response_cache[cache_key]
+            
+            # Load screen context first for fast-path processing
+            current_screen = await self._load_kiosk_data_for_context()
+            if not current_screen:
+                # Fallback to basic screen data if kiosk data unavailable
+                current_screen = {
+                    "name": "Chat Interface",
+                    "elements": [
+                        {
+                            "id": "chat_input",
+                            "name": "Message Input",
+                            "coordinates": {"x": 400, "y": 500},
+                            "voice_commands": ["send message", "type message"]
+                        },
+                        {
+                            "id": "voice_button", 
+                            "name": "Voice Input",
+                            "coordinates": {"x": 450, "y": 500},
+                            "voice_commands": ["start recording", "voice input"]
+                        }
+                    ]
+                }
+            
+            # Fast-path processing for simple commands (avoid LLM completely)
+            fast_response = await self._try_fast_path_response(message, current_screen)
+            if fast_response:
+                logger.info(f"Fast-path response for: {message}")
+                return fast_response
+            
             # Check if this is a text reading request first
             if self.text_reading_service and self.text_reading_service.is_text_reading_request(message):
                 logger.info(f"Processing text reading request: {message}")
@@ -429,27 +629,7 @@ class SpeechWebBridge:
                         "query_complexity": 2
                     }
             
-            # Load actual kiosk data for complete screen context
-            current_screen = await self._load_kiosk_data_for_context()
-            if not current_screen:
-                # Fallback to basic screen data if kiosk data unavailable
-                current_screen = {
-                    "name": "Chat Interface",
-                    "elements": [
-                        {
-                            "id": "chat_input",
-                            "name": "Message Input",
-                            "coordinates": {"x": 400, "y": 500},
-                            "voice_commands": ["send message", "type message"]
-                        },
-                        {
-                            "id": "voice_button", 
-                            "name": "Voice Input",
-                            "coordinates": {"x": 450, "y": 500},
-                            "voice_commands": ["start recording", "voice input"]
-                        }
-                    ]
-                }
+            # Screen context already loaded above for performance
             
             # Select optimal model based on query complexity
             optimal_model = self.model_manager.select_optimal_model(message)
@@ -480,7 +660,7 @@ class SpeechWebBridge:
                 # Execute suggested action if applicable
                 action_result = await self._execute_suggested_action(ollama_response, current_screen)
                 
-                return {
+                response = {
                     "success": True,
                     "response": ollama_response,
                     "action_result": action_result,
@@ -488,6 +668,17 @@ class SpeechWebBridge:
                     "model_used": optimal_model,
                     "query_complexity": self.model_manager._analyze_query_complexity(message)
                 }
+                
+                # Cache successful responses for common queries
+                if self._is_cacheable_query(message):
+                    cache_key = self._get_cache_key(message)
+                    self._response_cache[cache_key] = {
+                        "response": response,
+                        "time": time.time()
+                    }
+                    logger.debug(f"Cached response for: {message}")
+                
+                return response
             else:
                 return {
                     "success": False,

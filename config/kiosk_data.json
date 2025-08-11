@@ -356,6 +356,36 @@
           "description": "Text Banner element"
         }
       ]
+    },
+    "vignette_06": {
+      "name": "CCA",
+      "description": "Vignette 6 CCA Demo",
+      "detection_criteria": {
+        "title_text": "vignette_06",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "savedStateLink",
+          "name": "Saved State Link",
+          "coordinates": {
+            "x": 1713,
+            "y": 864
+          },
+          "size": {
+            "width": 61,
+            "height": 63
+          },
+          "voice_commands": [
+            "Click the saved state button"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "First click in CCA demo"
+        }
+      ]
     }
   },
   "global_commands": {
