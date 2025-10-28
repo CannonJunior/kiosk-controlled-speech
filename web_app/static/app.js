@@ -1653,7 +1653,56 @@ class KioskSpeechChat {
         if (this.isRecording) {
             this.stopRecording();
         } else {
+            // Toggle wake word mode: if not in wake word mode, start it; if in wake word mode, stop it
+            if (this.wakeWordActive) {
+                this.stopWakeWordMode();
+            } else {
+                this.startWakeWordMode();
+            }
+        }
+    }
+    
+    startWakeWordMode() {
+        this.wakeWordActive = true;
+        this.elements.voiceButton.classList.add('wake-word-active');
+        this.elements.voiceButton.title = 'Wake Word Mode Active - Click to stop';
+        this.startWakeWordListening();
+        console.log('Wake word mode activated');
+    }
+    
+    stopWakeWordMode() {
+        this.wakeWordActive = false;
+        this.isListeningForWakeWord = false;
+        this.elements.voiceButton.classList.remove('wake-word-active');
+        this.elements.voiceButton.title = 'Voice Input';
+        if (this.isRecording) {
+            this.stopRecording();
+        }
+        console.log('Wake word mode deactivated');
+    }
+    
+    async startWakeWordListening() {
+        if (!this.wakeWordActive || this.isListeningForWakeWord) {
+            return;
+        }
+        
+        this.isListeningForWakeWord = true;
+        console.log('Starting wake word listening...');
+        
+        try {
             await this.startRecording();
+        } catch (error) {
+            console.error('Failed to start wake word listening:', error);
+            this.isListeningForWakeWord = false;
+        }
+    }
+    
+    resumeWakeWordListeningIfActive() {
+        if (this.wakeWordActive && !this.isListeningForWakeWord && !this.isRecording) {
+            console.log('Resuming wake word listening after command processing...');
+            setTimeout(() => {
+                this.startWakeWordListening();
+            }, 1000); // Small delay to ensure cleanup is complete
         }
     }
     
@@ -1911,6 +1960,7 @@ class KioskSpeechChat {
         if (this.mediaRecorder && this.isRecording) {
             this.mediaRecorder.stop();
             this.isRecording = false;
+            this.isListeningForWakeWord = false;
             this.updateRecordingUI(false);
             
             // Stop audio stream
@@ -1918,7 +1968,6 @@ class KioskSpeechChat {
                 this.audioStream.getTracks().forEach(track => track.stop());
                 this.audioStream = null;
             }
-            
             
             console.log('Recording stopped');
         }

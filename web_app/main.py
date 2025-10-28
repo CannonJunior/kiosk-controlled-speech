@@ -311,14 +311,26 @@ class SpeechWebBridge:
                 if element_id:
                     for element in current_screen.get("elements", []):
                         if element.get("id") == element_id:
-                            config_coordinates = element.get("coordinates")
+                            raw_coordinates = element.get("coordinates")
+                            element_size = element.get("size", {})
+                            
+                            # Calculate center point from top-left coordinates and size
+                            if raw_coordinates and element_size:
+                                center_x = raw_coordinates["x"] + (element_size.get("width", 0) // 2)
+                                center_y = raw_coordinates["y"] + (element_size.get("height", 0) // 2)
+                                config_coordinates = {"x": center_x, "y": center_y}
+                                logger.info(f"Calculated center coordinates for {element_id}: {config_coordinates} (from top-left {raw_coordinates} + size {element_size})")
+                            else:
+                                # Fallback to raw coordinates if size not available
+                                config_coordinates = raw_coordinates
+                                logger.warning(f"No size data for {element_id}, using top-left coordinates: {config_coordinates}")
+                            
                             config_element_info = {
                                 "id": element.get("id"),
                                 "name": element.get("name", element_id),
                                 "screen": element.get("source_screen", current_screen.get("name", "unknown")),
                                 "screen_id": element.get("source_screen_id", "unknown")
                             }
-                            logger.info(f"Found coordinates for {element_id} in config: {config_coordinates}")
                             break
                 
                 # Reject any coordinates not from config

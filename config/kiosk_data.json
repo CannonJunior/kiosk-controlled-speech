@@ -194,12 +194,12 @@
           "id": "takeScreenshotButton",
           "name": "Take Screenshot Button",
           "coordinates": {
-            "x": 1122,
-            "y": 313
+            "x": 1633,
+            "y": 296
           },
           "size": {
-            "width": 280,
-            "height": 40
+            "width": 155,
+            "height": 49
           },
           "voice_commands": [
             "take screenshot",
@@ -339,12 +339,12 @@
           "id": "textBannon",
           "name": "Text Banner",
           "coordinates": {
-            "x": 552,
-            "y": 376
+            "x": 185,
+            "y": 467
           },
           "size": {
-            "width": 765,
-            "height": 102
+            "width": 681,
+            "height": 385
           },
           "voice_commands": [
             "Read text"
@@ -354,6 +354,26 @@
           ],
           "action": "click",
           "description": "Text Banner element"
+        },
+        {
+          "id": "vignettes",
+          "name": "vignettes",
+          "coordinates": {
+            "x": 1045,
+            "y": 466
+          },
+          "size": {
+            "width": 679,
+            "height": 389
+          },
+          "voice_commands": [
+            "Click the vignettes button"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Go to vignettes from the splash screen."
         }
       ]
     },

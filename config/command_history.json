@@ -147,6 +147,21 @@
       },
       "corrected_via_feedback": true,
       "timestamp": "2025-08-10T23:43:19.662596"
+    },
+    {
+      "user_command": "Click the Vignettes button.",
+      "action": {
+        "type": "click",
+        "element_id": "vignettes",
+        "coordinates": {
+          "x": 1045,
+          "y": 466
+        },
+        "method": "user_corrected",
+        "description": "corrected to click \"vignettes\" at coordinates {'x': 1045, 'y': 466}"
+      },
+      "corrected_via_feedback": true,
+      "timestamp": "2025-08-13T09:49:44.596570"
     }
   ]
 }

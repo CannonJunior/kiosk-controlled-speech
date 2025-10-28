@@ -295,6 +295,7 @@ Convert this voice command to a specific action. Respond with ONLY a valid JSON 
                 "model": self.config.model,
                 "prompt": f"{self.system_prompt}\n\n{prompt}",
                 "stream": False,
+                "keep_alive": "3600s",  # Keep model alive for 1 hour
                 "options": {
                     "temperature": self.config.temperature,
                     "num_predict": self.config.max_tokens
