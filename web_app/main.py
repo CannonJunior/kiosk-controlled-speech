@@ -1512,6 +1512,271 @@ async def delete_screenshot(screenshot_id: str):
         logger.error(f"Error deleting screenshot {screenshot_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete screenshot: {str(e)}")
 
+@app.post("/api/vignettes/save")
+async def save_vignette(request: Request):
+    """Save a vignette with screenshots to the config folder"""
+    try:
+        data = await request.json()
+        
+        vignette_name = data.get("name", "").strip()
+        if not vignette_name:
+            raise HTTPException(status_code=400, detail="Vignette name is required")
+        
+        # Sanitize vignette name for filesystem
+        safe_name = "".join(c for c in vignette_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_name = safe_name.replace(' ', '_')
+        
+        if not safe_name:
+            raise HTTPException(status_code=400, detail="Invalid vignette name")
+        
+        # Create vignette directory structure
+        config_dir = Path("config").resolve()
+        vignettes_dir = config_dir / "vignettes"
+        vignette_dir = vignettes_dir / safe_name
+        screenshots_dir = vignette_dir / "screenshots"
+        
+        # Create directories
+        vignettes_dir.mkdir(exist_ok=True)
+        vignette_dir.mkdir(exist_ok=True)
+        screenshots_dir.mkdir(exist_ok=True)
+        
+        logger.info(f"Creating vignette directory: {vignette_dir}")
+        
+        # Copy screenshot files to vignette directory
+        screenshots = data.get("screenshotData", [])
+        copied_screenshots = []
+        source_screenshots_dir = Path("web_app/static/screenshots").resolve()
+        
+        for screenshot in screenshots:
+            source_file = source_screenshots_dir / screenshot["filename"]
+            dest_file = screenshots_dir / screenshot["filename"]
+            
+            if source_file.exists():
+                import shutil
+                shutil.copy2(str(source_file), str(dest_file))
+                copied_screenshots.append({
+                    "id": screenshot["id"],
+                    "filename": screenshot["filename"],
+                    "original_path": screenshot["path"],
+                    "vignette_path": f"config/vignettes/{safe_name}/screenshots/{screenshot['filename']}",
+                    "size": screenshot.get("size", 0),
+                    "timestamp": screenshot.get("timestamp", "")
+                })
+                logger.info(f"Copied screenshot: {source_file} -> {dest_file}")
+            else:
+                logger.warning(f"Screenshot file not found: {source_file}")
+        
+        # Save vignette metadata
+        vignette_metadata = {
+            "name": vignette_name,
+            "safe_name": safe_name,
+            "screenshots": data.get("screenshots", []),
+            "annotations": data.get("annotations", {}),
+            "created": data.get("created"),
+            "modified": data.get("modified"),
+            "screenshot_count": len(copied_screenshots),
+            "annotation_count": len(data.get("annotations", {})),
+            "copied_screenshots": copied_screenshots
+        }
+        
+        # Save metadata as JSON file
+        metadata_file = vignette_dir / "vignette.json"
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            import json
+            json.dump(vignette_metadata, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Saved vignette metadata: {metadata_file}")
+        
+        # Update vignettes index
+        vignettes_index_file = vignettes_dir / "index.json"
+        if vignettes_index_file.exists():
+            with open(vignettes_index_file, 'r', encoding='utf-8') as f:
+                vignettes_index = json.load(f)
+        else:
+            vignettes_index = {"vignettes": []}
+        
+        # Update or add vignette in index
+        existing_index = next((i for i, v in enumerate(vignettes_index["vignettes"]) if v["safe_name"] == safe_name), None)
+        vignette_entry = {
+            "name": vignette_name,
+            "safe_name": safe_name,
+            "created": vignette_metadata["created"],
+            "modified": vignette_metadata["modified"],
+            "screenshot_count": len(copied_screenshots),
+            "annotation_count": len(data.get("annotations", {})),
+            "directory": f"config/vignettes/{safe_name}"
+        }
+        
+        if existing_index is not None:
+            vignettes_index["vignettes"][existing_index] = vignette_entry
+        else:
+            vignettes_index["vignettes"].append(vignette_entry)
+        
+        # Save updated index
+        with open(vignettes_index_file, 'w', encoding='utf-8') as f:
+            json.dump(vignettes_index, f, indent=2, ensure_ascii=False)
+        
+        return {
+            "success": True,
+            "message": f"Vignette '{vignette_name}' saved successfully",
+            "vignette_directory": str(vignette_dir),
+            "screenshots_copied": len(copied_screenshots),
+            "metadata_file": str(metadata_file)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving vignette: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save vignette: {str(e)}")
+
+@app.get("/api/vignettes/list")
+async def list_vignettes():
+    """Get list of saved vignettes"""
+    try:
+        vignettes_dir = Path("config/vignettes")
+        vignettes_index_file = vignettes_dir / "index.json"
+        
+        if not vignettes_index_file.exists():
+            return {"success": True, "vignettes": []}
+        
+        with open(vignettes_index_file, 'r', encoding='utf-8') as f:
+            import json
+            vignettes_index = json.load(f)
+        
+        vignettes = vignettes_index.get("vignettes", [])
+        
+        # Add additional metadata for each vignette
+        for vignette in vignettes:
+            vignette_dir = Path(vignette["directory"])
+            metadata_file = vignette_dir / "vignette.json"
+            
+            if metadata_file.exists():
+                try:
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                    vignette["has_metadata"] = True
+                    vignette["screenshots"] = metadata.get("screenshots", [])
+                    vignette["annotations"] = metadata.get("annotations", {})
+                except Exception as e:
+                    logger.warning(f"Could not read metadata for vignette {vignette['name']}: {e}")
+                    vignette["has_metadata"] = False
+            else:
+                vignette["has_metadata"] = False
+        
+        return {"success": True, "vignettes": vignettes}
+        
+    except Exception as e:
+        logger.error(f"Error listing vignettes: {e}")
+        return {"success": False, "error": str(e), "vignettes": []}
+
+@app.get("/api/vignettes/{vignette_name}")
+async def get_vignette(vignette_name: str):
+    """Get a specific vignette's data"""
+    try:
+        # Sanitize vignette name for filesystem
+        safe_name = "".join(c for c in vignette_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_name = safe_name.replace(' ', '_')
+        
+        vignette_dir = Path("config/vignettes") / safe_name
+        metadata_file = vignette_dir / "vignette.json"
+        
+        if not metadata_file.exists():
+            raise HTTPException(status_code=404, detail=f"Vignette '{vignette_name}' not found")
+        
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            import json
+            vignette_data = json.load(f)
+        
+        # Convert screenshot paths to web-accessible URLs
+        for screenshot in vignette_data.get("copied_screenshots", []):
+            # Convert config path to web-accessible path
+            config_path = screenshot.get("vignette_path", "")
+            if config_path:
+                # Create a web-accessible URL for vignette screenshots
+                # For now, we'll reference the original screenshots since they're web-accessible
+                screenshot["web_path"] = screenshot.get("original_path", "")
+        
+        return {"success": True, "vignette": vignette_data}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting vignette {vignette_name}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get vignette: {str(e)}")
+
+@app.post("/api/vignettes/{vignette_name}/load-to-gallery")
+async def load_vignette_to_gallery(vignette_name: str):
+    """Copy vignette screenshots to main gallery"""
+    try:
+        # Sanitize vignette name for filesystem
+        safe_name = "".join(c for c in vignette_name if c.isalnum() or c in (' ', '-', '_')).strip()
+        safe_name = safe_name.replace(' ', '_')
+        
+        vignette_dir = Path("config/vignettes") / safe_name
+        metadata_file = vignette_dir / "vignette.json"
+        
+        if not metadata_file.exists():
+            raise HTTPException(status_code=404, detail=f"Vignette '{vignette_name}' not found")
+        
+        # Load vignette data
+        with open(metadata_file, 'r', encoding='utf-8') as f:
+            import json
+            vignette_data = json.load(f)
+        
+        # Create main screenshots directory if it doesn't exist
+        main_screenshots_dir = Path("web_app/static/screenshots")
+        main_screenshots_dir.mkdir(parents=True, exist_ok=True)
+        
+        copied_count = 0
+        copied_screenshots = []
+        
+        # Copy each screenshot from vignette to main gallery
+        for screenshot_info in vignette_data.get("copied_screenshots", []):
+            screenshot_id = screenshot_info["id"]
+            filename = screenshot_info["filename"]
+            vignette_path = Path(screenshot_info["vignette_path"])
+            
+            # Target path in main screenshots directory
+            main_path = main_screenshots_dir / filename
+            
+            # Copy if source exists and target doesn't already exist
+            if vignette_path.exists():
+                if not main_path.exists():
+                    import shutil
+                    shutil.copy2(vignette_path, main_path)
+                    copied_count += 1
+                    logger.info(f"Copied screenshot {filename} to main gallery")
+                else:
+                    logger.info(f"Screenshot {filename} already exists in main gallery")
+                
+                # Add to copied screenshots list
+                copied_screenshots.append({
+                    "id": screenshot_id,
+                    "filename": filename,
+                    "path": f"/static/screenshots/{filename}",
+                    "size": main_path.stat().st_size if main_path.exists() else 0,
+                    "timestamp": screenshot_info.get("timestamp", "")
+                })
+            else:
+                logger.warning(f"Vignette screenshot {vignette_path} not found")
+        
+        return {
+            "success": True,
+            "data": {
+                "vignette_name": vignette_name,
+                "copied_count": copied_count,
+                "total_screenshots": len(vignette_data.get("copied_screenshots", [])),
+                "screenshots": copied_screenshots
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error loading vignette {vignette_name} to gallery: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load vignette to gallery: {str(e)}")
+
 @app.post("/api/feedback/command-history")
 async def update_command_history(request: Request):
     """Update command history based on user feedback"""

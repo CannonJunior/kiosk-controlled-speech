@@ -1,0 +1,31 @@
+{
+  "vignettes": [
+    {
+      "name": "save-test",
+      "safe_name": "save-test",
+      "created": "2025-12-29T17:59:59.457Z",
+      "modified": "2025-12-29T18:00:14.858Z",
+      "screenshot_count": 2,
+      "annotation_count": 1,
+      "directory": "config/vignettes/save-test"
+    },
+    {
+      "name": "My Vignette",
+      "safe_name": "My_Vignette",
+      "created": "2025-12-29T19:52:35.552Z",
+      "modified": "2025-12-29T20:39:50.743Z",
+      "screenshot_count": 2,
+      "annotation_count": 1,
+      "directory": "config/vignettes/My_Vignette"
+    },
+    {
+      "name": "test3",
+      "safe_name": "test3",
+      "created": "2025-12-29T20:57:20.628Z",
+      "modified": "2025-12-29T20:59:16.052Z",
+      "screenshot_count": 3,
+      "annotation_count": 3,
+      "directory": "config/vignettes/test3"
+    }
+  ]
+}

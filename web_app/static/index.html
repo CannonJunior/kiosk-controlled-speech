@@ -18,40 +18,52 @@
                 </span>
             </div>
             <div class="navbar-center">
-                <div class="drawing-mode-selector">
-                    <i class="fas fa-draw-polygon"></i>
-                    <label for="drawingMode">Draw:</label>
-                    <select id="drawingMode" class="drawing-dropdown">
-                        <option value="none">None</option>
-                        <option value="rectangle">Rectangle</option>
-                    </select>
+                <!-- Reordered to match annotation-navbar structure: vignetteLabel, file-dropdown, selected-screenshot-annotation, navbar-left, visibility toggles -->
+                <span id="mainVignetteLabel" class="vignette-label" contenteditable="true" title="Click to edit vignette name">My Vignette</span>
+                
+                <div class="file-dropdown">
+                    <button class="file-dropdown-trigger" id="mainFileDropdown">
+                        <i class="fas fa-file"></i>
+                        <span>File</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="file-dropdown-menu" id="mainFileDropdownMenu">
+                        <button id="saveButton" class="file-dropdown-item" disabled>
+                            <i class="fas fa-save"></i>
+                            <span>Save Annotation</span>
+                        </button>
+                        <button id="mainVignetteOpenButton" class="file-dropdown-item">
+                            <i class="fas fa-folder-open"></i>
+                            <span>Open Vignette</span>
+                        </button>
+                        <button id="mainVignetteSaveButton" class="file-dropdown-item" disabled>
+                            <i class="fas fa-save"></i>
+                            <span>Save Vignette</span>
+                        </button>
+                    </div>
                 </div>
-                <button id="saveButton" class="save-button" disabled>
-                    <i class="fas fa-save"></i>
-                    <span>Save</span>
-                </button>
-                <div class="button-group">
+                
+                <div class="selected-screenshot-annotation">
                     <div class="group-dropdown group-dropdown-left">
-                        <i class="fas fa-desktop"></i>
-                        <select id="screen" class="group-select">
-                            <option value="">Screen</option>
-                        </select>
-                    </div>
-                    <div class="group-dropdown group-dropdown-right">
-                        <i class="fas fa-cube"></i>
-                        <select id="element" class="group-select">
-                            <option value="">Element</option>
+                        <i class="fas fa-image"></i>
+                        <select id="mainScreenshotAnnotation" class="group-select">
+                            <option value="">Select Screen</option>
                         </select>
                     </div>
                 </div>
-                <div class="mouse-position-display">
-                    <i class="fas fa-mouse-pointer"></i>
-                    <span class="mouse-coords">
-                        Mouse: <span id="mouseX">0</span>, <span id="mouseY">0</span>
-                    </span>
+                
+                <div class="main-navbar-left">
+                    <div class="screenshot-navigation">
+                        <button id="mainPrevScreenshotBtn" class="nav-button" title="Previous Screenshot">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span id="mainScreenshotOrder" class="screenshot-order">1 of 1</span>
+                        <button id="mainNextScreenshotBtn" class="nav-button" title="Next Screenshot">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div class="navbar-right">
+                
                 <div class="elements-visibility-toggle" id="elementsVisibilityToggle" title="Show/Hide element outlines for selected screen">
                     <i class="fas fa-eye-slash"></i>
                     <span id="elementsVisibilityText">Elements Hidden</span>
@@ -60,6 +72,46 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                
+                <div class="main-drawing-elements" id="mainDrawingElements">
+                    <div class="drawing-mode-selector">
+                        <i class="fas fa-draw-polygon"></i>
+                        <label for="drawingMode">Draw:</label>
+                        <select id="drawingMode" class="drawing-dropdown">
+                            <option value="none">None</option>
+                            <option value="rectangle">Rectangle</option>
+                        </select>
+                    </div>
+                    
+                    <div class="button-group">
+                        <div class="group-dropdown group-dropdown-left">
+                            <i class="fas fa-desktop"></i>
+                            <select id="screen" class="group-select">
+                                <option value="">Screen</option>
+                            </select>
+                        </div>
+                        <div class="group-dropdown group-dropdown-right">
+                            <i class="fas fa-cube"></i>
+                            <select id="element" class="group-select">
+                                <option value="">Element</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mouse-position-display">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <span class="mouse-coords">
+                            Mouse: <span id="mouseX">0</span>, <span id="mouseY">0</span>
+                        </span>
+                    </div>
+                </div>
+                
+                <button id="mainUpdateButton" class="update-coords-button" style="display: none;">
+                    <i class="fas fa-crosshairs"></i>
+                    <span>📍 Update with Client Coords</span>
+                </button>
+            </div>
+            <div class="navbar-right">
                 <div class="navbar-stats">
                     <span class="stat-item">
                         <i class="fas fa-clock"></i>
@@ -598,6 +650,40 @@
                 <i class="fas fa-grip-horizontal"></i>
             </div>
             <div class="annotation-navbar-content">
+                <!-- Reordered elements: vignetteLabel, file-dropdown, selected-screenshot-annotation, annotation-navbar-left, annotation-visibility-toggle -->
+                <span id="vignetteLabel" class="vignette-label" contenteditable="true" title="Click to edit vignette name">My Vignette</span>
+                
+                <div class="file-dropdown">
+                    <button class="file-dropdown-trigger" id="annotationFileDropdown">
+                        <i class="fas fa-file"></i>
+                        <span>File</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                    <div class="file-dropdown-menu" id="annotationFileDropdownMenu">
+                        <button id="annotationSaveButton" class="file-dropdown-item" disabled>
+                            <i class="fas fa-save"></i>
+                            <span>Save Annotation</span>
+                        </button>
+                        <button id="vignetteOpenButton" class="file-dropdown-item">
+                            <i class="fas fa-folder-open"></i>
+                            <span>Open Vignette</span>
+                        </button>
+                        <button id="vignetteSaveButton" class="file-dropdown-item" disabled>
+                            <i class="fas fa-save"></i>
+                            <span>Save Vignette</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="selected-screenshot-annotation">
+                    <div class="group-dropdown group-dropdown-left">
+                        <i class="fas fa-image"></i>
+                        <select id="screenshotAnnotation" class="group-select">
+                            <option value="">Select Screen</option>
+                        </select>
+                    </div>
+                </div>
+                
                 <div class="annotation-navbar-left">
                     <span class="annotation-title">
                         <i class="fas fa-draw-polygon"></i>
@@ -613,7 +699,27 @@
                         </button>
                     </div>
                 </div>
-                <div class="annotation-navbar-center">
+                
+                <div class="annotation-visibility-toggle" id="annotationVisibilityToggle" title="Show/Hide annotations for selected screen annotation">
+                    <i class="fas fa-eye-slash"></i>
+                    <span id="annotationVisibilityText">Annotations Hidden</span>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="annotationVisibilityCheckbox">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <div class="drawtools-visibility-toggle" id="drawtoolsVisibilityToggle" title="Show/Hide annotation drawing tools">
+                    <i class="fas fa-eye"></i>
+                    <span id="drawtoolsVisibilityText">Tools Shown</span>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="drawtoolsVisibilityCheckbox" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                
+                <!-- Collapsible drawing elements -->
+                <div class="annotation-drawing-elements" id="annotationDrawingElements">
                     <div class="drawing-mode-selector">
                         <i class="fas fa-draw-polygon"></i>
                         <label for="annotationDrawingMode">Draw:</label>
@@ -622,19 +728,7 @@
                             <option value="rectangle">Rectangle</option>
                         </select>
                     </div>
-                    <span id="vignetteLabel" class="vignette-label" contenteditable="true" title="Click to edit vignette name">My Vignette</span>
-                    <button id="annotationSaveButton" class="save-button" disabled>
-                        <i class="fas fa-save"></i>
-                        <span>Save</span>
-                    </button>
-                    <button id="vignetteSaveButton" class="vignette-save-button" disabled>
-                        <i class="fas fa-folder-open"></i>
-                        <span>Save Vignette</span>
-                    </button>
-                    <button id="annotationUpdateButton" class="update-coords-button" style="display: none;">
-                        <i class="fas fa-crosshairs"></i>
-                        <span>📍 Update with Client Coords</span>
-                    </button>
+                    
                     <div class="button-group">
                         <div class="group-dropdown group-dropdown-left">
                             <i class="fas fa-desktop"></i>
@@ -649,20 +743,14 @@
                             </select>
                         </div>
                     </div>
-                    <div class="selected-screenshot-annotation">
-                        <div class="group-dropdown group-dropdown-left">
-                            <i class="fas fa-image"></i>
-                            <select id="screenshotAnnotation" class="group-select">
-                                <option value="">Screen Annotation</option>
-                            </select>
-                        </div>
-                    </div>
+                    
                     <div class="mouse-position-display">
                         <i class="fas fa-mouse-pointer"></i>
                         <span class="mouse-coords">
                             Mouse: <span id="annotationMouseX">0</span>, <span id="annotationMouseY">0</span>
                         </span>
                     </div>
+                    
                     <div class="elements-visibility-toggle annotation-elements-toggle" id="annotationElementsVisibilityToggle" title="Show/Hide element outlines for selected screen">
                         <i class="fas fa-eye-slash"></i>
                         <span id="annotationElementsVisibilityText">Elements Hidden</span>
@@ -672,6 +760,11 @@
                         </label>
                     </div>
                 </div>
+                
+                <button id="annotationUpdateButton" class="update-coords-button" style="display: none;">
+                    <i class="fas fa-crosshairs"></i>
+                    <span>📍 Update with Client Coords</span>
+                </button>
             </div>
         </div>
         
@@ -684,6 +777,38 @@
         <button class="annotation-exit" id="annotationExit" title="Exit Annotation Mode (ESC)">
             <i class="fas fa-times"></i>
         </button>
+    </div>
+
+    <!-- Vignette Selection Modal -->
+    <div class="vignette-modal" id="vignetteModal" style="display: none;">
+        <div class="modal-backdrop" id="vignetteModalBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-folder-open"></i> Open Vignette</h3>
+                <button class="modal-close" id="vignetteModalClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="vignette-loading" id="vignetteLoading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading vignettes...</span>
+                </div>
+                <div class="vignette-list" id="vignetteList" style="display: none;">
+                    <div class="vignette-list-header">
+                        <span>Select a vignette to open:</span>
+                    </div>
+                    <div class="vignette-items" id="vignetteItems">
+                        <!-- Vignette items will be populated here -->
+                    </div>
+                </div>
+                <div class="vignette-empty" id="vignetteEmpty" style="display: none;">
+                    <i class="fas fa-folder"></i>
+                    <p>No saved vignettes found</p>
+                    <p>Create and save a vignette first</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Error Modal -->

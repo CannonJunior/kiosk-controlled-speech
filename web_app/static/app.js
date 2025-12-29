@@ -89,7 +89,8 @@ class KioskSpeechChat {
         
         // Element visibility settings
         this.elementsVisible = false; // Default to hidden
-        this.currentElementOverlays = []; // Track current overlays
+        this.currentElementOverlays = []; // Track element overlays (blue)
+        this.currentAnnotationOverlays = []; // Track annotation overlays (red)
         this.currentSelectedScreen = null; // Track selected screen
         
         // Browser and URL detection
@@ -359,8 +360,39 @@ class KioskSpeechChat {
             nextScreenshotBtn: document.getElementById('nextScreenshotBtn'),
             screenshotOrder: document.getElementById('screenshotOrder'),
             vignetteLabel: document.getElementById('vignetteLabel'),
+            vignetteOpenButton: document.getElementById('vignetteOpenButton'),
             vignetteSaveButton: document.getElementById('vignetteSaveButton'),
-            screenshotAnnotation: document.getElementById('screenshotAnnotation')
+            screenshotAnnotation: document.getElementById('screenshotAnnotation'),
+            // Vignette modal elements
+            vignetteModal: document.getElementById('vignetteModal'),
+            vignetteModalClose: document.getElementById('vignetteModalClose'),
+            vignetteModalBackdrop: document.getElementById('vignetteModalBackdrop'),
+            vignetteLoading: document.getElementById('vignetteLoading'),
+            vignetteList: document.getElementById('vignetteList'),
+            vignetteItems: document.getElementById('vignetteItems'),
+            vignetteEmpty: document.getElementById('vignetteEmpty'),
+            // Main navbar elements (duplicates of annotation navbar)
+            mainPrevScreenshotBtn: document.getElementById('mainPrevScreenshotBtn'),
+            mainNextScreenshotBtn: document.getElementById('mainNextScreenshotBtn'),
+            mainScreenshotOrder: document.getElementById('mainScreenshotOrder'),
+            mainVignetteLabel: document.getElementById('mainVignetteLabel'),
+            mainVignetteOpenButton: document.getElementById('mainVignetteOpenButton'),
+            mainVignetteSaveButton: document.getElementById('mainVignetteSaveButton'),
+            mainUpdateButton: document.getElementById('mainUpdateButton'),
+            mainScreenshotAnnotation: document.getElementById('mainScreenshotAnnotation'),
+            // File dropdown elements
+            mainFileDropdown: document.getElementById('mainFileDropdown'),
+            mainFileDropdownMenu: document.getElementById('mainFileDropdownMenu'),
+            annotationFileDropdown: document.getElementById('annotationFileDropdown'),
+            annotationFileDropdownMenu: document.getElementById('annotationFileDropdownMenu'),
+            // New annotation and drawtools visibility elements
+            annotationVisibilityToggle: document.getElementById('annotationVisibilityToggle'),
+            annotationVisibilityCheckbox: document.getElementById('annotationVisibilityCheckbox'),
+            annotationVisibilityText: document.getElementById('annotationVisibilityText'),
+            drawtoolsVisibilityToggle: document.getElementById('drawtoolsVisibilityToggle'),
+            drawtoolsVisibilityCheckbox: document.getElementById('drawtoolsVisibilityCheckbox'),
+            drawtoolsVisibilityText: document.getElementById('drawtoolsVisibilityText'),
+            annotationDrawingElements: document.getElementById('annotationDrawingElements')
         };
     }
     
@@ -773,7 +805,7 @@ class KioskSpeechChat {
         
         // Clear previous element overlays if screen changed
         if (this.currentSelectedScreen !== selectedScreen) {
-            this.clearElementOverlays();
+            this.clearAllOverlays();
             this.currentSelectedScreen = selectedScreen;
         }
         
@@ -793,7 +825,7 @@ class KioskSpeechChat {
         
         // If elements are currently visible, redraw them for the new screen
         if (this.elementsVisible && selectedScreen) {
-            this.showElementOverlays(selectedScreen);
+            this.showElementOverlays(selectedScreen, false);
         }
         
         if (selectedScreen) {
@@ -1124,6 +1156,7 @@ class KioskSpeechChat {
         // Save button
         this.elements.saveButton.addEventListener('click', () => {
             this.handleSaveCoordinates();
+            this.closeFileDropdowns(); // Close dropdown after save action
         });
         
         // Settings toggle
@@ -2752,16 +2785,16 @@ class KioskSpeechChat {
             }
         }
         
-        // Show or hide element overlays based on current state
+        // Show or hide element overlays (blue) based on current state
         // Use annotation screen dropdown if in annotation mode, otherwise use main screen dropdown
         const selectedScreen = (this.annotationMode && this.annotationMode.isActive) 
             ? this.elements.annotationScreen.value 
             : this.elements.screenDropdown.value;
             
         if (this.elementsVisible && selectedScreen) {
-            this.showElementOverlays(selectedScreen);
+            this.showElementOverlays(selectedScreen, false); // Explicitly pass false for element overlays
         } else {
-            this.clearElementOverlays();
+            this.clearElementOverlays(); // Only clear element overlays, not annotation overlays
         }
         
         // Add a status message to chat
@@ -2772,9 +2805,13 @@ class KioskSpeechChat {
         localStorage.setItem('elementsVisible', this.elementsVisible);
     }
 
-    showElementOverlays(screenId) {
-        // Clear existing overlays first
-        this.clearElementOverlays();
+    showElementOverlays(screenId, isAnnotationOverlay = false) {
+        // Clear only the appropriate type of overlays
+        if (isAnnotationOverlay) {
+            this.clearAnnotationOverlays();
+        } else {
+            this.clearElementOverlays();
+        }
         
         if (!this.kioskData || !this.kioskData.screens || !screenId) {
             return;
@@ -2786,10 +2823,11 @@ class KioskSpeechChat {
             return;
         }
         
-        console.log(`Showing ${screenData.elements.length} element overlays for screen: ${screenId}`);
+        const overlayType = isAnnotationOverlay ? 'annotation (red)' : 'element (blue)';
+        console.log(`Showing ${screenData.elements.length} ${overlayType} overlays for screen: ${screenId}`);
         
         screenData.elements.forEach(element => {
-            this.createElementOverlay(element);
+            this.createElementOverlay(element, isAnnotationOverlay);
         });
     }
 
@@ -2811,9 +2849,9 @@ class KioskSpeechChat {
         return { x: offsetX, y: offsetY };
     }
 
-    createElementOverlay(element) {
+    createElementOverlay(element, isAnnotationOverlay = false) {
         const overlay = document.createElement('div');
-        overlay.className = 'element-overlay';
+        overlay.className = isAnnotationOverlay ? 'element-overlay annotation-overlay' : 'element-overlay';
         overlay.setAttribute('data-element-id', element.id);
         
         // Calculate proper positioning offset for layout
@@ -2827,7 +2865,7 @@ class KioskSpeechChat {
         
         // Debug: Log overlay creation and check if in annotation mode
         const isInAnnotationMode = document.body.classList.contains('annotation-mode-active');
-        console.log(`Creating element overlay for ${element.id}, annotation mode: ${isInAnnotationMode}`);
+        console.log(`Creating element overlay for ${element.id}, annotation mode: ${isInAnnotationMode}, annotation overlay: ${isAnnotationOverlay}`);
         
         // Create and add label
         const label = document.createElement('div');
@@ -2835,9 +2873,13 @@ class KioskSpeechChat {
         label.textContent = element.name || element.id;
         overlay.appendChild(label);
         
-        // Add to page and track overlay
+        // Add to page and track overlay in appropriate array
         document.body.appendChild(overlay);
-        this.currentElementOverlays.push(overlay);
+        if (isAnnotationOverlay) {
+            this.currentAnnotationOverlays.push(overlay);
+        } else {
+            this.currentElementOverlays.push(overlay);
+        }
         
         // Debug: Check computed z-index after adding to DOM
         const computedStyle = window.getComputedStyle(overlay);
@@ -2851,7 +2893,23 @@ class KioskSpeechChat {
             }
         });
         this.currentElementOverlays = [];
-        console.log('Cleared all element overlays');
+        console.log('Cleared element overlays (blue)');
+    }
+    
+    clearAnnotationOverlays() {
+        this.currentAnnotationOverlays.forEach(overlay => {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        });
+        this.currentAnnotationOverlays = [];
+        console.log('Cleared annotation overlays (red)');
+    }
+    
+    clearAllOverlays() {
+        this.clearElementOverlays();
+        this.clearAnnotationOverlays();
+        console.log('Cleared all overlays (elements and annotations)');
     }
 
     loadElementsVisibilityPreference() {
@@ -3909,6 +3967,7 @@ class ScreenshotAnnotationMode {
         // Save button
         this.kioskChat.elements.annotationSaveButton.addEventListener('click', () => {
             this.handleSave();
+            this.closeFileDropdowns(); // Close dropdown after save action
         });
         
         // Update with Screen Coords button
@@ -3936,7 +3995,7 @@ class ScreenshotAnnotationMode {
         
         // Vignette controls
         this.kioskChat.elements.vignetteLabel.addEventListener('blur', () => {
-            this.updateVignetteName();
+            this.updateVignetteName(this.kioskChat.elements.vignetteLabel);
         });
         
         this.kioskChat.elements.vignetteLabel.addEventListener('keydown', (e) => {
@@ -3946,13 +4005,93 @@ class ScreenshotAnnotationMode {
             }
         });
         
+        // Main navbar vignette label event listeners
+        this.kioskChat.elements.mainVignetteLabel.addEventListener('blur', () => {
+            this.updateVignetteName(this.kioskChat.elements.mainVignetteLabel);
+        });
+        
+        this.kioskChat.elements.mainVignetteLabel.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.kioskChat.elements.mainVignetteLabel.blur();
+            }
+        });
+        
+        this.kioskChat.elements.vignetteOpenButton.addEventListener('click', () => {
+            this.openVignetteModal();
+        });
+        
         this.kioskChat.elements.vignetteSaveButton.addEventListener('click', () => {
+            console.log('Vignette save button clicked');
+            console.log('Button disabled:', this.kioskChat.elements.vignetteSaveButton.disabled);
+            console.log('Screenshots:', this.kioskChat.vignettes.current.screenshots);
             this.saveVignette();
+            this.closeFileDropdowns(); // Close dropdown after save action
         });
         
         // Screenshot annotation dropdown
         this.kioskChat.elements.screenshotAnnotation.addEventListener('change', () => {
             this.handleScreenshotAnnotationChange();
+        });
+        
+        // Main navbar event listeners (duplicate functionality for main navbar)
+        this.kioskChat.elements.mainVignetteOpenButton.addEventListener('click', () => {
+            this.openVignetteModal();
+        });
+        
+        this.kioskChat.elements.mainVignetteSaveButton.addEventListener('click', () => {
+            console.log('Main vignette save button clicked');
+            this.saveVignette();
+            this.closeFileDropdowns(); // Close dropdown after save action
+        });
+        
+        this.kioskChat.elements.mainPrevScreenshotBtn.addEventListener('click', () => {
+            this.navigateScreenshot(-1);
+        });
+        
+        this.kioskChat.elements.mainNextScreenshotBtn.addEventListener('click', () => {
+            this.navigateScreenshot(1);
+        });
+        
+        this.kioskChat.elements.mainScreenshotAnnotation.addEventListener('change', () => {
+            this.handleMainScreenshotAnnotationChange();
+        });
+        
+        // File dropdown event listeners
+        this.kioskChat.elements.mainFileDropdown.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.toggleFileDropdown('main');
+        });
+        
+        this.kioskChat.elements.annotationFileDropdown.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.toggleFileDropdown('annotation');
+        });
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-dropdown')) {
+                this.closeFileDropdowns();
+            }
+        });
+        
+        // Annotation visibility toggle event listener (for element overlays)
+        this.kioskChat.elements.annotationVisibilityCheckbox.addEventListener('change', () => {
+            this.toggleAnnotationElementOverlays();
+        });
+        
+        // Drawtools visibility toggle event listener (for drawing tools)
+        this.kioskChat.elements.drawtoolsVisibilityCheckbox.addEventListener('change', () => {
+            this.toggleAnnotationDrawingElements();
+        });
+        
+        // Vignette modal event listeners
+        this.kioskChat.elements.vignetteModalClose.addEventListener('click', () => {
+            this.closeVignetteModal();
+        });
+        
+        this.kioskChat.elements.vignetteModalBackdrop.addEventListener('click', () => {
+            this.closeVignetteModal();
         });
         
         // Mouse position tracking
@@ -4047,11 +4186,12 @@ class ScreenshotAnnotationMode {
         this.kioskChat.elements.annotationNavbar.style.left = this.navbarPosition.x + 'px';
         this.kioskChat.elements.annotationNavbar.style.top = this.navbarPosition.y + 'px';
         
-        // Initialize dropdowns with current data
-        this.populateDropdowns();
-        
-        // Initialize vignette system
+        // Initialize vignette system first (this will populate dropdowns)
+        console.log('Vignette save button element:', this.kioskChat.elements.vignetteSaveButton);
         this.initializeVignetteSystem();
+        
+        // Initialize other annotation dropdowns with current data
+        this.populateAnnotationDropdowns();
         
         // Show modal
         this.kioskChat.elements.screenshotAnnotationModal.style.display = 'block';
@@ -4093,21 +4233,22 @@ class ScreenshotAnnotationMode {
         console.log('Exited screenshot annotation mode');
     }
     
-    populateDropdowns() {
-        // Clear existing options
+    populateAnnotationDropdowns() {
+        // Clear existing options for annotation navbar (screen and element only)
         this.kioskChat.elements.annotationScreen.innerHTML = '<option value="">Screen</option>';
         this.kioskChat.elements.annotationElement.innerHTML = '<option value="">Element</option>';
         
-        // Populate screen dropdown
+        // Populate screen dropdown for annotation navbar
         if (this.kioskChat.kioskData && this.kioskChat.kioskData.screens) {
             Object.entries(this.kioskChat.kioskData.screens).forEach(([screenKey, screen]) => {
-                const option = document.createElement('option');
-                option.value = screenKey;
-                option.textContent = screen.name || screenKey;
-                this.kioskChat.elements.annotationScreen.appendChild(option);
+                // Annotation navbar screen dropdown
+                const annotationOption = document.createElement('option');
+                annotationOption.value = screenKey;
+                annotationOption.textContent = screen.name || screenKey;
+                this.kioskChat.elements.annotationScreen.appendChild(annotationOption);
             });
             
-            // Add "Add New Screen..." option
+            // Add "Add New Screen..." option to annotation screen dropdown
             const addNewOption = document.createElement('option');
             addNewOption.value = '__add_new_screen__';
             addNewOption.textContent = '+ Add New Screen...';
@@ -4132,7 +4273,7 @@ class ScreenshotAnnotationMode {
         
         // Update element overlays if elements are currently visible
         if (this.kioskChat.elementsVisible && selectedScreen) {
-            this.kioskChat.showElementOverlays(selectedScreen);
+            this.kioskChat.showElementOverlays(selectedScreen, false);
         } else if (!selectedScreen) {
             this.kioskChat.clearElementOverlays();
         }
@@ -4502,28 +4643,75 @@ class ScreenshotAnnotationMode {
     
     updateNavigationButtons() {
         const screenshots = this.kioskChat.vignettes.current.screenshots;
-        this.kioskChat.elements.prevScreenshotBtn.disabled = this.kioskChat.currentScreenshotIndex <= 0;
-        this.kioskChat.elements.nextScreenshotBtn.disabled = this.kioskChat.currentScreenshotIndex >= screenshots.length - 1;
+        const prevDisabled = this.kioskChat.currentScreenshotIndex <= 0;
+        const nextDisabled = this.kioskChat.currentScreenshotIndex >= screenshots.length - 1;
+        
+        // Update annotation navbar buttons
+        this.kioskChat.elements.prevScreenshotBtn.disabled = prevDisabled;
+        this.kioskChat.elements.nextScreenshotBtn.disabled = nextDisabled;
+        
+        // Update main navbar buttons
+        this.kioskChat.elements.mainPrevScreenshotBtn.disabled = prevDisabled;
+        this.kioskChat.elements.mainNextScreenshotBtn.disabled = nextDisabled;
     }
     
     updateScreenshotOrder() {
         const screenshots = this.kioskChat.vignettes.current.screenshots;
         const orderText = screenshots.length === 0 ? '0 of 0' : `${this.kioskChat.currentScreenshotIndex + 1} of ${screenshots.length}`;
+        
+        // Update both annotation and main navbar
         this.kioskChat.elements.screenshotOrder.textContent = orderText;
+        this.kioskChat.elements.mainScreenshotOrder.textContent = orderText;
     }
     
-    updateVignetteName() {
-        const newName = this.kioskChat.elements.vignetteLabel.textContent.trim();
+    updateVignetteName(sourceElement) {
+        const newName = sourceElement.textContent.trim();
         if (newName && newName !== this.kioskChat.currentVignetteName) {
             this.kioskChat.currentVignetteName = newName;
             this.kioskChat.vignettes.current.name = newName;
             this.kioskChat.vignettes.current.modified = new Date().toISOString();
             this.updateVignetteSaveButton();
+            
+            // Sync both labels with the new name
+            this.kioskChat.elements.vignetteLabel.textContent = newName;
+            this.kioskChat.elements.mainVignetteLabel.textContent = newName;
         }
     }
     
     handleScreenshotAnnotationChange() {
         const selectedScreen = this.kioskChat.elements.screenshotAnnotation.value;
+        if (!selectedScreen) {
+            // Clear annotation overlays if no screen is selected
+            this.kioskChat.clearAnnotationOverlays();
+            return;
+        }
+        
+        const screenshots = this.kioskChat.vignettes.current.screenshots;
+        if (screenshots.length === 0) return;
+        
+        const currentScreenshotId = screenshots[this.kioskChat.currentScreenshotIndex];
+        
+        // Store the annotation for this screenshot
+        if (!this.kioskChat.vignettes.current.annotations[currentScreenshotId]) {
+            this.kioskChat.vignettes.current.annotations[currentScreenshotId] = {};
+        }
+        
+        this.kioskChat.vignettes.current.annotations[currentScreenshotId].screenAnnotation = selectedScreen;
+        this.kioskChat.vignettes.current.modified = new Date().toISOString();
+        this.updateVignetteSaveButton();
+        
+        // Sync with main navbar dropdown
+        this.kioskChat.elements.mainScreenshotAnnotation.value = selectedScreen;
+        
+        // Update element overlays if annotation visibility toggle is enabled
+        const annotationVisibilityEnabled = this.kioskChat.elements.annotationVisibilityCheckbox.checked;
+        if (annotationVisibilityEnabled) {
+            this.kioskChat.showElementOverlays(selectedScreen, true);
+        }
+    }
+    
+    handleMainScreenshotAnnotationChange() {
+        const selectedScreen = this.kioskChat.elements.mainScreenshotAnnotation.value;
         if (!selectedScreen) return;
         
         const screenshots = this.kioskChat.vignettes.current.screenshots;
@@ -4539,14 +4727,34 @@ class ScreenshotAnnotationMode {
         this.kioskChat.vignettes.current.annotations[currentScreenshotId].screenAnnotation = selectedScreen;
         this.kioskChat.vignettes.current.modified = new Date().toISOString();
         this.updateVignetteSaveButton();
+        
+        // Sync with annotation navbar dropdown
+        this.kioskChat.elements.screenshotAnnotation.value = selectedScreen;
     }
     
     loadScreenshotAnnotation(screenshotId) {
         const annotation = this.kioskChat.vignettes.current.annotations[screenshotId];
-        if (annotation && annotation.screenAnnotation) {
-            this.kioskChat.elements.screenshotAnnotation.value = annotation.screenAnnotation;
-        } else {
-            this.kioskChat.elements.screenshotAnnotation.value = '';
+        const annotationValue = (annotation && annotation.screenAnnotation) ? annotation.screenAnnotation : '';
+        
+        console.log('Loading screenshot annotation for ID:', screenshotId);
+        console.log('Found annotation:', annotation);
+        console.log('Annotation value:', annotationValue);
+        console.log('Available options in dropdown:', [...this.kioskChat.elements.screenshotAnnotation.options].map(opt => ({value: opt.value, text: opt.textContent})));
+        
+        // Update both annotation and main navbar dropdowns
+        this.kioskChat.elements.screenshotAnnotation.value = annotationValue;
+        this.kioskChat.elements.mainScreenshotAnnotation.value = annotationValue;
+        
+        // Verify the value was set correctly
+        console.log('Dropdown value after setting:', this.kioskChat.elements.screenshotAnnotation.value);
+        
+        // Update element overlays if annotation visibility toggle is enabled and there's an annotation
+        const annotationVisibilityEnabled = this.kioskChat.elements.annotationVisibilityCheckbox.checked;
+        if (annotationVisibilityEnabled && annotationValue) {
+            this.kioskChat.showElementOverlays(annotationValue, true);
+        } else if (!annotationValue) {
+            // Clear annotation overlays if no annotation is set
+            this.kioskChat.clearAnnotationOverlays();
         }
     }
     
@@ -4554,10 +4762,36 @@ class ScreenshotAnnotationMode {
         // Enable vignette save button if there are any screenshots or changes
         const hasScreenshots = this.kioskChat.vignettes.current.screenshots.length > 0;
         const hasAnnotations = Object.keys(this.kioskChat.vignettes.current.annotations).length > 0;
-        this.kioskChat.elements.vignetteSaveButton.disabled = !(hasScreenshots || hasAnnotations);
+        const shouldEnable = hasScreenshots || hasAnnotations;
+        console.log('updateVignetteSaveButton:', {hasScreenshots, hasAnnotations, shouldEnable});
+        
+        // Update both annotation and main navbar save buttons
+        this.kioskChat.elements.vignetteSaveButton.disabled = !shouldEnable;
+        this.kioskChat.elements.mainVignetteSaveButton.disabled = !shouldEnable;
     }
     
     async saveVignette() {
+        console.log('saveVignette method called');
+        
+        // Validate that all screenshots have valid screen annotations
+        const invalidScreenshots = [];
+        for (const screenshotId of this.kioskChat.vignettes.current.screenshots) {
+            const annotation = this.kioskChat.vignettes.current.annotations[screenshotId];
+            const hasValidScreen = annotation && annotation.screenAnnotation && annotation.screenAnnotation.trim() !== '';
+            
+            if (!hasValidScreen) {
+                const screenshot = this.kioskChat.screenshots.find(s => s.id === screenshotId);
+                const screenshotName = screenshot ? screenshot.filename : screenshotId;
+                invalidScreenshots.push(screenshotName);
+            }
+        }
+        
+        if (invalidScreenshots.length > 0) {
+            const errorMessage = `❌ Cannot save vignette. The following screenshots do not have valid screen names assigned:\n\n${invalidScreenshots.map(name => `• ${name}`).join('\n')}\n\nPlease select a screen name for each screenshot before saving.`;
+            this.kioskChat.addMessage('system', errorMessage);
+            return;
+        }
+        
         try {
             const vignetteData = {
                 name: this.kioskChat.vignettes.current.name,
@@ -4583,13 +4817,22 @@ class ScreenshotAnnotationMode {
             }
             
             // Save to server/local storage
-            await this.saveVignetteToStorage(vignetteData);
+            const result = await this.saveVignetteToStorage(vignetteData);
             
-            this.kioskChat.addMessage('system', 
-                `📁 Vignette "${vignetteData.name}" saved successfully\n` +
-                `Screenshots: ${vignetteData.screenshots.length}\n` +
-                `Annotations: ${Object.keys(vignetteData.annotations).length}`
-            );
+            if (result && result.success) {
+                this.kioskChat.addMessage('system', 
+                    `📁 Vignette "${vignetteData.name}" saved successfully\n` +
+                    `Directory: ${result.vignette_directory}\n` +
+                    `Screenshots copied: ${result.screenshots_copied}\n` +
+                    `Annotations: ${Object.keys(vignetteData.annotations).length}`
+                );
+            } else {
+                this.kioskChat.addMessage('system', 
+                    `📁 Vignette "${vignetteData.name}" saved to localStorage\n` +
+                    `Screenshots: ${vignetteData.screenshots.length}\n` +
+                    `Annotations: ${Object.keys(vignetteData.annotations).length}`
+                );
+            }
             
         } catch (error) {
             console.error('Error saving vignette:', error);
@@ -4598,30 +4841,57 @@ class ScreenshotAnnotationMode {
     }
     
     async saveVignetteToStorage(vignetteData) {
-        // For now, save to localStorage. In production, this could save to server
-        const vignetteKey = `vignette_${vignetteData.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
-        localStorage.setItem(vignetteKey, JSON.stringify(vignetteData));
-        
-        // Also update a list of all vignettes
-        const vignettesListKey = 'saved_vignettes';
-        const existingVignettes = JSON.parse(localStorage.getItem(vignettesListKey) || '[]');
-        
-        const existingIndex = existingVignettes.findIndex(v => v.name === vignetteData.name);
-        const vignetteInfo = {
-            name: vignetteData.name,
-            created: vignetteData.created,
-            modified: vignetteData.modified,
-            screenshotCount: vignetteData.screenshots.length,
-            annotationCount: Object.keys(vignetteData.annotations).length
-        };
-        
-        if (existingIndex >= 0) {
-            existingVignettes[existingIndex] = vignetteInfo;
-        } else {
-            existingVignettes.push(vignetteInfo);
+        try {
+            const response = await fetch('/api/vignettes/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(vignetteData)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const result = await response.json();
+            console.log('Vignette saved to server:', result);
+            
+            return result;
+            
+        } catch (error) {
+            console.error('Error saving vignette to server:', error);
+            
+            // Fallback to localStorage if server save fails
+            console.log('Falling back to localStorage...');
+            const vignetteKey = `vignette_${vignetteData.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+            localStorage.setItem(vignetteKey, JSON.stringify(vignetteData));
+            
+            // Also update a list of all vignettes
+            const vignettesListKey = 'saved_vignettes';
+            const existingVignettes = JSON.parse(localStorage.getItem(vignettesListKey) || '[]');
+            
+            const existingIndex = existingVignettes.findIndex(v => v.name === vignetteData.name);
+            const vignetteInfo = {
+                name: vignetteData.name,
+                created: vignetteData.created,
+                modified: vignetteData.modified,
+                screenshotCount: vignetteData.screenshots.length,
+                annotationCount: Object.keys(vignetteData.annotations).length
+            };
+            
+            if (existingIndex >= 0) {
+                existingVignettes[existingIndex] = vignetteInfo;
+            } else {
+                existingVignettes.push(vignetteInfo);
+            }
+            
+            localStorage.setItem(vignettesListKey, JSON.stringify(existingVignettes));
+            
+            // Re-throw error to be handled by caller
+            throw error;
         }
-        
-        localStorage.setItem(vignettesListKey, JSON.stringify(existingVignettes));
     }
     
     // Initialize vignette system when annotation mode opens
@@ -4650,21 +4920,274 @@ class ScreenshotAnnotationMode {
     }
     
     populateScreenshotAnnotationDropdown() {
-        const dropdown = this.kioskChat.elements.screenshotAnnotation;
+        const annotationDropdown = this.kioskChat.elements.screenshotAnnotation;
+        const mainDropdown = this.kioskChat.elements.mainScreenshotAnnotation;
         
-        // Clear existing options except the default
-        while (dropdown.children.length > 1) {
-            dropdown.removeChild(dropdown.lastChild);
+        // Clear existing options except the default for both dropdowns
+        while (annotationDropdown.children.length > 1) {
+            annotationDropdown.removeChild(annotationDropdown.lastChild);
+        }
+        while (mainDropdown.children.length > 1) {
+            mainDropdown.removeChild(mainDropdown.lastChild);
         }
         
-        // Add screen options from kiosk data
+        // Update default text
+        annotationDropdown.children[0].textContent = "Select Screen";
+        mainDropdown.children[0].textContent = "Select Screen";
+        
+        // Add screen options from kiosk data to both dropdowns
         if (this.kioskChat.kioskData && this.kioskChat.kioskData.screens) {
             for (const [screenId, screenData] of Object.entries(this.kioskChat.kioskData.screens)) {
-                const option = document.createElement('option');
-                option.value = screenId;
-                option.textContent = screenData.name || screenId;
-                dropdown.appendChild(option);
+                // Annotation dropdown option
+                const annotationOption = document.createElement('option');
+                annotationOption.value = screenId;
+                annotationOption.textContent = screenData.name || screenId;
+                annotationDropdown.appendChild(annotationOption);
+                
+                // Main dropdown option
+                const mainOption = document.createElement('option');
+                mainOption.value = screenId;
+                mainOption.textContent = screenData.name || screenId;
+                mainDropdown.appendChild(mainOption);
             }
+        }
+    }
+    
+    // Vignette Modal Methods
+    async openVignetteModal() {
+        // Show modal
+        this.kioskChat.elements.vignetteModal.style.display = 'flex';
+        
+        // Show loading state
+        this.kioskChat.elements.vignetteLoading.style.display = 'flex';
+        this.kioskChat.elements.vignetteList.style.display = 'none';
+        this.kioskChat.elements.vignetteEmpty.style.display = 'none';
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+        
+        try {
+            // Fetch vignettes from server
+            const response = await fetch('/api/vignettes/list');
+            const data = await response.json();
+            
+            if (data.success && data.vignettes.length > 0) {
+                this.populateVignetteList(data.vignettes);
+                this.kioskChat.elements.vignetteLoading.style.display = 'none';
+                this.kioskChat.elements.vignetteList.style.display = 'block';
+            } else {
+                this.kioskChat.elements.vignetteLoading.style.display = 'none';
+                this.kioskChat.elements.vignetteEmpty.style.display = 'flex';
+            }
+        } catch (error) {
+            console.error('Error loading vignettes:', error);
+            this.kioskChat.elements.vignetteLoading.style.display = 'none';
+            this.kioskChat.elements.vignetteEmpty.style.display = 'flex';
+        }
+    }
+    
+    closeVignetteModal() {
+        this.kioskChat.elements.vignetteModal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    
+    toggleFileDropdown(type) {
+        const dropdown = type === 'main' ? 
+            this.kioskChat.elements.mainFileDropdown.parentElement : 
+            this.kioskChat.elements.annotationFileDropdown.parentElement;
+        
+        // Close the other dropdown first
+        const otherType = type === 'main' ? 'annotation' : 'main';
+        const otherDropdown = otherType === 'main' ? 
+            this.kioskChat.elements.mainFileDropdown.parentElement : 
+            this.kioskChat.elements.annotationFileDropdown.parentElement;
+        otherDropdown.classList.remove('open');
+        
+        // Toggle current dropdown
+        dropdown.classList.toggle('open');
+    }
+    
+    closeFileDropdowns() {
+        this.kioskChat.elements.mainFileDropdown.parentElement.classList.remove('open');
+        this.kioskChat.elements.annotationFileDropdown.parentElement.classList.remove('open');
+    }
+    
+    toggleAnnotationDrawingElements() {
+        const isChecked = this.kioskChat.elements.drawtoolsVisibilityCheckbox.checked;
+        const elementsDiv = this.kioskChat.elements.annotationDrawingElements;
+        const toggleIcon = this.kioskChat.elements.drawtoolsVisibilityToggle.querySelector('i');
+        const toggleText = this.kioskChat.elements.drawtoolsVisibilityText;
+        
+        if (isChecked) {
+            elementsDiv.classList.remove('hidden');
+            toggleIcon.className = 'fas fa-eye';
+            toggleText.textContent = 'Tools Shown';
+        } else {
+            elementsDiv.classList.add('hidden');
+            toggleIcon.className = 'fas fa-eye-slash';
+            toggleText.textContent = 'Tools Hidden';
+        }
+    }
+    
+    toggleAnnotationElementOverlays() {
+        const isChecked = this.kioskChat.elements.annotationVisibilityCheckbox.checked;
+        const toggleIcon = this.kioskChat.elements.annotationVisibilityToggle.querySelector('i');
+        const toggleText = this.kioskChat.elements.annotationVisibilityText;
+        
+        if (isChecked) {
+            toggleIcon.className = 'fas fa-eye';
+            toggleText.textContent = 'Annotations Visible';
+        } else {
+            toggleIcon.className = 'fas fa-eye-slash';
+            toggleText.textContent = 'Annotations Hidden';
+        }
+        
+        // Control annotation overlays for the selected screen annotation
+        const selectedScreenAnnotation = this.kioskChat.elements.screenshotAnnotation.value;
+        if (selectedScreenAnnotation) {
+            if (isChecked) {
+                // Show annotation overlays for the selected screen annotation (red color)
+                this.kioskChat.showElementOverlays(selectedScreenAnnotation, true);
+            } else {
+                // Hide only annotation overlays
+                this.kioskChat.clearAnnotationOverlays();
+            }
+        } else if (!isChecked) {
+            // Clear annotation overlays when toggled off
+            this.kioskChat.clearAnnotationOverlays();
+        }
+    }
+    
+    populateVignetteList(vignettes) {
+        const vignetteItems = this.kioskChat.elements.vignetteItems;
+        vignetteItems.innerHTML = '';
+        
+        vignettes.forEach(vignette => {
+            const vignetteItem = document.createElement('div');
+            vignetteItem.className = 'vignette-item';
+            vignetteItem.dataset.vignetteName = vignette.name;
+            
+            const createdDate = new Date(vignette.created).toLocaleDateString();
+            const modifiedDate = new Date(vignette.modified).toLocaleDateString();
+            
+            vignetteItem.innerHTML = `
+                <div class="vignette-item-icon">
+                    <i class="fas fa-images"></i>
+                </div>
+                <div class="vignette-item-content">
+                    <div class="vignette-item-name">${vignette.name}</div>
+                    <div class="vignette-item-details">
+                        <div class="vignette-item-detail">
+                            <i class="fas fa-camera"></i>
+                            <span>${vignette.screenshot_count} screenshots</span>
+                        </div>
+                        <div class="vignette-item-detail">
+                            <i class="fas fa-tag"></i>
+                            <span>${vignette.annotation_count} annotations</span>
+                        </div>
+                        <div class="vignette-item-detail">
+                            <i class="fas fa-calendar"></i>
+                            <span>Modified ${modifiedDate}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            vignetteItem.addEventListener('click', () => {
+                this.loadVignette(vignette.name);
+            });
+            
+            vignetteItems.appendChild(vignetteItem);
+        });
+    }
+    
+    async loadVignette(vignetteName) {
+        try {
+            // Show loading feedback
+            this.kioskChat.addMessage('system', `📂 Loading vignette: ${vignetteName}...`);
+            
+            // Fetch vignette data
+            const response = await fetch(`/api/vignettes/${encodeURIComponent(vignetteName)}`);
+            
+            if (!response.ok) {
+                throw new Error(`Failed to load vignette: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to load vignette');
+            }
+            
+            const vignetteData = data.vignette;
+            
+            // Load vignette into current annotation session
+            this.kioskChat.vignettes.current = {
+                name: vignetteData.name,
+                screenshots: vignetteData.screenshots || [],
+                annotations: vignetteData.annotations || {},
+                created: vignetteData.created,
+                modified: vignetteData.modified
+            };
+            
+            this.kioskChat.currentVignetteName = vignetteData.name;
+            this.kioskChat.currentScreenshotIndex = 0;
+            
+            // Update UI
+            this.kioskChat.elements.vignetteLabel.textContent = vignetteData.name;
+            this.kioskChat.elements.mainVignetteLabel.textContent = vignetteData.name;
+            this.populateScreenshotAnnotationDropdown();
+            
+            if (this.kioskChat.vignettes.current.screenshots.length > 0) {
+                this.updateScreenshotDisplay();
+            }
+            this.updateNavigationButtons();
+            this.updateScreenshotOrder();
+            this.updateVignetteSaveButton();
+            
+            // Load vignette screenshots to main gallery
+            this.kioskChat.addMessage('system', `📸 Loading vignette screenshots to gallery...`);
+            
+            try {
+                const galleryResponse = await fetch(`/api/vignettes/${encodeURIComponent(vignetteName)}/load-to-gallery`, {
+                    method: 'POST'
+                });
+                
+                if (!galleryResponse.ok) {
+                    throw new Error(`Failed to load screenshots: ${galleryResponse.status} ${galleryResponse.statusText}`);
+                }
+                
+                const galleryData = await galleryResponse.json();
+                
+                if (galleryData.success) {
+                    // Update gallery with loaded screenshots
+                    await this.kioskChat.loadScreenshots();  // Refresh gallery from file system
+                    
+                    this.kioskChat.addMessage('system', 
+                        `📁 Vignette "${vignetteData.name}" loaded successfully\n` +
+                        `Screenshots: ${this.kioskChat.vignettes.current.screenshots.length}\n` +
+                        `Annotations: ${Object.keys(this.kioskChat.vignettes.current.annotations).length}\n` +
+                        `Gallery updated: ${galleryData.data.copied_count} screenshots added`
+                    );
+                } else {
+                    throw new Error(galleryData.error || 'Failed to load screenshots to gallery');
+                }
+            } catch (galleryError) {
+                console.error('Error loading screenshots to gallery:', galleryError);
+                this.kioskChat.addMessage('system', 
+                    `📁 Vignette "${vignetteData.name}" loaded for annotation\n` +
+                    `⚠️ Gallery update failed: ${galleryError.message}\n` +
+                    `Screenshots: ${this.kioskChat.vignettes.current.screenshots.length}\n` +
+                    `Annotations: ${Object.keys(this.kioskChat.vignettes.current.annotations).length}`
+                );
+            }
+            
+            // Close modal
+            this.closeVignetteModal();
+            
+        } catch (error) {
+            console.error('Error loading vignette:', error);
+            this.kioskChat.addMessage('system', `❌ Error loading vignette: ${error.message}`);
         }
     }
 
