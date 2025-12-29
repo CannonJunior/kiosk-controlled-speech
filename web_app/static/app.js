@@ -32,6 +32,19 @@ class KioskSpeechChat {
         this.screenshotCount = 0;
         this.currentScreenshot = null;
         
+        // Vignette system for organizing screenshots with annotations
+        this.vignettes = {
+            current: {
+                name: 'My Vignette',
+                screenshots: [], // Array of screenshot IDs in order
+                annotations: {}, // Map screenshot ID to annotation data
+                created: new Date().toISOString(),
+                modified: new Date().toISOString()
+            }
+        };
+        this.currentVignetteName = 'My Vignette';
+        this.currentScreenshotIndex = 0;
+        
         // Drawing functionality
         this.drawingMode = 'none';
         this.isDrawing = false;
@@ -92,6 +105,7 @@ class KioskSpeechChat {
         this.initializeNavbar();
         this.loadVADConfig();
         this.loadKioskData();
+        this.loadScreenshots();
         this.loadSettings();
         this.loadOptimizationState();
         this.loadCommandHistory();
@@ -201,6 +215,27 @@ class KioskSpeechChat {
         }
     }
     
+    async loadScreenshots() {
+        try {
+            const response = await fetch('/api/screenshots');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.screenshots = data.screenshots;
+                this.screenshotCount = data.total;
+                console.log(`Loaded ${this.screenshotCount} screenshots from file system`);
+                
+                // Update UI
+                this.updateScreenshotCount();
+                this.populateGallery();
+            } else {
+                console.warn('Failed to load screenshots from server:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading screenshots:', error);
+        }
+    }
+    
     generateClientId() {
         return 'client_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     }
@@ -270,6 +305,9 @@ class KioskSpeechChat {
             takeScreenshotButton: document.getElementById('takeScreenshotButton'),
             screenshotCount: document.getElementById('screenshotCount'),
             screenshotGallery: document.getElementById('screenshotGallery'),
+            galleryControls: document.getElementById('galleryControls'),
+            selectAllScreenshots: document.getElementById('selectAllScreenshots'),
+            deleteSelectedButton: document.getElementById('deleteSelectedButton'),
             screenshotModal: document.getElementById('screenshotModal'),
             modalBackdrop: document.getElementById('modalBackdrop'),
             modalClose: document.getElementById('modalClose'),
@@ -315,7 +353,14 @@ class KioskSpeechChat {
             annotationMouseY: document.getElementById('annotationMouseY'),
             annotationDrawingOverlay: document.getElementById('annotationDrawingOverlay'),
             annotationDrawingRectangle: document.getElementById('annotationDrawingRectangle'),
-            annotationExit: document.getElementById('annotationExit')
+            annotationExit: document.getElementById('annotationExit'),
+            // New annotation elements
+            prevScreenshotBtn: document.getElementById('prevScreenshotBtn'),
+            nextScreenshotBtn: document.getElementById('nextScreenshotBtn'),
+            screenshotOrder: document.getElementById('screenshotOrder'),
+            vignetteLabel: document.getElementById('vignetteLabel'),
+            vignetteSaveButton: document.getElementById('vignetteSaveButton'),
+            screenshotAnnotation: document.getElementById('screenshotAnnotation')
         };
     }
     
@@ -1152,6 +1197,15 @@ class KioskSpeechChat {
         // Take screenshot button
         this.elements.takeScreenshotButton.addEventListener('click', () => {
             this.takeScreenshot();
+        });
+        
+        // Gallery controls event listeners
+        this.elements.selectAllScreenshots.addEventListener('change', () => {
+            this.toggleAllScreenshots();
+        });
+        
+        this.elements.deleteSelectedButton.addEventListener('click', () => {
+            this.deleteSelectedScreenshots();
         });
         
         // Screenshot modal event listeners
@@ -2983,11 +3037,15 @@ class KioskSpeechChat {
                 const data = response.data;
                 
                 // Create screenshot object from MCP response
+                // Extract ID from filename (remove .png extension)
+                const filename = data.filename || `screenshot_${Date.now()}.png`;
+                const screenshotId = filename.replace(/\.(png|jpg|jpeg)$/i, '');
+                
                 const screenshot = {
-                    id: Date.now().toString(),
+                    id: screenshotId,
                     timestamp: new Date().toISOString(),
                     path: data.screenshot_path,
-                    filename: data.filename || `screenshot_${Date.now()}.png`,
+                    filename: filename,
                     size: data.size || 'Unknown size',
                     method: data.method || 'MCP Tool',
                     width: data.width,
@@ -3071,18 +3129,47 @@ class KioskSpeechChat {
         this.elements.screenshotCount.textContent = this.screenshotCount;
     }
     
-    addScreenshotToGallery(screenshot) {
-        // Remove empty state if this is the first screenshot
-        if (this.screenshotCount === 1) {
-            this.elements.screenshotGallery.innerHTML = '';
+    populateGallery() {
+        // Clear gallery first
+        this.elements.screenshotGallery.innerHTML = '';
+        
+        if (this.screenshots.length === 0) {
+            // Show empty state and hide gallery controls
+            this.elements.screenshotGallery.innerHTML = `
+                <div class="gallery-empty">
+                    <i class="fas fa-camera"></i>
+                    <p>No screenshots yet</p>
+                    <p>Click "Take Screenshot" to start</p>
+                </div>
+            `;
+            this.elements.galleryControls.style.display = 'none';
+            return;
         }
         
+        // Show gallery controls
+        this.elements.galleryControls.style.display = 'block';
+        
+        // Add all screenshots to gallery (they're already sorted by timestamp in the API)
+        this.screenshots.forEach(screenshot => {
+            this.addScreenshotToGallery(screenshot);
+        });
+        
+        // Initialize button state
+        this.updateDeleteButtonState();
+        
+        console.log(`Populated gallery with ${this.screenshots.length} screenshots`);
+    }
+
+    addScreenshotToGallery(screenshot) {
         // Create thumbnail element
         const thumbnail = document.createElement('div');
         thumbnail.className = 'screenshot-thumbnail';
         thumbnail.dataset.screenshotId = screenshot.id;
         
         thumbnail.innerHTML = `
+            <div class="thumbnail-checkbox">
+                <input type="checkbox" class="screenshot-checkbox" data-screenshot-id="${screenshot.id}">
+            </div>
             <img src="${screenshot.path}" alt="Screenshot ${screenshot.id}" loading="lazy">
             <div class="thumbnail-overlay">
                 <div class="thumbnail-actions">
@@ -3099,6 +3186,7 @@ class KioskSpeechChat {
         // Add click events for actions
         const viewButton = thumbnail.querySelector('.view-action');
         const annotateButton = thumbnail.querySelector('.annotate-action');
+        const checkbox = thumbnail.querySelector('.screenshot-checkbox');
         
         viewButton.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -3110,8 +3198,137 @@ class KioskSpeechChat {
             this.annotationMode.enterMode(screenshot.path, screenshot);
         });
         
-        // Add to gallery (newest first)
-        this.elements.screenshotGallery.insertBefore(thumbnail, this.elements.screenshotGallery.firstChild);
+        // Add checkbox event listener
+        checkbox.addEventListener('change', () => {
+            this.updateDeleteButtonState();
+        });
+        
+        // Add to gallery 
+        this.elements.screenshotGallery.appendChild(thumbnail);
+    }
+    
+    updateDeleteButtonState() {
+        const checkboxes = this.elements.screenshotGallery.querySelectorAll('.screenshot-checkbox');
+        const checkedBoxes = this.elements.screenshotGallery.querySelectorAll('.screenshot-checkbox:checked');
+        
+        // Update delete button state
+        this.elements.deleteSelectedButton.disabled = checkedBoxes.length === 0;
+        
+        // Update button text
+        const deleteButtonText = this.elements.deleteSelectedButton.querySelector('span');
+        if (checkedBoxes.length === 0) {
+            deleteButtonText.textContent = 'Delete Selected';
+        } else {
+            deleteButtonText.textContent = `Delete Selected (${checkedBoxes.length})`;
+        }
+        
+        // Update select all checkbox state
+        if (checkboxes.length === 0) {
+            this.elements.selectAllScreenshots.checked = false;
+            this.elements.selectAllScreenshots.indeterminate = false;
+        } else if (checkedBoxes.length === checkboxes.length) {
+            this.elements.selectAllScreenshots.checked = true;
+            this.elements.selectAllScreenshots.indeterminate = false;
+        } else if (checkedBoxes.length > 0) {
+            this.elements.selectAllScreenshots.checked = false;
+            this.elements.selectAllScreenshots.indeterminate = true;
+        } else {
+            this.elements.selectAllScreenshots.checked = false;
+            this.elements.selectAllScreenshots.indeterminate = false;
+        }
+    }
+    
+    toggleAllScreenshots() {
+        const checkboxes = this.elements.screenshotGallery.querySelectorAll('.screenshot-checkbox');
+        const shouldCheck = this.elements.selectAllScreenshots.checked;
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = shouldCheck;
+        });
+        
+        this.updateDeleteButtonState();
+    }
+    
+    async deleteSelectedScreenshots() {
+        const checkedBoxes = this.elements.screenshotGallery.querySelectorAll('.screenshot-checkbox:checked');
+        
+        if (checkedBoxes.length === 0) {
+            return;
+        }
+        
+        // Confirm deletion
+        const screenshotIds = Array.from(checkedBoxes).map(cb => cb.dataset.screenshotId);
+        const confirmMessage = `Are you sure you want to delete ${screenshotIds.length} screenshot(s)?\n\nThis action cannot be undone.`;
+        
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        try {
+            // Disable button during operation
+            this.elements.deleteSelectedButton.disabled = true;
+            this.elements.deleteSelectedButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Deleting...</span>';
+            
+            let deletedCount = 0;
+            let errorCount = 0;
+            
+            // Delete each screenshot individually using existing API pattern
+            for (const screenshotId of screenshotIds) {
+                try {
+                    const response = await fetch(`/api/screenshots/${screenshotId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        // Remove from frontend array (similar to existing deleteCurrentScreenshot)
+                        this.screenshots = this.screenshots.filter(s => s.id !== screenshotId);
+                        this.screenshotCount--;
+                        
+                        // Remove from gallery DOM
+                        const thumbnail = this.elements.screenshotGallery.querySelector(`[data-screenshot-id="${screenshotId}"]`);
+                        if (thumbnail) {
+                            thumbnail.remove();
+                        }
+                        
+                        deletedCount++;
+                    } else {
+                        console.error(`Failed to delete screenshot ${screenshotId}: ${response.status}`);
+                        errorCount++;
+                    }
+                } catch (error) {
+                    console.error(`Error deleting screenshot ${screenshotId}:`, error);
+                    errorCount++;
+                }
+            }
+            
+            // Update count and show empty state if needed
+            this.updateScreenshotCount();
+            
+            if (this.screenshotCount === 0) {
+                this.elements.screenshotGallery.innerHTML = `
+                    <div class="gallery-empty">
+                        <i class="fas fa-camera"></i>
+                        <p>No screenshots yet</p>
+                        <p>Click "Take Screenshot" to start</p>
+                    </div>
+                `;
+            }
+            
+            // Show result message
+            if (deletedCount > 0) {
+                this.addMessage('system', `🗑️ Successfully deleted ${deletedCount} screenshot(s)${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+            } else {
+                this.addMessage('system', `❌ Failed to delete screenshots`);
+            }
+            
+        } catch (error) {
+            console.error('Error in bulk delete:', error);
+            this.addMessage('system', `❌ Error deleting screenshots: ${error.message || 'Unknown error'}`);
+        } finally {
+            // Restore button state
+            this.elements.deleteSelectedButton.innerHTML = '<i class="fas fa-trash"></i><span>Delete Selected</span>';
+            this.updateDeleteButtonState();
+        }
     }
     
     openScreenshotModal(screenshot) {
@@ -3393,38 +3610,52 @@ class KioskSpeechChat {
         document.body.removeChild(link);
     }
     
-    deleteCurrentScreenshot() {
+    async deleteCurrentScreenshot() {
         if (!this.currentScreenshot) return;
         
         if (confirm('Are you sure you want to delete this screenshot?')) {
-            // Remove from array
-            this.screenshots = this.screenshots.filter(s => s.id !== this.currentScreenshot.id);
-            this.screenshotCount--;
-            
-            // Remove from gallery
-            const thumbnail = this.elements.screenshotGallery.querySelector(`[data-screenshot-id="${this.currentScreenshot.id}"]`);
-            if (thumbnail) {
-                thumbnail.remove();
+            try {
+                // Call API to delete the file
+                const response = await fetch(`/api/screenshots/${this.currentScreenshot.id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    // Remove from array
+                    this.screenshots = this.screenshots.filter(s => s.id !== this.currentScreenshot.id);
+                    this.screenshotCount--;
+                    
+                    // Remove from gallery
+                    const thumbnail = this.elements.screenshotGallery.querySelector(`[data-screenshot-id="${this.currentScreenshot.id}"]`);
+                    if (thumbnail) {
+                        thumbnail.remove();
+                    }
+                    
+                    // Update count
+                    this.updateScreenshotCount();
+                    
+                    // Show empty state if no screenshots left
+                    if (this.screenshotCount === 0) {
+                        this.elements.screenshotGallery.innerHTML = `
+                            <div class="gallery-empty">
+                                <i class="fas fa-camera"></i>
+                                <p>No screenshots yet</p>
+                                <p>Click "Take Screenshot" to start</p>
+                            </div>
+                        `;
+                    }
+                    
+                    // Close modal
+                    this.closeScreenshotModal();
+                    
+                    this.addMessage('system', '🗑️ Screenshot deleted successfully');
+                } else {
+                    throw new Error(`Failed to delete screenshot: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error deleting screenshot:', error);
+                this.addMessage('system', `❌ Error deleting screenshot: ${error.message}`);
             }
-            
-            // Update count
-            this.updateScreenshotCount();
-            
-            // Show empty state if no screenshots left
-            if (this.screenshotCount === 0) {
-                this.elements.screenshotGallery.innerHTML = `
-                    <div class="gallery-empty">
-                        <i class="fas fa-camera"></i>
-                        <p>No screenshots yet</p>
-                        <p>Click "Take Screenshot" to start</p>
-                    </div>
-                `;
-            }
-            
-            // Close modal
-            this.closeScreenshotModal();
-            
-            console.log('Screenshot deleted:', this.currentScreenshot.filename);
         }
     }
     
@@ -3694,6 +3925,36 @@ class ScreenshotAnnotationMode {
             this.handleElementChange();
         });
         
+        // Screenshot navigation
+        this.kioskChat.elements.prevScreenshotBtn.addEventListener('click', () => {
+            this.navigateScreenshot(-1);
+        });
+        
+        this.kioskChat.elements.nextScreenshotBtn.addEventListener('click', () => {
+            this.navigateScreenshot(1);
+        });
+        
+        // Vignette controls
+        this.kioskChat.elements.vignetteLabel.addEventListener('blur', () => {
+            this.updateVignetteName();
+        });
+        
+        this.kioskChat.elements.vignetteLabel.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.kioskChat.elements.vignetteLabel.blur();
+            }
+        });
+        
+        this.kioskChat.elements.vignetteSaveButton.addEventListener('click', () => {
+            this.saveVignette();
+        });
+        
+        // Screenshot annotation dropdown
+        this.kioskChat.elements.screenshotAnnotation.addEventListener('change', () => {
+            this.handleScreenshotAnnotationChange();
+        });
+        
         // Mouse position tracking
         this.kioskChat.elements.annotationDrawingOverlay.addEventListener('mousemove', (e) => {
             this.updateMousePosition(e);
@@ -3788,6 +4049,9 @@ class ScreenshotAnnotationMode {
         
         // Initialize dropdowns with current data
         this.populateDropdowns();
+        
+        // Initialize vignette system
+        this.initializeVignetteSystem();
         
         // Show modal
         this.kioskChat.elements.screenshotAnnotationModal.style.display = 'block';
@@ -4199,6 +4463,209 @@ class ScreenshotAnnotationMode {
             `✅ Pending coordinate updates saved to config file\n` +
             `All queued changes have been applied.`
         );
+    }
+    
+    // Vignette and Screenshot Navigation Methods
+    navigateScreenshot(direction) {
+        const screenshots = this.kioskChat.vignettes.current.screenshots;
+        if (screenshots.length === 0) return;
+        
+        const newIndex = this.kioskChat.currentScreenshotIndex + direction;
+        
+        if (newIndex >= 0 && newIndex < screenshots.length) {
+            this.kioskChat.currentScreenshotIndex = newIndex;
+            this.updateScreenshotDisplay();
+            this.updateNavigationButtons();
+            this.updateScreenshotOrder();
+        }
+    }
+    
+    updateScreenshotDisplay() {
+        const screenshots = this.kioskChat.vignettes.current.screenshots;
+        if (screenshots.length === 0) return;
+        
+        const currentScreenshotId = screenshots[this.kioskChat.currentScreenshotIndex];
+        const screenshot = this.kioskChat.screenshots.find(s => s.id === currentScreenshotId);
+        
+        if (screenshot) {
+            // Update the annotation background with current screenshot
+            const annotationBackground = this.kioskChat.elements.annotationBackground;
+            annotationBackground.style.backgroundImage = `url('${screenshot.path}')`;
+            annotationBackground.style.backgroundSize = 'contain';
+            annotationBackground.style.backgroundRepeat = 'no-repeat';
+            annotationBackground.style.backgroundPosition = 'center';
+            
+            // Load annotation data for this screenshot if it exists
+            this.loadScreenshotAnnotation(currentScreenshotId);
+        }
+    }
+    
+    updateNavigationButtons() {
+        const screenshots = this.kioskChat.vignettes.current.screenshots;
+        this.kioskChat.elements.prevScreenshotBtn.disabled = this.kioskChat.currentScreenshotIndex <= 0;
+        this.kioskChat.elements.nextScreenshotBtn.disabled = this.kioskChat.currentScreenshotIndex >= screenshots.length - 1;
+    }
+    
+    updateScreenshotOrder() {
+        const screenshots = this.kioskChat.vignettes.current.screenshots;
+        const orderText = screenshots.length === 0 ? '0 of 0' : `${this.kioskChat.currentScreenshotIndex + 1} of ${screenshots.length}`;
+        this.kioskChat.elements.screenshotOrder.textContent = orderText;
+    }
+    
+    updateVignetteName() {
+        const newName = this.kioskChat.elements.vignetteLabel.textContent.trim();
+        if (newName && newName !== this.kioskChat.currentVignetteName) {
+            this.kioskChat.currentVignetteName = newName;
+            this.kioskChat.vignettes.current.name = newName;
+            this.kioskChat.vignettes.current.modified = new Date().toISOString();
+            this.updateVignetteSaveButton();
+        }
+    }
+    
+    handleScreenshotAnnotationChange() {
+        const selectedScreen = this.kioskChat.elements.screenshotAnnotation.value;
+        if (!selectedScreen) return;
+        
+        const screenshots = this.kioskChat.vignettes.current.screenshots;
+        if (screenshots.length === 0) return;
+        
+        const currentScreenshotId = screenshots[this.kioskChat.currentScreenshotIndex];
+        
+        // Store the annotation for this screenshot
+        if (!this.kioskChat.vignettes.current.annotations[currentScreenshotId]) {
+            this.kioskChat.vignettes.current.annotations[currentScreenshotId] = {};
+        }
+        
+        this.kioskChat.vignettes.current.annotations[currentScreenshotId].screenAnnotation = selectedScreen;
+        this.kioskChat.vignettes.current.modified = new Date().toISOString();
+        this.updateVignetteSaveButton();
+    }
+    
+    loadScreenshotAnnotation(screenshotId) {
+        const annotation = this.kioskChat.vignettes.current.annotations[screenshotId];
+        if (annotation && annotation.screenAnnotation) {
+            this.kioskChat.elements.screenshotAnnotation.value = annotation.screenAnnotation;
+        } else {
+            this.kioskChat.elements.screenshotAnnotation.value = '';
+        }
+    }
+    
+    updateVignetteSaveButton() {
+        // Enable vignette save button if there are any screenshots or changes
+        const hasScreenshots = this.kioskChat.vignettes.current.screenshots.length > 0;
+        const hasAnnotations = Object.keys(this.kioskChat.vignettes.current.annotations).length > 0;
+        this.kioskChat.elements.vignetteSaveButton.disabled = !(hasScreenshots || hasAnnotations);
+    }
+    
+    async saveVignette() {
+        try {
+            const vignetteData = {
+                name: this.kioskChat.vignettes.current.name,
+                screenshots: this.kioskChat.vignettes.current.screenshots,
+                annotations: this.kioskChat.vignettes.current.annotations,
+                created: this.kioskChat.vignettes.current.created,
+                modified: new Date().toISOString(),
+                screenshotData: []
+            };
+            
+            // Include actual screenshot data
+            for (const screenshotId of this.kioskChat.vignettes.current.screenshots) {
+                const screenshot = this.kioskChat.screenshots.find(s => s.id === screenshotId);
+                if (screenshot) {
+                    vignetteData.screenshotData.push({
+                        id: screenshot.id,
+                        filename: screenshot.filename,
+                        path: screenshot.path,
+                        timestamp: screenshot.timestamp,
+                        size: screenshot.size
+                    });
+                }
+            }
+            
+            // Save to server/local storage
+            await this.saveVignetteToStorage(vignetteData);
+            
+            this.kioskChat.addMessage('system', 
+                `📁 Vignette "${vignetteData.name}" saved successfully\n` +
+                `Screenshots: ${vignetteData.screenshots.length}\n` +
+                `Annotations: ${Object.keys(vignetteData.annotations).length}`
+            );
+            
+        } catch (error) {
+            console.error('Error saving vignette:', error);
+            this.kioskChat.addMessage('system', `❌ Error saving vignette: ${error.message}`);
+        }
+    }
+    
+    async saveVignetteToStorage(vignetteData) {
+        // For now, save to localStorage. In production, this could save to server
+        const vignetteKey = `vignette_${vignetteData.name.replace(/[^a-zA-Z0-9]/g, '_')}`;
+        localStorage.setItem(vignetteKey, JSON.stringify(vignetteData));
+        
+        // Also update a list of all vignettes
+        const vignettesListKey = 'saved_vignettes';
+        const existingVignettes = JSON.parse(localStorage.getItem(vignettesListKey) || '[]');
+        
+        const existingIndex = existingVignettes.findIndex(v => v.name === vignetteData.name);
+        const vignetteInfo = {
+            name: vignetteData.name,
+            created: vignetteData.created,
+            modified: vignetteData.modified,
+            screenshotCount: vignetteData.screenshots.length,
+            annotationCount: Object.keys(vignetteData.annotations).length
+        };
+        
+        if (existingIndex >= 0) {
+            existingVignettes[existingIndex] = vignetteInfo;
+        } else {
+            existingVignettes.push(vignetteInfo);
+        }
+        
+        localStorage.setItem(vignettesListKey, JSON.stringify(existingVignettes));
+    }
+    
+    // Initialize vignette system when annotation mode opens
+    initializeVignetteSystem() {
+        // Add all current screenshots to the vignette if not already present
+        for (const screenshot of this.kioskChat.screenshots) {
+            if (!this.kioskChat.vignettes.current.screenshots.includes(screenshot.id)) {
+                this.kioskChat.vignettes.current.screenshots.push(screenshot.id);
+            }
+        }
+        
+        // Populate screenshot annotation dropdown with available screens
+        this.populateScreenshotAnnotationDropdown();
+        
+        // Update initial display
+        if (this.kioskChat.vignettes.current.screenshots.length > 0) {
+            this.kioskChat.currentScreenshotIndex = 0;
+            this.updateScreenshotDisplay();
+        }
+        this.updateNavigationButtons();
+        this.updateScreenshotOrder();
+        this.updateVignetteSaveButton();
+        
+        // Set initial vignette name
+        this.kioskChat.elements.vignetteLabel.textContent = this.kioskChat.vignettes.current.name;
+    }
+    
+    populateScreenshotAnnotationDropdown() {
+        const dropdown = this.kioskChat.elements.screenshotAnnotation;
+        
+        // Clear existing options except the default
+        while (dropdown.children.length > 1) {
+            dropdown.removeChild(dropdown.lastChild);
+        }
+        
+        // Add screen options from kiosk data
+        if (this.kioskChat.kioskData && this.kioskChat.kioskData.screens) {
+            for (const [screenId, screenData] of Object.entries(this.kioskChat.kioskData.screens)) {
+                const option = document.createElement('option');
+                option.value = screenId;
+                option.textContent = screenData.name || screenId;
+                dropdown.appendChild(option);
+            }
+        }
     }
 
     // Text Reading Functionality

@@ -39,6 +39,22 @@ fi
 # Set Python path
 export PYTHONPATH="$(pwd):$PYTHONPATH"
 
+# Check if port 8000 is in use and kill the process if found
+print_info "Checking port 8000..."
+if lsof -ti:8000 >/dev/null 2>&1; then
+    print_warning "Process found running on port 8000, killing it..."
+    lsof -ti:8000 | xargs kill -9 2>/dev/null || print_warning "Failed to kill process on port 8000"
+    sleep 2
+    if lsof -ti:8000 >/dev/null 2>&1; then
+        echo "❌ Failed to free port 8000. Please manually kill the process and try again."
+        exit 1
+    else
+        print_status "Port 8000 is now available"
+    fi
+else
+    print_status "Port 8000 is available"
+fi
+
 print_status "Preloading Ollama model with 1 hour keep-alive..."
 if command -v ollama >/dev/null 2>&1; then
     ollama run qwen2.5:1.5b --keepalive 3600 >/dev/null 2>&1 &

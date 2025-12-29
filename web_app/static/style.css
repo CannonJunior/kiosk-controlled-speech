@@ -2380,6 +2380,7 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
 .annotation-navbar-left {
     display: flex;
     align-items: center;
+    gap: 15px;
 }
 
 .annotation-title {
@@ -2401,6 +2402,117 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
     align-items: center;
     gap: 15px;
     flex: 1;
+}
+
+/* Screenshot Navigation */
+.screenshot-navigation {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-button {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9rem;
+    min-width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-button:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    color: #212529;
+}
+
+.nav-button:disabled {
+    background: #e9ecef;
+    border-color: #dee2e6;
+    color: #adb5bd;
+    cursor: not-allowed;
+}
+
+.screenshot-order {
+    font-size: 0.85rem;
+    color: #495057;
+    font-weight: 500;
+    min-width: 60px;
+    text-align: center;
+}
+
+/* Vignette Controls */
+.vignette-label {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #495057;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: text;
+    transition: all 0.2s ease;
+    min-width: 120px;
+    text-align: center;
+}
+
+.vignette-label:hover {
+    border-color: #667eea;
+    background: #fff;
+}
+
+.vignette-label:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+    background: #fff;
+}
+
+.vignette-save-button {
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.vignette-save-button:hover {
+    background: #218838;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
+.vignette-save-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Selected Screenshot Annotation */
+.selected-screenshot-annotation {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.selected-screenshot-annotation .group-dropdown {
+    min-width: 200px;
 }
 
 /* Annotation Elements Toggle Adjustments */
@@ -2656,3 +2768,86 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
 *[style*="background: #1a73e8"] {
     display: none !important;
 }
+
+/* Gallery Controls */
+.gallery-controls {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #e1e5e9;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.checkbox-label input[type='checkbox'] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.checkbox-text {
+    user-select: none;
+}
+
+.delete-selected-button {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: #dc3545;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.delete-selected-button:hover:not(:disabled) {
+    background: #c82333;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.delete-selected-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.delete-selected-button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+/* Screenshot Thumbnail Checkbox */
+.thumbnail-checkbox {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 3px;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.thumbnail-checkbox input[type='checkbox'] {
+    margin: 0;
+    cursor: pointer;
+    transform: scale(0.9);
+}
+
+.screenshot-thumbnail:hover .thumbnail-checkbox {
+    background: rgba(255, 255, 255, 1);
+}
+

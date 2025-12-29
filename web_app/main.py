@@ -1439,6 +1439,79 @@ async def get_active_sessions():
         }
     }
 
+@app.get("/api/screenshots")
+async def get_screenshots():
+    """Get list of screenshots from the file system"""
+    try:
+        screenshots_dir = Path("web_app/static/screenshots")
+        
+        if not screenshots_dir.exists():
+            return {"success": True, "screenshots": []}
+        
+        screenshots = []
+        
+        # Get all PNG files in the screenshots directory
+        screenshot_files = list(screenshots_dir.glob("*.png"))
+        screenshot_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)  # Sort by modification time, newest first
+        
+        for file_path in screenshot_files:
+            stat_info = file_path.stat()
+            
+            screenshot_data = {
+                "id": file_path.stem,  # filename without extension
+                "filename": file_path.name,
+                "path": f"/static/screenshots/{file_path.name}",
+                "timestamp": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+                "size": stat_info.st_size,
+                "created": datetime.fromtimestamp(stat_info.st_ctime).isoformat(),
+                "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat()
+            }
+            screenshots.append(screenshot_data)
+        
+        logger.info(f"Found {len(screenshots)} screenshots in {screenshots_dir}")
+        
+        return {
+            "success": True,
+            "screenshots": screenshots,
+            "total": len(screenshots)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing screenshots: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "screenshots": []
+        }
+
+@app.delete("/api/screenshots/{screenshot_id}")
+async def delete_screenshot(screenshot_id: str):
+    """Delete a single screenshot from the file system"""
+    try:
+        screenshots_dir = Path("web_app/static/screenshots")
+        
+        # Handle both filename-based IDs and full filenames
+        if screenshot_id.endswith('.png'):
+            filename = screenshot_id
+        else:
+            filename = f"{screenshot_id}.png"
+        
+        file_path = screenshots_dir / filename
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"Screenshot not found: {filename}")
+        
+        file_path.unlink()
+        logger.info(f"Deleted screenshot: {filename}")
+        
+        return {"success": True, "message": f"Screenshot {filename} deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting screenshot {screenshot_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete screenshot: {str(e)}")
+
 @app.post("/api/feedback/command-history")
 async def update_command_history(request: Request):
     """Update command history based on user feedback"""

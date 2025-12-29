@@ -105,7 +105,7 @@ except Exception as e:
         except Exception as e:
             error_messages.append(f"Windows Python method failed: {e}")
             
-        # Method 2: PowerShell Script (Working Method)
+        # Method 2: PowerShell Script - Full Screen Capture
         if screenshot is None:
             try:
                 # Create Windows temp directory first
@@ -116,17 +116,77 @@ except Exception as e:
                 temp_filename = f"screenshot_{uuid.uuid4().hex}.png"
                 win_temp_path = f"C:\\temp\\{temp_filename}"
                 
-                # Create PowerShell script content
+                # Create PowerShell script content that captures the actual visible screen
                 ps_script_content = f"""
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing
-$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class Win32 {{
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")]
+        public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+        [DllImport("user32.dll")]
+        public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
+        [DllImport("user32.dll")]
+        public static extern bool ClientToScreen(IntPtr hWnd, ref POINT lpPoint);
+        
+        public struct RECT {{
+            public int Left, Top, Right, Bottom;
+        }}
+        
+        public struct POINT {{
+            public int X, Y;
+        }}
+    }}
+"@
+
+# Get screen information
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen
+$bounds = $screen.Bounds
+
+Write-Host "Full Screen Bounds: X=$($bounds.X), Y=$($bounds.Y), Width=$($bounds.Width), Height=$($bounds.Height)"
+
+# Try to get foreground window (browser) information
+try {{
+    $hwnd = [Win32]::GetForegroundWindow()
+    $windowRect = New-Object Win32+RECT
+    $clientRect = New-Object Win32+RECT
+    
+    if ([Win32]::GetWindowRect($hwnd, [ref]$windowRect)) {{
+        Write-Host "Window Rect: Left=$($windowRect.Left), Top=$($windowRect.Top), Right=$($windowRect.Right), Bottom=$($windowRect.Bottom)"
+        $winWidth = $windowRect.Right - $windowRect.Left
+        $winHeight = $windowRect.Bottom - $windowRect.Top
+        Write-Host "Window Size: $winWidth x $winHeight"
+    }}
+    
+    if ([Win32]::GetClientRect($hwnd, [ref]$clientRect)) {{
+        Write-Host "Client Rect: Left=$($clientRect.Left), Top=$($clientRect.Top), Right=$($clientRect.Right), Bottom=$($clientRect.Bottom)"
+        $clientWidth = $clientRect.Right - $clientRect.Left
+        $clientHeight = $clientRect.Bottom - $clientRect.Top
+        Write-Host "Client Size: $clientWidth x $clientHeight"
+    }}
+}} catch {{
+    Write-Host "Could not get window information: $_"
+}}
+
+# Always capture the full screen - this should include fullscreen content
 $bmp = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
 $graphics = [System.Drawing.Graphics]::FromImage($bmp)
-$graphics.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
-$bmp.Save('{win_temp_path}')
+
+# Capture the entire screen starting from (0,0)
+$graphics.CopyFromScreen(0, 0, 0, 0, $bounds.Size, [System.Drawing.CopyPixelOperation]::SourceCopy)
+
+# Save the image
+$bmp.Save('{win_temp_path}', [System.Drawing.Imaging.ImageFormat]::Png)
+
+# Clean up
 $graphics.Dispose()
 $bmp.Dispose()
+
 Write-Host "Screenshot saved to {win_temp_path}"
+Write-Host "Final image dimensions: $($bounds.Width) x $($bounds.Height)"
 """
                 
                 # Save PowerShell script to temp file
