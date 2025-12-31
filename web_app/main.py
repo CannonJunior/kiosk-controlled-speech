@@ -1914,7 +1914,7 @@ async def get_screenshots():
         
         # Get all PNG files in the screenshots directory
         screenshot_files = list(screenshots_dir.glob("*.png"))
-        screenshot_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)  # Sort by modification time, newest first
+        screenshot_files.sort(key=lambda x: x.stat().st_mtime, reverse=False)  # Sort by modification time, oldest first
         
         for file_path in screenshot_files:
             stat_info = file_path.stat()

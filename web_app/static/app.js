@@ -2087,6 +2087,16 @@ class KioskSpeechChat {
                         } else {
                             messageText = `I would ${response.action} on "${response.element_id}" at coordinates (${response.coordinates?.x}, ${response.coordinates?.y}). ${response.message || ''}`;
                         }
+                    } else if (response.action === 'native_screenshot') {
+                        if (actionResult && actionResult.action_executed) {
+                            messageText = response.message || '📸 Portal screenshot captured successfully!';
+                            // Refresh the screenshot gallery to show the new screenshot
+                            this.loadScreenshots();
+                        } else if (actionResult && !actionResult.action_executed) {
+                            messageText = `❌ Portal screenshot failed: ${actionResult.error || 'Unknown error'}`;
+                        } else {
+                            messageText = response.message || 'Portal screenshot processing...';
+                        }
                     } else if (response.action === 'help') {
                         messageText = response.message || 'Here are the available commands...';
                     } else if (response.action === 'clarify') {
@@ -3839,7 +3849,7 @@ class KioskSpeechChat {
         
         annotateButton.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.annotationMode.enterMode(screenshot.path, screenshot);
+            this.annotateScreenshot(screenshot);
         });
         
         // Add checkbox event listener
@@ -3847,7 +3857,7 @@ class KioskSpeechChat {
             this.updateDeleteButtonState();
         });
         
-        // Add to gallery 
+        // Add to gallery - appendChild adds to end, which will now show newest at bottom since API sorts oldest first
         this.elements.screenshotGallery.appendChild(thumbnail);
     }
     
@@ -3991,6 +4001,22 @@ class KioskSpeechChat {
         
         // Restore body scroll
         document.body.style.overflow = '';
+    }
+    
+    annotateScreenshot(screenshot) {
+        // Add screenshot to current vignette if not already present
+        if (!this.vignettes.current.screenshots.includes(screenshot.id)) {
+            this.vignettes.current.screenshots.push(screenshot.id);
+        }
+        
+        // Set the current screenshot index to the correct position
+        this.currentScreenshotIndex = this.vignettes.current.screenshots.indexOf(screenshot.id);
+        
+        // Update modified timestamp
+        this.vignettes.current.modified = new Date().toISOString();
+        
+        // Enter annotation mode for this specific screenshot
+        this.annotationMode.enterMode(screenshot.path, screenshot);
     }
     
     // Add new screen modal methods
