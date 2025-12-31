@@ -2886,13 +2886,297 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
 /* Main Drawing Elements */
 .main-drawing-elements {
     display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 8px 16px;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 16px;
     background: rgba(102, 126, 234, 0.1);
     border-radius: 15px;
     border: 1px solid rgba(102, 126, 234, 0.2);
-    flex-wrap: wrap;
+    position: relative;
+    overflow: visible;
+}
+
+/* Screen Selector Row */
+.screen-selector-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Draggable Elements Panel */
+.elements-panel {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    width: 600px;
+    max-width: 90vw;
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(20px);
+    z-index: 1001;
+    resize: both;
+    overflow: auto;
+    min-width: 400px;
+    min-height: 250px;
+    max-height: 80vh;
+}
+
+.elements-panel-header {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(102, 126, 234, 0.05));
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+    border-radius: 12px 12px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    user-select: none;
+}
+
+.elements-panel-title {
+    font-weight: 600;
+    color: #333;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.elements-panel-title i {
+    color: #667eea;
+}
+
+.elements-panel-controls {
+    display: flex;
+    gap: 4px;
+}
+
+.panel-minimize-btn,
+.panel-close-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: none;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    transition: background-color 0.2s ease;
+}
+
+.panel-minimize-btn:hover {
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+}
+
+.panel-close-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.elements-panel-body {
+    padding: 0;
+    max-height: calc(80vh - 60px);
+    overflow: hidden;
+}
+
+.elements-table-wrapper {
+    max-height: calc(80vh - 60px);
+    overflow-y: auto;
+}
+
+.elements-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.elements-table th {
+    background: #f8f9fa;
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #555;
+    border-bottom: 1px solid #dee2e6;
+    font-size: 0.75rem;
+    position: sticky;
+    top: 0;
+}
+
+.elements-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f3f4;
+    color: #333;
+    font-size: 0.8rem;
+}
+
+.elements-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.elements-table tbody tr:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.elements-table tbody tr.selected {
+    background: rgba(102, 126, 234, 0.2);
+    color: #333;
+}
+
+.element-coord {
+    font-family: 'Monaco', 'Menlo', monospace;
+    color: #667eea;
+    font-weight: 500;
+    font-size: 0.75rem;
+}
+
+.element-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.element-action {
+    background: none;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.7rem;
+}
+
+.element-action:hover {
+    background: #f8f9fa;
+}
+
+.element-action.view {
+    color: #007bff;
+    border-color: rgba(0, 123, 255, 0.3);
+}
+
+.element-action.edit {
+    color: #28a745;
+    border-color: rgba(40, 167, 69, 0.3);
+}
+
+.element-action.delete {
+    color: #dc3545;
+    border-color: rgba(220, 53, 69, 0.3);
+}
+
+.add-element-row {
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.add-element-btn {
+    width: 100%;
+    padding: 6px 12px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.2s ease;
+}
+
+.add-element-btn:hover {
+    background: #218838;
+}
+
+.add-element-btn i {
+    font-size: 0.7rem;
+}
+
+/* Element Table Checkboxes */
+.element-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.element-checkbox {
+    cursor: pointer;
+}
+
+.element-name-text {
+    font-weight: 500;
+}
+
+/* Editable Coordinates */
+.editable-coord {
+    cursor: pointer;
+    position: relative;
+    transition: background-color 0.2s ease;
+}
+
+.editable-coord:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.editable-coord:focus {
+    outline: 2px solid #667eea;
+    outline-offset: -2px;
+    background: rgba(102, 126, 234, 0.15);
+}
+
+.coord-input {
+    width: 100%;
+    border: none;
+    background: #667eea;
+    color: white;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+    border-radius: 3px;
+    text-align: center;
+}
+
+.coord-input:focus {
+    outline: none;
+    background: #5a67d8;
+}
+
+/* Selected table rows */
+.elements-table tbody tr.selected {
+    background: rgba(102, 126, 234, 0.2);
+    border-left: 3px solid #667eea;
+}
+
+/* Absolute positioned overlays */
+.absolute-overlay {
+    position: fixed !important;
+    pointer-events: none;
+    z-index: 1000;
+    border-radius: 4px;
+}
+
+/* Annotation Elements Panel */
+.annotation-elements-panel {
+    top: 150px;
+    left: 20px;
+    border-color: rgba(255, 102, 0, 0.3);
+}
+
+.annotation-elements-panel .elements-panel-header {
+    background: linear-gradient(135deg, rgba(255, 102, 0, 0.1), rgba(255, 102, 0, 0.05));
+    border-bottom-color: rgba(255, 102, 0, 0.2);
+}
+
+.annotation-elements-panel .elements-panel-title i {
+    color: #ff6600;
 }
 
 .main-navbar-left {

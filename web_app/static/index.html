@@ -74,35 +74,17 @@
                 </div>
                 
                 <div class="main-drawing-elements" id="mainDrawingElements">
-                    <div class="drawing-mode-selector">
-                        <i class="fas fa-draw-polygon"></i>
-                        <label for="drawingMode">Draw:</label>
-                        <select id="drawingMode" class="drawing-dropdown">
-                            <option value="none">None</option>
-                            <option value="rectangle">Rectangle</option>
-                        </select>
-                    </div>
-                    
-                    <div class="button-group">
+                    <div class="screen-selector-row">
                         <div class="group-dropdown group-dropdown-left">
                             <i class="fas fa-desktop"></i>
                             <select id="screen" class="group-select">
-                                <option value="">Screen</option>
+                                <option value="">Select Screen</option>
                             </select>
                         </div>
-                        <div class="group-dropdown group-dropdown-right">
-                            <i class="fas fa-cube"></i>
-                            <select id="element" class="group-select">
-                                <option value="">Element</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="mouse-position-display">
-                        <i class="fas fa-mouse-pointer"></i>
-                        <span class="mouse-coords">
-                            Mouse: <span id="mouseX">0</span>, <span id="mouseY">0</span>
-                        </span>
+                        <!-- Hidden element dropdown for compatibility -->
+                        <select id="element" class="group-select" style="display: none;">
+                            <option value="">Element</option>
+                        </select>
                     </div>
                 </div>
                 
@@ -736,12 +718,10 @@
                                 <option value="">Screen</option>
                             </select>
                         </div>
-                        <div class="group-dropdown group-dropdown-right">
-                            <i class="fas fa-cube"></i>
-                            <select id="annotationElement" class="group-select">
-                                <option value="">Element</option>
-                            </select>
-                        </div>
+                        <!-- Hidden element dropdown for compatibility -->
+                        <select id="annotationElement" class="group-select" style="display: none;">
+                            <option value="">Element</option>
+                        </select>
                     </div>
                     
                     <div class="mouse-position-display">
@@ -820,6 +800,88 @@
             <h3>Connection Error</h3>
             <p id="errorMessage">Unable to connect to the server.</p>
             <button id="errorClose" class="error-button">Close</button>
+        </div>
+    </div>
+
+    <!-- Draggable Elements Panel (Main) -->
+    <div class="elements-panel" id="elementsPanel" style="display: none;">
+        <div class="elements-panel-header" id="elementsPanelHeader">
+            <span class="elements-panel-title">
+                <i class="fas fa-cube"></i> <span id="elementsPanelScreenName">Screen Elements</span>
+            </span>
+            <div class="elements-panel-controls">
+                <button class="panel-minimize-btn" id="elementsPanelMinimize" title="Minimize">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button class="panel-close-btn" id="elementsPanelClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="elements-panel-body" id="elementsPanelBody">
+            <div class="elements-table-wrapper">
+                <table class="elements-table" id="elementsTable">
+                    <thead>
+                        <tr>
+                            <th>Element</th>
+                            <th>Left</th>
+                            <th>Top</th>
+                            <th>Right</th>
+                            <th>Bottom</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="elementsTableBody">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+                <div class="add-element-row">
+                    <button class="add-element-btn" id="addElementBtn">
+                        <i class="fas fa-plus"></i> Add New Element...
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Draggable Annotation Elements Panel -->
+    <div class="elements-panel annotation-elements-panel" id="annotationElementsPanel" style="display: none;">
+        <div class="elements-panel-header" id="annotationElementsPanelHeader">
+            <span class="elements-panel-title">
+                <i class="fas fa-cube"></i> <span id="annotationElementsPanelScreenName">Annotation Elements</span>
+            </span>
+            <div class="elements-panel-controls">
+                <button class="panel-minimize-btn" id="annotationElementsPanelMinimize" title="Minimize">
+                    <i class="fas fa-minus"></i>
+                </button>
+                <button class="panel-close-btn" id="annotationElementsPanelClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="elements-panel-body" id="annotationElementsPanelBody">
+            <div class="elements-table-wrapper">
+                <table class="elements-table" id="annotationElementsTable">
+                    <thead>
+                        <tr>
+                            <th>Element</th>
+                            <th>Left</th>
+                            <th>Top</th>
+                            <th>Right</th>
+                            <th>Bottom</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="annotationElementsTableBody">
+                        <!-- Populated dynamically -->
+                    </tbody>
+                </table>
+                <div class="add-element-row">
+                    <button class="add-element-btn" id="annotationAddElementBtn">
+                        <i class="fas fa-plus"></i> Add New Element...
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 

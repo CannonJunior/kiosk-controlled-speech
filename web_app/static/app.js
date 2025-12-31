@@ -254,6 +254,24 @@ class KioskSpeechChat {
             saveButton: document.getElementById('saveButton'),
             screenDropdown: document.getElementById('screen'),
             elementDropdown: document.getElementById('element'),
+            elementsPanel: document.getElementById('elementsPanel'),
+            elementsPanelHeader: document.getElementById('elementsPanelHeader'),
+            elementsPanelScreenName: document.getElementById('elementsPanelScreenName'),
+            elementsPanelBody: document.getElementById('elementsPanelBody'),
+            elementsPanelMinimize: document.getElementById('elementsPanelMinimize'),
+            elementsPanelClose: document.getElementById('elementsPanelClose'),
+            elementsTableBody: document.getElementById('elementsTableBody'),
+            addElementBtn: document.getElementById('addElementBtn'),
+            
+            // Annotation Elements Panel
+            annotationElementsPanel: document.getElementById('annotationElementsPanel'),
+            annotationElementsPanelHeader: document.getElementById('annotationElementsPanelHeader'),
+            annotationElementsPanelScreenName: document.getElementById('annotationElementsPanelScreenName'),
+            annotationElementsPanelBody: document.getElementById('annotationElementsPanelBody'),
+            annotationElementsPanelMinimize: document.getElementById('annotationElementsPanelMinimize'),
+            annotationElementsPanelClose: document.getElementById('annotationElementsPanelClose'),
+            annotationElementsTableBody: document.getElementById('annotationElementsTableBody'),
+            annotationAddElementBtn: document.getElementById('annotationAddElementBtn'),
             
             connectionStatus: document.getElementById('connectionStatus'),
             chatMessages: document.getElementById('chatMessages'),
@@ -799,6 +817,508 @@ class KioskSpeechChat {
                    screenData.elements.map(e => e.id));
     }
     
+    populateElementsTable(selectedScreen) {
+        if (!this.elements.elementsPanel || !this.elements.elementsTableBody) {
+            return;
+        }
+        
+        // Clear selected elements when changing screens
+        if (this.selectedElements) {
+            this.selectedElements.clear();
+        } else {
+            this.selectedElements = new Set();
+        }
+        
+        // Hide panel if no screen selected
+        if (!selectedScreen) {
+            this.elements.elementsPanel.style.display = 'none';
+            return;
+        }
+        
+        // Show panel and update screen name
+        this.elements.elementsPanel.style.display = 'block';
+        this.elements.elementsPanelScreenName.textContent = `${selectedScreen} Elements`;
+        
+        // Clear existing table rows
+        this.elements.elementsTableBody.innerHTML = '';
+        
+        // Get screen data
+        const screenData = this.kioskData?.screens?.[selectedScreen];
+        if (!screenData || !screenData.elements || screenData.elements.length === 0) {
+            // Show empty state
+            const emptyRow = document.createElement('tr');
+            emptyRow.innerHTML = `
+                <td colspan="6" style="text-align: center; color: #666; font-style: italic; padding: 20px;">
+                    No elements defined for this screen
+                </td>
+            `;
+            this.elements.elementsTableBody.appendChild(emptyRow);
+            return;
+        }
+        
+        // Add each element as a table row
+        screenData.elements.forEach(element => {
+            const row = this.createElementTableRow(element, selectedScreen);
+            this.elements.elementsTableBody.appendChild(row);
+        });
+    }
+    
+    createElementTableRow(element, screenId) {
+        const row = document.createElement('tr');
+        row.dataset.elementId = element.id;
+        row.dataset.screenId = screenId;
+        
+        // Calculate bounds
+        const x = element.coordinates?.x || 0;
+        const y = element.coordinates?.y || 0;
+        const width = element.size?.width || 0;
+        const height = element.size?.height || 0;
+        const right = x + width;
+        const bottom = y + height;
+        
+        row.innerHTML = `
+            <td class="element-name">
+                <label class="element-checkbox-label">
+                    <input type="checkbox" class="element-checkbox" value="${element.id}">
+                    <span class="element-name-text">${element.name || element.id}</span>
+                </label>
+            </td>
+            <td class="element-coord editable-coord" data-coord="x" data-original="${x}" tabindex="0">${x}</td>
+            <td class="element-coord editable-coord" data-coord="y" data-original="${y}" tabindex="0">${y}</td>
+            <td class="element-coord editable-coord" data-coord="right" data-original="${right}" tabindex="0">${right}</td>
+            <td class="element-coord editable-coord" data-coord="bottom" data-original="${bottom}" tabindex="0">${bottom}</td>
+            <td>
+                <div class="element-actions">
+                    <button class="element-action view" title="Highlight Element">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="element-action edit" title="Edit Element">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="element-action delete" title="Delete Element">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        // Add checkbox change handler for multiple selection
+        const checkbox = row.querySelector('.element-checkbox');
+        checkbox.addEventListener('change', (e) => {
+            this.handleElementSelection(element.id, e.target.checked, row);
+        });
+
+        // Add editable coordinate functionality
+        const coordCells = row.querySelectorAll('.editable-coord');
+        coordCells.forEach(cell => {
+            this.makeCoordinateEditable(cell, element, screenId);
+        });
+        
+        // Add action button handlers
+        const viewBtn = row.querySelector('.view');
+        const editBtn = row.querySelector('.edit');
+        const deleteBtn = row.querySelector('.delete');
+        
+        if (viewBtn) {
+            viewBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.highlightSingleElement(element, screenId);
+            });
+        }
+        
+        if (editBtn) {
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.editElementFromTable(element, screenId);
+            });
+        }
+        
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteElementFromTable(element.id, screenId);
+            });
+        }
+        
+        return row;
+    }
+    
+    handleElementSelection(elementId, isChecked, row) {
+        if (isChecked) {
+            // Add to selected elements
+            if (!this.selectedElements) {
+                this.selectedElements = new Set();
+            }
+            this.selectedElements.add(elementId);
+            row.classList.add('selected');
+        } else {
+            // Remove from selected elements
+            if (this.selectedElements) {
+                this.selectedElements.delete(elementId);
+            }
+            row.classList.remove('selected');
+        }
+        
+        // Update element overlays for selected elements
+        const selectedScreen = this.elements.screenDropdown.value;
+        if (selectedScreen && this.elementsVisible) {
+            this.showSelectedElementOverlays(selectedScreen);
+        }
+        
+        // Update the last selected element in hidden dropdown for compatibility
+        if (isChecked && this.elements.elementDropdown) {
+            this.elements.elementDropdown.value = elementId;
+        }
+        
+        console.log('Selected elements:', this.selectedElements);
+    }
+
+    showSelectedElementOverlays(screenId) {
+        // Clear existing element overlays
+        this.clearElementOverlays();
+        
+        if (!this.selectedElements || this.selectedElements.size === 0) {
+            return;
+        }
+        
+        const screenData = this.kioskData?.screens?.[screenId];
+        if (!screenData?.elements) return;
+        
+        // Show overlays for each selected element with absolute positioning
+        this.selectedElements.forEach(elementId => {
+            const element = screenData.elements.find(e => e.id === elementId);
+            if (element) {
+                this.createAbsoluteElementOverlay(element, false); // false = not annotation overlay
+            }
+        });
+    }
+
+    createAbsoluteElementOverlay(element, isAnnotationOverlay = false) {
+        const overlay = document.createElement('div');
+        overlay.className = isAnnotationOverlay ? 'element-overlay annotation-overlay absolute-overlay' : 'element-overlay absolute-overlay';
+        overlay.setAttribute('data-element-id', element.id);
+        
+        // Use absolute positioning relative to the entire screen (no offsets)
+        overlay.style.position = 'fixed';
+        overlay.style.left = element.coordinates.x + 'px';
+        overlay.style.top = element.coordinates.y + 'px';
+        overlay.style.width = element.size.width + 'px';
+        overlay.style.height = element.size.height + 'px';
+        overlay.style.zIndex = '1000';
+        overlay.style.border = isAnnotationOverlay ? '2px solid #ff0000' : '2px solid #0066ff';
+        overlay.style.backgroundColor = isAnnotationOverlay ? 'rgba(255, 0, 0, 0.1)' : 'rgba(0, 102, 255, 0.1)';
+        overlay.style.pointerEvents = 'none';
+        
+        // Create and add label
+        const label = document.createElement('div');
+        label.className = 'element-label';
+        label.textContent = element.name || element.id;
+        label.style.position = 'absolute';
+        label.style.top = '-20px';
+        label.style.left = '0';
+        label.style.background = isAnnotationOverlay ? '#ff0000' : '#0066ff';
+        label.style.color = 'white';
+        label.style.padding = '2px 6px';
+        label.style.fontSize = '10px';
+        label.style.fontWeight = 'bold';
+        label.style.borderRadius = '3px';
+        label.style.whiteSpace = 'nowrap';
+        overlay.appendChild(label);
+        
+        // Add to page and track overlay in appropriate array
+        document.body.appendChild(overlay);
+        if (isAnnotationOverlay) {
+            this.currentAnnotationOverlays.push(overlay);
+        } else {
+            this.currentElementOverlays.push(overlay);
+        }
+        
+        console.log(`Created absolute overlay for element: ${element.id} at (${element.coordinates.x}, ${element.coordinates.y})`);
+    }
+
+    makeCoordinateEditable(cell, element, screenId) {
+        let isEditing = false;
+        
+        // Click to edit
+        cell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isEditing) return;
+            
+            isEditing = true;
+            const originalValue = cell.textContent;
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.value = originalValue;
+            input.className = 'coord-input';
+            
+            cell.textContent = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+            
+            const finishEditing = () => {
+                if (!isEditing) return;
+                isEditing = false;
+                
+                const newValue = parseInt(input.value) || 0;
+                cell.textContent = newValue;
+                cell.setAttribute('data-original', newValue);
+                
+                // Update the element data
+                this.updateElementCoordinate(element, screenId, cell.dataset.coord, newValue);
+            };
+            
+            // Save on Enter or blur
+            input.addEventListener('blur', finishEditing);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    finishEditing();
+                } else if (e.key === 'Escape') {
+                    isEditing = false;
+                    cell.textContent = originalValue;
+                }
+            });
+        });
+        
+        // Arrow key increment/decrement
+        cell.addEventListener('keydown', (e) => {
+            if (isEditing) return;
+            
+            const currentValue = parseInt(cell.textContent) || 0;
+            let newValue = currentValue;
+            
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                newValue = currentValue + 1;
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                newValue = currentValue - 1;
+            } else {
+                return;
+            }
+            
+            cell.textContent = newValue;
+            cell.setAttribute('data-original', newValue);
+            
+            // Update the element data
+            this.updateElementCoordinate(element, screenId, cell.dataset.coord, newValue);
+        });
+    }
+
+    updateElementCoordinate(element, screenId, coord, newValue) {
+        // Update the element data in the kioskData
+        const screenData = this.kioskData?.screens?.[screenId];
+        if (!screenData?.elements) return;
+        
+        const elementData = screenData.elements.find(e => e.id === element.id);
+        if (!elementData) return;
+        
+        // Update coordinates based on coord type
+        if (coord === 'x') {
+            elementData.coordinates.x = newValue;
+        } else if (coord === 'y') {
+            elementData.coordinates.y = newValue;
+        } else if (coord === 'right') {
+            // Right = x + width, so width = right - x
+            const x = elementData.coordinates?.x || 0;
+            elementData.size.width = Math.max(1, newValue - x);
+        } else if (coord === 'bottom') {
+            // Bottom = y + height, so height = bottom - y  
+            const y = elementData.coordinates?.y || 0;
+            elementData.size.height = Math.max(1, newValue - y);
+        }
+        
+        // Update table display to reflect coordinate changes
+        this.refreshElementTableRow(element, screenId);
+        
+        // Update overlays if element is selected and visible
+        if (this.selectedElements?.has(element.id) && this.elementsVisible) {
+            this.showSelectedElementOverlays(screenId);
+        }
+        
+        // Mark data as changed
+        this.hasUnsavedChanges = true;
+        
+        console.log('Updated element coordinate:', element.id, coord, newValue);
+    }
+
+    refreshElementTableRow(element, screenId) {
+        // Find the table row for this element
+        const row = this.elements.elementsTableBody.querySelector(`tr[data-element-id="${element.id}"]`);
+        if (!row) return;
+        
+        // Recalculate bounds
+        const x = element.coordinates?.x || 0;
+        const y = element.coordinates?.y || 0;
+        const width = element.size?.width || 0;
+        const height = element.size?.height || 0;
+        const right = x + width;
+        const bottom = y + height;
+        
+        // Update coordinate cells
+        const coordCells = row.querySelectorAll('.editable-coord');
+        coordCells.forEach(cell => {
+            const coord = cell.dataset.coord;
+            let newValue;
+            if (coord === 'x') newValue = x;
+            else if (coord === 'y') newValue = y;
+            else if (coord === 'right') newValue = right;
+            else if (coord === 'bottom') newValue = bottom;
+            
+            cell.textContent = newValue;
+            cell.setAttribute('data-original', newValue);
+        });
+    }
+    
+    highlightSingleElement(element, screenId) {
+        // Clear existing overlays
+        this.clearElementOverlays();
+        
+        // Show only this element
+        const overlay = this.createElementOverlay(element, false);
+        if (overlay) {
+            document.body.appendChild(overlay);
+            
+            // Auto-hide after 2 seconds
+            setTimeout(() => {
+                this.clearElementOverlays();
+                // Restore normal element visibility if enabled
+                if (this.elementsVisible) {
+                    this.showElementOverlays(screenId, false);
+                }
+            }, 2000);
+        }
+    }
+    
+    editElementFromTable(element, screenId) {
+        // Use existing modal functionality
+        this.showAddElementModal(element, screenId);
+    }
+    
+    deleteElementFromTable(elementId, screenId) {
+        if (confirm(`Delete element "${elementId}"?`)) {
+            // Remove from data
+            const screenData = this.kioskData.screens[screenId];
+            if (screenData && screenData.elements) {
+                screenData.elements = screenData.elements.filter(e => e.id !== elementId);
+                
+                // Update both table and dropdown
+                this.populateElementsTable(screenId);
+                this.updateElementDropdown(screenId);
+                
+                // Clear overlays and redraw
+                this.clearElementOverlays();
+                if (this.elementsVisible) {
+                    this.showElementOverlays(screenId, false);
+                }
+                
+                // Save changes
+                this.saveKioskData();
+                
+                this.addMessage('system', `🗑️ Element "${elementId}" deleted`);
+            }
+        }
+    }
+
+    initDraggablePanel() {
+        if (!this.elements.elementsPanelHeader || !this.elements.elementsPanel) {
+            return;
+        }
+
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        this.elements.elementsPanelHeader.addEventListener('mousedown', (e) => {
+            // Don't drag if clicking on buttons
+            if (e.target.closest('.panel-minimize-btn, .panel-close-btn')) {
+                return;
+            }
+
+            isDragging = true;
+            const rect = this.elements.elementsPanel.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+            
+            this.elements.elementsPanel.style.transition = 'none';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const x = e.clientX - dragOffset.x;
+            const y = e.clientY - dragOffset.y;
+            
+            // Keep panel within viewport bounds
+            const maxX = window.innerWidth - this.elements.elementsPanel.offsetWidth;
+            const maxY = window.innerHeight - this.elements.elementsPanel.offsetHeight;
+            
+            const clampedX = Math.max(0, Math.min(x, maxX));
+            const clampedY = Math.max(0, Math.min(y, maxY));
+            
+            this.elements.elementsPanel.style.left = `${clampedX}px`;
+            this.elements.elementsPanel.style.top = `${clampedY}px`;
+            this.elements.elementsPanel.style.right = 'auto';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                this.elements.elementsPanel.style.transition = '';
+                document.body.style.userSelect = '';
+            }
+        });
+    }
+
+    initDraggableAnnotationPanel() {
+        if (!this.elements.annotationElementsPanelHeader || !this.elements.annotationElementsPanel) {
+            return;
+        }
+
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        this.elements.annotationElementsPanelHeader.addEventListener('mousedown', (e) => {
+            // Don't drag if clicking on buttons
+            if (e.target.closest('.panel-minimize-btn, .panel-close-btn')) {
+                return;
+            }
+
+            isDragging = true;
+            const rect = this.elements.annotationElementsPanel.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+            
+            this.elements.annotationElementsPanel.style.transition = 'none';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const x = e.clientX - dragOffset.x;
+            const y = e.clientY - dragOffset.y;
+            
+            // Keep panel within viewport bounds
+            const maxX = window.innerWidth - this.elements.annotationElementsPanel.offsetWidth;
+            const maxY = window.innerHeight - this.elements.annotationElementsPanel.offsetHeight;
+            
+            const clampedX = Math.max(0, Math.min(x, maxX));
+            const clampedY = Math.max(0, Math.min(y, maxY));
+            
+            this.elements.annotationElementsPanel.style.left = `${clampedX}px`;
+            this.elements.annotationElementsPanel.style.top = `${clampedY}px`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                this.elements.annotationElementsPanel.style.transition = '';
+                document.body.style.userSelect = '';
+            }
+        });
+    }
+    
     handleScreenChange() {
         const selectedScreen = this.elements.screenDropdown.value;
         console.log('Screen changed to:', selectedScreen);
@@ -820,8 +1340,11 @@ class KioskSpeechChat {
             return;
         }
         
-        // Update element dropdown based on selected screen
+        // Update element dropdown based on selected screen (for compatibility)
         this.updateElementDropdown(selectedScreen);
+        
+        // Update and show/hide elements table
+        this.populateElementsTable(selectedScreen);
         
         // If elements are currently visible, redraw them for the new screen
         if (this.elementsVisible && selectedScreen) {
@@ -1168,6 +1691,64 @@ class KioskSpeechChat {
         this.elements.sidebarToggle.addEventListener('click', () => {
             this.toggleSidebar();
         });
+        
+        // Add element button
+        if (this.elements.addElementBtn) {
+            this.elements.addElementBtn.addEventListener('click', () => {
+                const selectedScreen = this.elements.screenDropdown.value;
+                if (selectedScreen && selectedScreen !== '__add_new_screen__') {
+                    this.showAddElementModal(null, selectedScreen);
+                } else {
+                    this.addMessage('system', '⚠️ Please select a screen first.');
+                }
+            });
+        }
+
+        // Elements panel controls
+        if (this.elements.elementsPanelClose) {
+            this.elements.elementsPanelClose.addEventListener('click', () => {
+                this.elements.elementsPanel.style.display = 'none';
+            });
+        }
+
+        if (this.elements.elementsPanelMinimize) {
+            this.elements.elementsPanelMinimize.addEventListener('click', () => {
+                const body = this.elements.elementsPanelBody;
+                if (body.style.display === 'none') {
+                    body.style.display = 'block';
+                    this.elements.elementsPanelMinimize.innerHTML = '<i class="fas fa-minus"></i>';
+                } else {
+                    body.style.display = 'none';
+                    this.elements.elementsPanelMinimize.innerHTML = '<i class="fas fa-plus"></i>';
+                }
+            });
+        }
+
+        // Make panel draggable
+        this.initDraggablePanel();
+
+        // Annotation Elements panel controls
+        if (this.elements.annotationElementsPanelClose) {
+            this.elements.annotationElementsPanelClose.addEventListener('click', () => {
+                this.elements.annotationElementsPanel.style.display = 'none';
+            });
+        }
+
+        if (this.elements.annotationElementsPanelMinimize) {
+            this.elements.annotationElementsPanelMinimize.addEventListener('click', () => {
+                const body = this.elements.annotationElementsPanelBody;
+                if (body.style.display === 'none') {
+                    body.style.display = 'block';
+                    this.elements.annotationElementsPanelMinimize.innerHTML = '<i class="fas fa-minus"></i>';
+                } else {
+                    body.style.display = 'none';
+                    this.elements.annotationElementsPanelMinimize.innerHTML = '<i class="fas fa-plus"></i>';
+                }
+            });
+        }
+
+        // Make annotation panel draggable
+        this.initDraggableAnnotationPanel();
         
         // Dictation button (manual start/stop listening)
         this.elements.dictationButton.addEventListener('click', () => {
@@ -2792,7 +3373,12 @@ class KioskSpeechChat {
             : this.elements.screenDropdown.value;
             
         if (this.elementsVisible && selectedScreen) {
-            this.showElementOverlays(selectedScreen, false); // Explicitly pass false for element overlays
+            // If elements are selected in the table, show only selected ones; otherwise show all
+            if (this.selectedElements && this.selectedElements.size > 0) {
+                this.showSelectedElementOverlays(selectedScreen);
+            } else {
+                this.showElementOverlays(selectedScreen, false); // Show all elements
+            }
         } else {
             this.clearElementOverlays(); // Only clear element overlays, not annotation overlays
         }
@@ -4268,12 +4854,20 @@ class ScreenshotAnnotationMode {
             return;
         }
         
-        // Update element dropdown
+        // Update element dropdown (for compatibility)
         this.updateElementDropdown(selectedScreen);
+        
+        // Update and show/hide annotation elements table
+        this.populateAnnotationElementsTable(selectedScreen);
         
         // Update element overlays if elements are currently visible
         if (this.kioskChat.elementsVisible && selectedScreen) {
-            this.kioskChat.showElementOverlays(selectedScreen, false);
+            // If annotation elements are selected in the table, show only selected ones; otherwise show all
+            if (this.annotationSelectedElements && this.annotationSelectedElements.size > 0) {
+                this.showSelectedAnnotationElementOverlays(selectedScreen);
+            } else {
+                this.kioskChat.showElementOverlays(selectedScreen, false);
+            }
         } else if (!selectedScreen) {
             this.kioskChat.clearElementOverlays();
         }
@@ -4303,6 +4897,226 @@ class ScreenshotAnnotationMode {
         addNewOption.style.fontStyle = 'italic';
         addNewOption.style.color = '#667eea';
         this.kioskChat.elements.annotationElement.appendChild(addNewOption);
+    }
+
+    populateAnnotationElementsTable(selectedScreen) {
+        if (!this.kioskChat.elements.annotationElementsPanel || !this.kioskChat.elements.annotationElementsTableBody) {
+            return;
+        }
+        
+        // Clear selected elements when changing screens
+        if (this.annotationSelectedElements) {
+            this.annotationSelectedElements.clear();
+        } else {
+            this.annotationSelectedElements = new Set();
+        }
+        
+        // Hide panel if no screen selected
+        if (!selectedScreen) {
+            this.kioskChat.elements.annotationElementsPanel.style.display = 'none';
+            return;
+        }
+        
+        // Show panel and update screen name
+        this.kioskChat.elements.annotationElementsPanel.style.display = 'block';
+        this.kioskChat.elements.annotationElementsPanelScreenName.textContent = `${selectedScreen} Annotation Elements`;
+        
+        // Clear existing table rows
+        this.kioskChat.elements.annotationElementsTableBody.innerHTML = '';
+        
+        // Get screen data
+        const screenData = this.kioskChat.kioskData?.screens?.[selectedScreen];
+        if (!screenData || !screenData.elements || screenData.elements.length === 0) {
+            // Show empty state
+            const emptyRow = document.createElement('tr');
+            emptyRow.innerHTML = `
+                <td colspan="6" style="text-align: center; color: #666; font-style: italic; padding: 20px;">
+                    No elements defined for this screen
+                </td>
+            `;
+            this.kioskChat.elements.annotationElementsTableBody.appendChild(emptyRow);
+            return;
+        }
+        
+        // Add each element as a table row
+        screenData.elements.forEach(element => {
+            const row = this.createAnnotationElementTableRow(element, selectedScreen);
+            this.kioskChat.elements.annotationElementsTableBody.appendChild(row);
+        });
+    }
+
+    createAnnotationElementTableRow(element, screenId) {
+        const row = document.createElement('tr');
+        row.dataset.elementId = element.id;
+        row.dataset.screenId = screenId;
+        
+        // Calculate bounds
+        const x = element.coordinates?.x || 0;
+        const y = element.coordinates?.y || 0;
+        const width = element.size?.width || 0;
+        const height = element.size?.height || 0;
+        const right = x + width;
+        const bottom = y + height;
+        
+        row.innerHTML = `
+            <td class="element-name">
+                <label class="element-checkbox-label">
+                    <input type="checkbox" class="annotation-element-checkbox" value="${element.id}">
+                    <span class="element-name-text">${element.name || element.id}</span>
+                </label>
+            </td>
+            <td class="element-coord editable-coord" data-coord="x" data-original="${x}" tabindex="0">${x}</td>
+            <td class="element-coord editable-coord" data-coord="y" data-original="${y}" tabindex="0">${y}</td>
+            <td class="element-coord editable-coord" data-coord="right" data-original="${right}" tabindex="0">${right}</td>
+            <td class="element-coord editable-coord" data-coord="bottom" data-original="${bottom}" tabindex="0">${bottom}</td>
+            <td>
+                <div class="element-actions">
+                    <button class="element-action view" title="Highlight Element">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="element-action edit" title="Edit Element">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="element-action delete" title="Delete Element">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        // Add checkbox change handler for multiple selection
+        const checkbox = row.querySelector('.annotation-element-checkbox');
+        checkbox.addEventListener('change', (e) => {
+            this.handleAnnotationElementSelection(element.id, e.target.checked, row);
+        });
+
+        // Add editable coordinate functionality
+        const coordCells = row.querySelectorAll('.editable-coord');
+        coordCells.forEach(cell => {
+            this.kioskChat.makeCoordinateEditable(cell, element, screenId);
+        });
+        
+        // Add action button handlers
+        const viewBtn = row.querySelector('.view');
+        const editBtn = row.querySelector('.edit');
+        const deleteBtn = row.querySelector('.delete');
+        
+        if (viewBtn) {
+            viewBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.highlightAnnotationElement(element, screenId);
+            });
+        }
+        
+        if (editBtn) {
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.kioskChat.showAddElementModal(element, screenId);
+            });
+        }
+        
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteAnnotationElementFromTable(element.id, screenId);
+            });
+        }
+        
+        return row;
+    }
+
+    handleAnnotationElementSelection(elementId, isChecked, row) {
+        if (isChecked) {
+            // Add to selected elements
+            if (!this.annotationSelectedElements) {
+                this.annotationSelectedElements = new Set();
+            }
+            this.annotationSelectedElements.add(elementId);
+            row.classList.add('selected');
+        } else {
+            // Remove from selected elements
+            if (this.annotationSelectedElements) {
+                this.annotationSelectedElements.delete(elementId);
+            }
+            row.classList.remove('selected');
+        }
+        
+        // Update element overlays for selected elements
+        const selectedScreen = this.kioskChat.elements.annotationScreen.value;
+        if (selectedScreen && this.kioskChat.elementsVisible) {
+            this.showSelectedAnnotationElementOverlays(selectedScreen);
+        }
+        
+        // Update the last selected element in hidden dropdown for compatibility
+        if (isChecked && this.kioskChat.elements.annotationElement) {
+            this.kioskChat.elements.annotationElement.value = elementId;
+        }
+        
+        console.log('Selected annotation elements:', this.annotationSelectedElements);
+    }
+
+    showSelectedAnnotationElementOverlays(screenId) {
+        // Clear existing element overlays
+        this.kioskChat.clearElementOverlays();
+        
+        if (!this.annotationSelectedElements || this.annotationSelectedElements.size === 0) {
+            return;
+        }
+        
+        const screenData = this.kioskChat.kioskData?.screens?.[screenId];
+        if (!screenData?.elements) return;
+        
+        // Show overlays for each selected element with absolute positioning
+        this.annotationSelectedElements.forEach(elementId => {
+            const element = screenData.elements.find(e => e.id === elementId);
+            if (element) {
+                this.kioskChat.createAbsoluteElementOverlay(element, true); // true = annotation overlay (red)
+            }
+        });
+    }
+
+    highlightAnnotationElement(element, screenId) {
+        // Clear existing overlays
+        this.kioskChat.clearElementOverlays();
+        
+        // Create temporary overlay for this element
+        this.kioskChat.createAbsoluteElementOverlay(element, true);
+        
+        // Auto-hide after 2 seconds if not selected
+        if (!this.annotationSelectedElements?.has(element.id)) {
+            setTimeout(() => {
+                if (this.annotationSelectedElements && this.annotationSelectedElements.size > 0) {
+                    this.showSelectedAnnotationElementOverlays(screenId);
+                } else {
+                    this.kioskChat.clearElementOverlays();
+                }
+            }, 2000);
+        }
+    }
+
+    deleteAnnotationElementFromTable(elementId, screenId) {
+        if (confirm(`Delete element "${elementId}"?`)) {
+            // Remove from data
+            const screenData = this.kioskChat.kioskData.screens[screenId];
+            if (screenData && screenData.elements) {
+                screenData.elements = screenData.elements.filter(e => e.id !== elementId);
+                
+                // Update both table and dropdown
+                this.populateAnnotationElementsTable(screenId);
+                this.updateElementDropdown(screenId);
+                
+                // Clear overlays and redraw
+                this.kioskChat.clearElementOverlays();
+                if (this.kioskChat.elementsVisible) {
+                    this.showSelectedAnnotationElementOverlays(screenId);
+                }
+                
+                // Save changes
+                this.kioskChat.saveKioskData();
+                
+                this.kioskChat.addMessage('system', `🗑️ Element "${elementId}" deleted from annotation`);
+            }
+        }
     }
     
     handleElementChange() {

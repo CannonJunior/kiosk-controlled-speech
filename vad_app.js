@@ -31,6 +31,13 @@ class KioskSpeechChat {
         this.screenshotCount = 0;
         this.currentScreenshot = null;
         
+        // Processing timing metrics
+        this.processingStartTime = null;
+        this.processingTimer = null;
+        this.processingTimeouts = [];
+        this.maxProcessingTime = 3000; // 3 second limit
+        this.targetMedianTime = 1000; // Target 1 second median
+        
         // Settings (will be loaded from config)
         this.settings = {
             autoSendVoice: true,
@@ -444,6 +451,13 @@ class KioskSpeechChat {
                 if (data.response && data.response.success) {
                     const response = data.response.response;
                     let messageText = response.message || 'I processed your request.';
+                    
+                    // Add timing information if available
+                    if (data.response.actual_processing_time) {
+                        const processingTime = data.response.actual_processing_time;
+                        const processingId = data.response.processing_id || 'unknown';
+                        console.log(`[TIMING-${processingId}] Server processing time: ${processingTime}`);
+                    }
                     
                     // Format response based on action type
                     if (response.action === 'click') {
@@ -1045,11 +1059,140 @@ class KioskSpeechChat {
     }
     
     showProcessingIndicator() {
+        this.processingStartTime = Date.now();
         this.elements.processingIndicator.style.display = 'flex';
+        
+        // Start real-time timer display
+        this.startProcessingTimer();
+        
+        // AGGRESSIVE timeout enforcement (2 second limit)
+        const timeoutId = setTimeout(() => {
+            this.enforceProcessingTimeout();
+        }, 2000);  // Reduced from 3s to 2s to be more aggressive
+        this.processingTimeouts.push(timeoutId);
+        
+        // Update indicator text with timing info
+        this.updateProcessingIndicatorText();
+        
+        console.log(`[TIMING] Processing started at: ${new Date().toISOString()}`);
     }
     
     hideProcessingIndicator() {
+        if (this.processingStartTime) {
+            const endTime = Date.now();
+            const elapsedTime = endTime - this.processingStartTime;
+            const startTimeStr = new Date(this.processingStartTime).toISOString();
+            const endTimeStr = new Date(endTime).toISOString();
+            
+            // Clear timers and timeouts
+            this.stopProcessingTimer();
+            this.clearProcessingTimeouts();
+            
+            // Log timing metrics
+            console.log(`[TIMING] Processing completed:`);
+            console.log(`[TIMING] - Start: ${startTimeStr}`);
+            console.log(`[TIMING] - End: ${endTimeStr}`);
+            console.log(`[TIMING] - Duration: ${elapsedTime}ms`);
+            
+            // Add timing message to chat
+            this.addTimingMessage(this.processingStartTime, endTime, elapsedTime);
+            
+            // Performance warning if over target
+            if (elapsedTime > this.targetMedianTime) {
+                console.warn(`[PERFORMANCE] Processing took ${elapsedTime}ms (target: ${this.targetMedianTime}ms)`);
+            }
+            
+            this.processingStartTime = null;
+        }
+        
         this.elements.processingIndicator.style.display = 'none';
+    }
+    
+    startProcessingTimer() {
+        this.processingTimer = setInterval(() => {
+            if (this.processingStartTime) {
+                this.updateProcessingIndicatorText();
+            }
+        }, 100); // Update every 100ms
+    }
+    
+    stopProcessingTimer() {
+        if (this.processingTimer) {
+            clearInterval(this.processingTimer);
+            this.processingTimer = null;
+        }
+    }
+    
+    clearProcessingTimeouts() {
+        this.processingTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.processingTimeouts = [];
+    }
+    
+    updateProcessingIndicatorText() {
+        if (!this.processingStartTime) return;
+        
+        const elapsed = Date.now() - this.processingStartTime;
+        const elapsedSeconds = (elapsed / 1000).toFixed(1);
+        const startTime = new Date(this.processingStartTime).toLocaleTimeString();
+        
+        const indicator = this.elements.processingIndicator.querySelector('span');
+        if (indicator) {
+            indicator.innerHTML = `
+                Processing Input...<br>
+                <small>Started: ${startTime} | Elapsed: ${elapsedSeconds}s</small>
+            `;
+        }
+    }
+    
+    enforceProcessingTimeout() {
+        if (this.processingStartTime) {
+            const elapsed = Date.now() - this.processingStartTime;
+            console.error(`[FORCE-TIMEOUT] Processing exceeded 2s (actual: ${elapsed}ms)`);
+            
+            // FORCE hide processing indicator immediately
+            this.hideProcessingIndicator();
+            
+            // Show timeout message with recovery options
+            this.addMessage('system', `🚨 **Processing Timeout**\n\nRequest took ${(elapsed/1000).toFixed(1)}s (max: 2.0s)\n\n**Try these reliable commands:**\n• 'help'\n• 'screenshot' \n• 'settings'`);
+            
+            // Attempt to cancel any ongoing requests
+            if (this.ws && this.isConnected) {
+                this.ws.send(JSON.stringify({
+                    type: 'cancel_processing',
+                    timestamp: new Date().toISOString()
+                }));
+            }
+            
+            // Clear any pending operations
+            this.clearProcessingTimeouts();
+            this.stopProcessingTimer();
+        }
+    }
+    
+    addTimingMessage(startTime, endTime, elapsedTime) {
+        const startStr = new Date(startTime).toLocaleTimeString();
+        const endStr = new Date(endTime).toLocaleTimeString();
+        const duration = (elapsedTime / 1000).toFixed(2);
+        
+        // Determine performance level
+        let performanceIcon = '🟢';
+        let performanceText = 'Excellent';
+        
+        if (elapsedTime > this.targetMedianTime) {
+            performanceIcon = '🟡';
+            performanceText = 'Acceptable';
+        }
+        
+        if (elapsedTime > 2000) {
+            performanceIcon = '🔴';
+            performanceText = 'Slow';
+        }
+        
+        const timingMessage = `${performanceIcon} **Processing Complete** (${performanceText})\n` +
+                             `📅 Start: ${startStr} | End: ${endStr}\n` +
+                             `⏱️ Duration: ${duration}s`;
+        
+        this.addMessage('system', timingMessage);
     }
     
     toggleSettings() {
