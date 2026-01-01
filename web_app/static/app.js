@@ -23,6 +23,9 @@ class KioskSpeechChat {
         this.speechDetected = false;
         this.consecutiveSilenceCount = 0;
         
+        // Processing timeout to prevent UI hangs
+        this.processingTimeout = null;
+        
         // Dictation state (manual control)
         this.isDictationListening = false;
         
@@ -346,7 +349,6 @@ class KioskSpeechChat {
             confirmAddScreen: document.getElementById('confirmAddScreen'),
             // Add new element modal elements
             addElementModal: document.getElementById('addElementModal'),
-            addElementModalBackdrop: document.getElementById('addElementModalBackdrop'),
             addElementModalClose: document.getElementById('addElementModalClose'),
             elementId: document.getElementById('elementId'),
             elementName: document.getElementById('elementName'),
@@ -357,6 +359,7 @@ class KioskSpeechChat {
             elementY: document.getElementById('elementY'),
             elementWidth: document.getElementById('elementWidth'),
             elementHeight: document.getElementById('elementHeight'),
+            panelDrawingMode: document.getElementById('panelDrawingMode'),
             cancelAddElement: document.getElementById('cancelAddElement'),
             confirmAddElement: document.getElementById('confirmAddElement'),
             // Screenshot annotation modal elements
@@ -755,13 +758,20 @@ class KioskSpeechChat {
         this.elements.screenDropdown.innerHTML = '<option value="">Screen</option>';
         
         // Add screen options
-        Object.keys(this.kioskData.screens).forEach(screenKey => {
+        const screenKeys = Object.keys(this.kioskData.screens);
+        screenKeys.forEach((screenKey, index) => {
             const screen = this.kioskData.screens[screenKey];
             const option = document.createElement('option');
             option.value = screenKey;
             option.textContent = screen.name || screenKey;
             this.elements.screenDropdown.appendChild(option);
         });
+        
+        // Auto-select the first screen if available
+        if (screenKeys.length > 0) {
+            this.elements.screenDropdown.value = screenKeys[0];
+            console.log('🎯 Auto-selected first screen:', screenKeys[0]);
+        }
         
         // Add "Add New Screen..." option at the end
         const addNewOption = document.createElement('option');
@@ -1136,10 +1146,39 @@ class KioskSpeechChat {
             this.showSelectedElementOverlays(screenId);
         }
         
+        // Refresh individual element overlays if they are currently visible
+        this.refreshElementOverlay(element);
+        
         // Mark data as changed
         this.hasUnsavedChanges = true;
         
         console.log('Updated element coordinate:', element.id, coord, newValue);
+    }
+
+    refreshElementOverlay(element) {
+        // Check if this element has any visible overlays and refresh them
+        
+        // Check for main element overlay (blue)
+        const mainOverlay = document.querySelector(`.element-overlay:not(.annotation-overlay)[data-element-id="${element.id}"]`);
+        if (mainOverlay) {
+            this.updateOverlayPosition(mainOverlay, element);
+            console.log('🔄 Refreshed main overlay for element:', element.id);
+        }
+        
+        // Check for annotation element overlay (red)
+        const annotationOverlay = document.querySelector(`.element-overlay.annotation-overlay[data-element-id="${element.id}"]`);
+        if (annotationOverlay) {
+            this.updateOverlayPosition(annotationOverlay, element);
+            console.log('🔄 Refreshed annotation overlay for element:', element.id);
+        }
+    }
+
+    updateOverlayPosition(overlay, element) {
+        // Update overlay position and size based on current element data
+        overlay.style.left = element.coordinates.x + 'px';
+        overlay.style.top = element.coordinates.y + 'px';
+        overlay.style.width = element.size.width + 'px';
+        overlay.style.height = element.size.height + 'px';
     }
 
     refreshElementTableRow(element, screenId) {
@@ -1171,22 +1210,48 @@ class KioskSpeechChat {
     }
     
     highlightSingleElement(element, screenId) {
-        // Clear existing overlays
-        this.clearElementOverlays();
+        // Check if this element already has an overlay
+        const existingOverlay = document.querySelector(`.element-overlay[data-element-id="${element.id}"]`);
         
-        // Show only this element
-        const overlay = this.createElementOverlay(element, false);
-        if (overlay) {
-            document.body.appendChild(overlay);
+        if (existingOverlay) {
+            // Element is visible, hide it
+            existingOverlay.remove();
             
-            // Auto-hide after 2 seconds
-            setTimeout(() => {
-                this.clearElementOverlays();
-                // Restore normal element visibility if enabled
-                if (this.elementsVisible) {
-                    this.showElementOverlays(screenId, false);
+            // Remove from currentElementOverlays array
+            const overlayIndex = this.currentElementOverlays.indexOf(existingOverlay);
+            if (overlayIndex > -1) {
+                this.currentElementOverlays.splice(overlayIndex, 1);
+            }
+            
+            console.log(`👁️ Hidden element: ${element.id}`);
+        } else {
+            // Element is not visible, show it
+            const overlay = this.createElementOverlay(element, false);
+            if (overlay) {
+                document.body.appendChild(overlay);
+                this.currentElementOverlays.push(overlay);
+                console.log(`👁️ Showing element: ${element.id}`);
+            }
+        }
+        
+        // Update the eye icon to reflect current state
+        this.updateHighlightButtonIcon(element.id, !existingOverlay);
+    }
+    
+    updateHighlightButtonIcon(elementId, isVisible) {
+        // Find the highlight button for this element in main elements panel
+        const button = document.querySelector(`#elementsTableBody tr[data-element-id="${elementId}"] .element-action.view`);
+        if (button) {
+            const icon = button.querySelector('i');
+            if (icon) {
+                if (isVisible) {
+                    icon.className = 'fas fa-eye-slash';
+                    button.title = 'Hide Element';
+                } else {
+                    icon.className = 'fas fa-eye';
+                    button.title = 'Highlight Element';
                 }
-            }, 2000);
+            }
         }
     }
     
@@ -1612,6 +1677,19 @@ class KioskSpeechChat {
     initializeKeyboardShortcuts() {
         // Handle keyboard shortcuts for drawing functionality
         document.addEventListener('keydown', (e) => {
+            // ALT+Z - Take screenshot and add to gallery
+            if (e.altKey && (e.key === 'z' || e.key === 'Z')) {
+                e.preventDefault(); // Prevent any default browser behavior
+                console.log('🔥 ALT+Z pressed - taking screenshot');
+                
+                // Provide immediate feedback that hotkey was triggered
+                this.addMessage('system', '📸 ALT+Z pressed - taking screenshot...');
+                
+                // Call takeScreenshot (it handles its own success/error feedback)
+                this.takeScreenshot();
+                return;
+            }
+            
             // ESC key - exit drawing mode
             if (e.key === 'Escape' || e.keyCode === 27) {
                 if (this.drawingMode !== 'none') {
@@ -1704,6 +1782,21 @@ class KioskSpeechChat {
             });
         }
 
+        // Annotation Add Element button
+        if (this.elements.annotationAddElementBtn) {
+            this.elements.annotationAddElementBtn.addEventListener('click', () => {
+                // Use the current annotation screen from the elements panel
+                const annotationScreen = this.currentAnnotationScreen;
+                if (annotationScreen) {
+                    this.showAddElementModal(null, annotationScreen);
+                    console.log('🎯 Annotation Add Element button clicked for screen:', annotationScreen);
+                    this.addMessage('system', `📋 Opening Add Element modal for annotation screen: ${annotationScreen}`);
+                } else {
+                    this.addMessage('system', '⚠️ Please select a screen in annotation mode first.');
+                }
+            });
+        }
+
         // Elements panel controls
         if (this.elements.elementsPanelClose) {
             this.elements.elementsPanelClose.addEventListener('click', () => {
@@ -1786,10 +1879,6 @@ class KioskSpeechChat {
         
         // Add new element modal event listeners
         this.elements.addElementModalClose.addEventListener('click', () => {
-            this.closeAddElementModal();
-        });
-        
-        this.elements.addElementModalBackdrop.addEventListener('click', () => {
             this.closeAddElementModal();
         });
         
@@ -2054,6 +2143,20 @@ class KioskSpeechChat {
             case 'transcription':
                 this.showTranscription(data.text, data.confidence);
                 
+                // Hide processing indicator for transcription-only mode
+                if (this.processingMode === 'heuristic' || !this.settings.autoSendVoice) {
+                    this.hideProcessingIndicator();
+                }
+                
+                // Check for empty transcription that could indicate processing issues
+                if (!data.text || !data.text.trim()) {
+                    console.warn('⚠️ Empty transcription received');
+                    if (!this.settings.autoSendVoice) {
+                        this.addMessage('system', '⚠️ No speech detected. Please try speaking more clearly.');
+                    }
+                    this.resumeWakeWordListeningIfActive();
+                    break;
+                }
                 
                 // Only process transcription on client-side in heuristic mode
                 // In LLM mode, server handles transcription processing automatically
@@ -2447,8 +2550,11 @@ class KioskSpeechChat {
             };
             
             this.mediaRecorder.onstop = () => {
+                // Preserve speech detection state before cleanup
+                const hadSpeech = this.speechDetected;
                 this.cleanupVAD();
-                this.processRecordedAudio();
+                // Pass speech detection state to processing
+                this.processRecordedAudio(hadSpeech);
             };
             
             // Start recording
@@ -2651,13 +2757,36 @@ class KioskSpeechChat {
         }
     }
     
-    async processRecordedAudio() {
+    async processRecordedAudio(hadSpeech = false) {
         try {
             if (this.audioChunks.length === 0) {
                 console.warn('No audio data recorded');
                 return;
             }
             
+            // Check if speech was actually detected during recording
+            // This prevents processing background noise or silence
+            if (!hadSpeech) {
+                console.log('🔇 No speech detected during recording, skipping processing to prevent false triggers');
+                // Clear audio chunks to prevent accumulation
+                this.audioChunks = [];
+                // Resume wake word listening if active
+                this.resumeWakeWordListeningIfActive();
+                return;
+            }
+            
+            // Additional check: ensure recording was long enough to be meaningful speech
+            const recordingDuration = Date.now() - this.recordingStartTime;
+            if (recordingDuration < 200) { // Less than 200ms
+                console.log(`🔇 Recording too brief (${recordingDuration}ms), likely false trigger - skipping processing`);
+                // Clear audio chunks to prevent accumulation
+                this.audioChunks = [];
+                // Resume wake word listening if active
+                this.resumeWakeWordListeningIfActive();
+                return;
+            }
+            
+            console.log('🗣️ Speech was detected, processing audio...');
             this.showProcessingIndicator();
             
             // Create audio blob
@@ -2701,6 +2830,15 @@ class KioskSpeechChat {
         if (!this.ws || !this.isConnected) {
             this.hideProcessingIndicator();
             this.showError('Not connected to server');
+            return;
+        }
+
+        // Check for empty or minimal audio data that could cause hanging
+        if (!base64Audio || base64Audio.length < 100) {
+            console.warn('⚠️ Empty or minimal audio detected, aborting to prevent hang');
+            this.hideProcessingIndicator();
+            this.addMessage('system', '⚠️ No audio detected. Please try speaking again.');
+            this.resumeWakeWordListeningIfActive();
             return;
         }
 
@@ -3146,10 +3284,33 @@ class KioskSpeechChat {
     }
     
     showProcessingIndicator() {
+        // Clear any existing timeout first
+        if (this.processingTimeout) {
+            clearTimeout(this.processingTimeout);
+            this.processingTimeout = null;
+        }
+        
         this.elements.processingIndicator.style.display = 'flex';
+        
+        // Set a 3-second timeout to automatically hide the indicator
+        // This prevents the UI from hanging indefinitely
+        this.processingTimeout = setTimeout(() => {
+            console.warn('⚠️ Processing timeout reached (3s) - hiding indicator to prevent UI hang');
+            this.hideProcessingIndicator();
+            this.addMessage('system', '⚠️ Processing timed out. Please try again.');
+            
+            // Resume wake word listening if active to ensure system doesn't stay locked
+            this.resumeWakeWordListeningIfActive();
+        }, 3000); // 3 seconds maximum
     }
     
     hideProcessingIndicator() {
+        // Clear the timeout when manually hiding
+        if (this.processingTimeout) {
+            clearTimeout(this.processingTimeout);
+            this.processingTimeout = null;
+        }
+        
         this.elements.processingIndicator.style.display = 'none';
     }
     
@@ -3427,35 +3588,16 @@ class KioskSpeechChat {
         });
     }
 
-    calculateLayoutOffset() {
-        // The key insight: overlay elements are positioned using screen coordinates from config/kiosk_data.json,
-        // but they need to be positioned relative to the browser's client coordinate system.
-        // We need to convert from screen coordinates to client coordinates.
-        
-        // Calculate the offset between screen coordinates and client coordinates
-        // This is the same approach used in rectangle drawing for coordinate conversion
-        const screenOffsetX = this.lastMouseX - this.lastClientX;
-        const screenOffsetY = this.lastMouseY - this.lastClientY;
-        
-        // To position overlays correctly, we need the inverse offset:
-        // screenCoord + offset = clientCoord, so offset = clientCoord - screenCoord
-        const offsetX = -screenOffsetX;  // Negative because we're converting FROM screen TO client
-        const offsetY = -screenOffsetY;
-        
-        return { x: offsetX, y: offsetY };
-    }
 
     createElementOverlay(element, isAnnotationOverlay = false) {
         const overlay = document.createElement('div');
         overlay.className = isAnnotationOverlay ? 'element-overlay annotation-overlay' : 'element-overlay';
         overlay.setAttribute('data-element-id', element.id);
         
-        // Calculate proper positioning offset for layout
-        const layoutOffset = this.calculateLayoutOffset();
-        
-        // Position and size the overlay with layout offset applied
-        overlay.style.left = (element.coordinates.x + layoutOffset.x) + 'px';
-        overlay.style.top = (element.coordinates.y + layoutOffset.y) + 'px';
+        // Position and size the overlay using absolute screen coordinates
+        // Element coordinates are already relative to the top-left of the entire screen
+        overlay.style.left = element.coordinates.x + 'px';
+        overlay.style.top = element.coordinates.y + 'px';
         overlay.style.width = element.size.width + 'px';
         overlay.style.height = element.size.height + 'px';
         
@@ -4130,8 +4272,8 @@ class KioskSpeechChat {
         console.log('New screen queued:', screenId, newScreen);
     }
     
-    showAddElementModal() {
-        console.log('showAddElementModal called');
+    showAddElementModal(element = null, screenId = null) {
+        console.log('showAddElementModal called with:', { element, screenId });
         
         // Check if modal elements exist
         if (!this.elements.addElementModal) {
@@ -4140,46 +4282,333 @@ class KioskSpeechChat {
             return;
         }
         
-        // Check if a screen is selected
-        const selectedScreen = this.elements.screenDropdown.value;
+        // Determine which screen to use
+        let selectedScreen = screenId;
         if (!selectedScreen) {
-            this.addMessage('system', '⚠️ Please select a screen first before adding an element.');
-            return;
+            selectedScreen = this.elements.screenDropdown.value;
         }
         
-        // Clear form fields
-        this.elements.elementId.value = '';
-        this.elements.elementName.value = '';
-        this.elements.elementDescription.value = '';
-        this.elements.elementAction.value = '';
-        this.elements.elementVoiceCommands.value = '';
-        this.elements.elementX.value = '';
-        this.elements.elementY.value = '';
-        this.elements.elementWidth.value = '';
-        this.elements.elementHeight.value = '';
+        // If still no screen, use the first available screen
+        if (!selectedScreen || selectedScreen === '') {
+            const availableScreens = Object.keys(this.kioskData.screens);
+            if (availableScreens.length > 0) {
+                selectedScreen = availableScreens[0];
+                this.elements.screenDropdown.value = selectedScreen;
+                console.log('🎯 No screen selected, using first available:', selectedScreen);
+            } else {
+                this.addMessage('system', '⚠️ No screens available. Please add a screen first.');
+                return;
+            }
+        }
+        
+        console.log('🎯 Using screen for modal:', selectedScreen);
+        
+        // Clear form fields or populate if editing
+        if (element) {
+            // Editing existing element
+            this.elements.elementId.value = element.id || '';
+            this.elements.elementName.value = element.name || '';
+            this.elements.elementDescription.value = element.description || '';
+            this.elements.elementAction.value = element.action || '';
+            this.elements.elementVoiceCommands.value = (element.voiceCommands || []).join(', ');
+            this.elements.elementX.value = element.coordinates?.x || '';
+            this.elements.elementY.value = element.coordinates?.y || '';
+            this.elements.elementWidth.value = element.size?.width || '';
+            this.elements.elementHeight.value = element.size?.height || '';
+            console.log('🔧 Populating modal for editing element:', element.id);
+        } else {
+            // Adding new element
+            this.elements.elementId.value = '';
+            this.elements.elementName.value = '';
+            this.elements.elementDescription.value = '';
+            this.elements.elementAction.value = '';
+            this.elements.elementVoiceCommands.value = '';
+            this.elements.elementX.value = '';
+            this.elements.elementY.value = '';
+            this.elements.elementWidth.value = '';
+            this.elements.elementHeight.value = '';
+            console.log('➕ Modal opened for adding new element');
+        }
         
         // Reset validation
         this.validateAddElementForm();
         
-        // Show modal
-        this.elements.addElementModal.style.display = 'flex';
+        // Show panel
+        this.elements.addElementModal.style.display = 'block';
+        
+        // Initialize dragging functionality
+        this.initAddElementPanelDragging();
+        
+        // Initialize drawing functionality
+        this.initAddElementPanelDrawing();
         
         // Focus on first input
         this.elements.elementId.focus();
         
-        // Prevent body scroll
-        document.body.style.overflow = 'hidden';
+        console.log('Add element panel opened for screen:', selectedScreen);
+    }
+    
+    initAddElementPanelDragging() {
+        const panel = this.elements.addElementModal;
+        const header = document.getElementById('addElementPanelHeader');
         
-        console.log('Add element modal opened for screen:', selectedScreen);
+        if (!panel || !header) {
+            console.warn('Cannot initialize dragging: panel or header not found');
+            return;
+        }
+        
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        
+        const startDrag = (e) => {
+            if (e.target.closest('.panel-close')) {
+                return; // Don't start dragging if clicking close button
+            }
+            
+            isDragging = true;
+            const rect = panel.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+            
+            // Prevent text selection while dragging
+            document.body.style.userSelect = 'none';
+            header.style.cursor = 'grabbing';
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+            e.preventDefault();
+        };
+        
+        const drag = (e) => {
+            if (!isDragging) return;
+            
+            const x = e.clientX - dragOffset.x;
+            const y = e.clientY - dragOffset.y;
+            
+            // Keep panel within viewport bounds
+            const maxX = window.innerWidth - panel.offsetWidth;
+            const maxY = window.innerHeight - panel.offsetHeight;
+            
+            const clampedX = Math.max(0, Math.min(x, maxX));
+            const clampedY = Math.max(0, Math.min(y, maxY));
+            
+            panel.style.left = clampedX + 'px';
+            panel.style.top = clampedY + 'px';
+        };
+        
+        const stopDrag = () => {
+            if (!isDragging) return;
+            
+            isDragging = false;
+            document.body.style.userSelect = '';
+            header.style.cursor = 'move';
+            
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        };
+        
+        // Add event listeners
+        header.addEventListener('mousedown', startDrag);
+        
+        // Store cleanup function for when panel is closed
+        this._cleanupDragging = () => {
+            header.removeEventListener('mousedown', startDrag);
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.body.style.userSelect = '';
+        };
+    }
+    
+    initAddElementPanelDrawing() {
+        const drawingModeSelect = this.elements.panelDrawingMode;
+        
+        if (!drawingModeSelect) {
+            console.warn('Cannot initialize panel drawing: drawing mode select not found');
+            return;
+        }
+        
+        const handleDrawingModeChange = (mode) => {
+            if (mode === 'rectangle') {
+                this.startPanelDrawingMode();
+            } else {
+                this.stopPanelDrawingMode();
+            }
+        };
+        
+        // Set up drawing mode change handler
+        drawingModeSelect.addEventListener('change', (e) => {
+            handleDrawingModeChange(e.target.value);
+        });
+        
+        // Store cleanup function
+        this._cleanupPanelDrawing = () => {
+            drawingModeSelect.removeEventListener('change', handleDrawingModeChange);
+            this.stopPanelDrawingMode();
+        };
+    }
+    
+    startPanelDrawingMode() {
+        // Create drawing overlay if it doesn't exist
+        let overlay = document.getElementById('panelDrawingOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'panelDrawingOverlay';
+            overlay.className = 'panel-drawing-overlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: auto;
+                z-index: 9999;
+                cursor: crosshair;
+            `;
+            document.body.appendChild(overlay);
+        }
+        
+        this._drawingOverlay = overlay;
+        overlay.style.display = 'block';
+        
+        let isDrawing = false;
+        let startPos = { x: 0, y: 0 };
+        let currentRect = null;
+        
+        const startDrawing = (e) => {
+            isDrawing = true;
+            startPos.x = e.clientX;
+            startPos.y = e.clientY;
+            
+            // Create rectangle element
+            currentRect = document.createElement('div');
+            currentRect.style.cssText = `
+                position: fixed;
+                border: 2px dashed #28a745;
+                background: rgba(40, 167, 69, 0.1);
+                pointer-events: none;
+                z-index: 10000;
+                border-radius: 2px;
+            `;
+            document.body.appendChild(currentRect);
+        };
+        
+        const updateDrawing = (e) => {
+            if (!isDrawing || !currentRect) return;
+            
+            const x = Math.min(startPos.x, e.clientX);
+            const y = Math.min(startPos.y, e.clientY);
+            const width = Math.abs(e.clientX - startPos.x);
+            const height = Math.abs(e.clientY - startPos.y);
+            
+            currentRect.style.left = x + 'px';
+            currentRect.style.top = y + 'px';
+            currentRect.style.width = width + 'px';
+            currentRect.style.height = height + 'px';
+        };
+        
+        const finishDrawing = (e) => {
+            if (!isDrawing || !currentRect) return;
+            
+            isDrawing = false;
+            
+            // Calculate final coordinates
+            const x = Math.min(startPos.x, e.clientX);
+            const y = Math.min(startPos.y, e.clientY);
+            const width = Math.abs(e.clientX - startPos.x);
+            const height = Math.abs(e.clientY - startPos.y);
+            
+            // Update coordinate fields
+            this.updatePanelCoordinateFields(x, y, width, height);
+            
+            // Clean up
+            currentRect.remove();
+            currentRect = null;
+            
+            // Stop drawing mode
+            this.stopPanelDrawingMode();
+            
+            // Reset drawing mode select
+            this.elements.panelDrawingMode.value = 'none';
+        };
+        
+        overlay.addEventListener('mousedown', startDrawing);
+        document.addEventListener('mousemove', updateDrawing);
+        document.addEventListener('mouseup', finishDrawing);
+        
+        // Store cleanup functions
+        this._drawingCleanupFunctions = {
+            startDrawing,
+            updateDrawing,
+            finishDrawing
+        };
+        
+        console.log('🎨 Panel drawing mode started');
+    }
+    
+    stopPanelDrawingMode() {
+        if (this._drawingOverlay) {
+            this._drawingOverlay.style.display = 'none';
+        }
+        
+        if (this._drawingCleanupFunctions) {
+            const { startDrawing, updateDrawing, finishDrawing } = this._drawingCleanupFunctions;
+            this._drawingOverlay?.removeEventListener('mousedown', startDrawing);
+            document.removeEventListener('mousemove', updateDrawing);
+            document.removeEventListener('mouseup', finishDrawing);
+            this._drawingCleanupFunctions = null;
+        }
+        
+        console.log('🎨 Panel drawing mode stopped');
+    }
+    
+    updatePanelCoordinateFields(x, y, width, height) {
+        // Update the coordinate input fields immediately
+        if (this.elements.elementX) {
+            this.elements.elementX.value = Math.round(x);
+        }
+        if (this.elements.elementY) {
+            this.elements.elementY.value = Math.round(y);
+        }
+        if (this.elements.elementWidth) {
+            this.elements.elementWidth.value = Math.round(width);
+        }
+        if (this.elements.elementHeight) {
+            this.elements.elementHeight.value = Math.round(height);
+        }
+        
+        // Trigger validation update
+        this.validateAddElementForm();
+        
+        console.log('📐 Panel coordinates updated:', { 
+            x: Math.round(x), 
+            y: Math.round(y), 
+            width: Math.round(width), 
+            height: Math.round(height) 
+        });
     }
     
     closeAddElementModal() {
         this.elements.addElementModal.style.display = 'none';
         
-        // Restore body scroll
-        document.body.style.overflow = '';
+        // Clean up dragging functionality
+        if (this._cleanupDragging) {
+            this._cleanupDragging();
+            this._cleanupDragging = null;
+        }
         
-        console.log('Add element modal closed');
+        // Clean up drawing functionality
+        if (this._cleanupPanelDrawing) {
+            this._cleanupPanelDrawing();
+            this._cleanupPanelDrawing = null;
+        }
+        
+        // Remove drawing overlay
+        const drawingOverlay = document.getElementById('panelDrawingOverlay');
+        if (drawingOverlay) {
+            drawingOverlay.remove();
+        }
+        
+        console.log('Add element panel closed');
     }
     
     validateAddElementForm() {
@@ -4193,7 +4622,7 @@ class KioskSpeechChat {
         this.elements.confirmAddElement.disabled = !isValid;
     }
     
-    handleAddNewElement() {
+    async handleAddNewElement() {
         const selectedScreen = this.elements.screenDropdown.value;
         if (!selectedScreen) {
             console.error('No screen selected');
@@ -4238,34 +4667,84 @@ class KioskSpeechChat {
             description: elementDescription || `${elementName} element`
         };
         
-        // Add to pending updates (this will be saved when Save button is clicked)
-        if (!this.pendingNewElements) {
-            this.pendingNewElements = {};
-        }
-        if (!this.pendingNewElements[selectedScreen]) {
-            this.pendingNewElements[selectedScreen] = [];
-        }
-        this.pendingNewElements[selectedScreen].push(newElement);
+        // Save the new element to the server
+        await this.saveKioskData(selectedScreen, newElement);
         
-        // Enable save button
-        this.elements.saveButton.disabled = false;
+        // Add element to local kioskData after successful save
+        if (!this.kioskData.screens[selectedScreen].elements) {
+            this.kioskData.screens[selectedScreen].elements = [];
+        }
+        this.kioskData.screens[selectedScreen].elements.push(newElement);
         
         // Close modal
         this.closeAddElementModal();
         
+        // Refresh the UI to show the new element
+        this.updateElementDropdown(selectedScreen);
+        this.populateElementsTable(selectedScreen);
+        
         // Add success message
         this.addMessage('system', 
-            `✅ New Element Queued for Addition\n` +
+            `✅ Element Added Successfully\n` +
             `Screen: ${selectedScreen}\n` +
             `Element ID: ${elementId}\n` +
             `Name: ${elementName}\n` +
             `Action: ${elementAction}\n` +
             `Coordinates: (${elementX}, ${elementY})\n` +
             `Voice Commands: ${voiceCommands.join(', ')}\n` +
-            `Click Save to add this element to the configuration.`
+            `Element is now available for use.`
         );
         
-        console.log('New element queued for screen:', selectedScreen, newElement);
+        console.log('New element added and saved for screen:', selectedScreen, newElement);
+    }
+    
+    async saveKioskData(screenName = null, newElement = null) {
+        try {
+            console.log('Saving kiosk data to server...');
+            
+            // Prepare the request data
+            const requestData = {
+                updates: {}, // For coordinate updates (not used here)
+                newScreens: {}, // For new screens (not used here)
+                newElements: {} // For new elements
+            };
+            
+            // If adding a new element, include it in newElements
+            if (screenName && newElement) {
+                requestData.newElements[screenName] = [newElement];
+                console.log('Adding new element:', screenName, newElement);
+            }
+            
+            // If no specific data to save, this might be a general save (like for deletions)
+            // In that case, we'll need to send the current state or handle differently
+            if (!screenName && !newElement) {
+                // This is likely a delete operation - for now just return
+                // TODO: Implement proper delete handling if needed
+                console.log('General save called - no specific action taken');
+                return;
+            }
+            
+            const response = await fetch('/api/kiosk-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to save kiosk data');
+            }
+            
+            const result = await response.json();
+            console.log('Kiosk data saved successfully:', result);
+            
+        } catch (error) {
+            console.error('Failed to save kiosk data:', error);
+            this.addMessage('system', `❌ Failed to save configuration: ${error.message}`);
+            throw error; // Re-throw so calling code can handle it
+        }
     }
     
     downloadCurrentScreenshot() {
@@ -4556,24 +5035,9 @@ class ScreenshotAnnotationMode {
         // ESC key to exit
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isActive) {
-                // Check if we're in drawing mode first
-                const currentDrawingMode = this.kioskChat.elements.annotationDrawingMode.value;
-                if (currentDrawingMode !== 'none') {
-                    // Exit drawing mode first
-                    this.kioskChat.elements.annotationDrawingMode.value = 'none';
-                    this.handleAnnotationDrawingModeChange();
-                    console.log('Escaped from drawing mode in annotation mode');
-                } else {
-                    // Only exit annotation mode if we're not in drawing mode
-                    this.exitMode();
-                    console.log('Escaped from annotation mode');
-                }
+                this.exitMode();
+                console.log('Escaped from annotation mode');
             }
-        });
-        
-        // Drawing mode change
-        this.kioskChat.elements.annotationDrawingMode.addEventListener('change', () => {
-            this.handleAnnotationDrawingModeChange();
         });
         
         // Save button
@@ -4947,6 +5411,9 @@ class ScreenshotAnnotationMode {
         this.kioskChat.elements.annotationElementsPanel.style.display = 'block';
         this.kioskChat.elements.annotationElementsPanelScreenName.textContent = `${selectedScreen} Annotation Elements`;
         
+        // Store the current annotation screen for use by the Add Element button
+        this.kioskChat.currentAnnotationScreen = selectedScreen;
+        
         // Clear existing table rows
         this.kioskChat.elements.annotationElementsTableBody.innerHTML = '';
         
@@ -5102,21 +5569,46 @@ class ScreenshotAnnotationMode {
     }
 
     highlightAnnotationElement(element, screenId) {
-        // Clear existing overlays
-        this.kioskChat.clearElementOverlays();
+        // Check if this element already has an overlay (red annotation overlay)
+        const existingOverlay = document.querySelector(`.element-overlay.annotation-overlay[data-element-id="${element.id}"]`);
         
-        // Create temporary overlay for this element
-        this.kioskChat.createAbsoluteElementOverlay(element, true);
-        
-        // Auto-hide after 2 seconds if not selected
-        if (!this.annotationSelectedElements?.has(element.id)) {
-            setTimeout(() => {
-                if (this.annotationSelectedElements && this.annotationSelectedElements.size > 0) {
-                    this.showSelectedAnnotationElementOverlays(screenId);
-                } else {
-                    this.kioskChat.clearElementOverlays();
+        if (existingOverlay) {
+            // Element is visible, hide it
+            existingOverlay.remove();
+            
+            // Remove from kioskChat's overlay tracking if it exists
+            if (this.kioskChat.currentElementOverlays) {
+                const overlayIndex = this.kioskChat.currentElementOverlays.indexOf(existingOverlay);
+                if (overlayIndex > -1) {
+                    this.kioskChat.currentElementOverlays.splice(overlayIndex, 1);
                 }
-            }, 2000);
+            }
+            
+            console.log(`👁️ Hidden annotation element: ${element.id}`);
+        } else {
+            // Element is not visible, show it with red annotation overlay
+            this.kioskChat.createAbsoluteElementOverlay(element, true);
+            console.log(`👁️ Showing annotation element: ${element.id}`);
+        }
+        
+        // Update the eye icon to reflect current state
+        this.updateAnnotationHighlightButtonIcon(element.id, !existingOverlay);
+    }
+
+    updateAnnotationHighlightButtonIcon(elementId, isVisible) {
+        // Find the highlight button for this element in annotation elements panel
+        const button = document.querySelector(`#annotationElementsTableBody tr[data-element-id="${elementId}"] .element-action.view`);
+        if (button) {
+            const icon = button.querySelector('i');
+            if (icon) {
+                if (isVisible) {
+                    icon.className = 'fas fa-eye-slash';
+                    button.title = 'Hide Element';
+                } else {
+                    icon.className = 'fas fa-eye';
+                    button.title = 'Highlight Element';
+                }
+            }
         }
     }
 
@@ -5304,25 +5796,6 @@ class ScreenshotAnnotationMode {
         // Don't hide the update button here - it should only disappear when Save is clicked
     }
     
-    handleAnnotationDrawingModeChange() {
-        const mode = this.kioskChat.elements.annotationDrawingMode.value;
-        const overlay = this.kioskChat.elements.annotationDrawingOverlay;
-        
-        console.log('Annotation drawing mode changed to:', mode);
-        
-        if (mode === 'rectangle') {
-            // Enable drawing mode
-            overlay.classList.add('drawing-mode');
-            document.body.classList.add('drawing-mode');
-            console.log('Annotation drawing mode enabled');
-        } else {
-            // Disable drawing mode
-            overlay.classList.remove('drawing-mode');
-            document.body.classList.remove('drawing-mode');
-            this.resetDrawing();
-            console.log('Annotation drawing mode disabled');
-        }
-    }
     
     screenToImageCoordinates(screenX, screenY) {
         const background = this.kioskChat.elements.annotationBackground;

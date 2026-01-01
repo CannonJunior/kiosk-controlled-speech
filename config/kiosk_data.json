@@ -284,6 +284,26 @@
           ],
           "action": "read_text",
           "description": "Main title or header area at the top of the screen"
+        },
+        {
+          "id": "b",
+          "name": "b",
+          "coordinates": {
+            "x": 694,
+            "y": 290
+          },
+          "size": {
+            "width": 535,
+            "height": 405
+          },
+          "voice_commands": [
+            "b"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "b"
         }
       ]
     },
@@ -374,6 +394,26 @@
           ],
           "action": "click",
           "description": "Go to vignettes from the splash screen."
+        },
+        {
+          "id": "a",
+          "name": "a",
+          "coordinates": {
+            "x": 250,
+            "y": 250
+          },
+          "size": {
+            "width": 300,
+            "height": 300
+          },
+          "voice_commands": [
+            "a"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "a"
         }
       ]
     },
