@@ -79,13 +79,9 @@ def register_routes(app: FastAPI):
     from web_app.api.v1.annotation_routes import router as annotation_router
     from web_app.api.v1.websocket_routes import router as websocket_router
     from web_app.api.v1.health_routes import router as health_router
-    from web_app.api.v1.mcp_routes import router as mcp_router
     
     # Core application routes (root, health, performance)
     app.include_router(core_router)
-    
-    # MCP tool compatibility routes
-    app.include_router(mcp_router)
     
     # Domain-specific API routes
     app.include_router(speech_router)
@@ -170,7 +166,7 @@ def main():
         
         # Run the application
         uvicorn.run(
-            "web_app.main:app",
+            "web_app.main_refactored:app",
             host="0.0.0.0",
             port=8000,
             reload=True,

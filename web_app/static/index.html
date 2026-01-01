@@ -321,6 +321,20 @@
                     <!-- Gallery Controls -->
                     <div class="gallery-controls" id="galleryControls" style="display: none;">
                         <div class="setting-group">
+                            <label for="screenshotSortSelect">Sort by:</label>
+                            <select id="screenshotSortSelect">
+                                <option value="timestamp">Date</option>
+                                <option value="name">Name</option>
+                                <option value="size">Size</option>
+                            </select>
+                        </div>
+                        <div class="setting-group">
+                            <button id="viewModeToggle" class="view-mode-toggle" title="Toggle view mode">
+                                <i class="fas fa-th"></i>
+                                <span>Grid View</span>
+                            </button>
+                        </div>
+                        <div class="setting-group">
                             <label class="checkbox-label">
                                 <input type="checkbox" id="selectAllScreenshots">
                                 <span class="checkbox-text">Select all screenshots</span>
@@ -340,7 +354,7 @@
         <!-- Settings Panel -->
         <div class="settings-panel" id="settingsPanel" style="display: none;">
             <div class="settings-content">
-                <h3><i class="fas fa-cog"></i> Settings</h3>
+                <h3><i class="fas fa-cog"></i> Settings <button class="close-btn" id="settingsClose"><i class="fas fa-times"></i></button></h3>
                 <div class="setting-group">
                     <label for="microphoneSelect">Microphone:</label>
                     <select id="microphoneSelect">
@@ -359,6 +373,138 @@
                     <a href="/troubleshooting" target="_blank" style="color: #667eea; text-decoration: none;">
                         <i class="fas fa-tools"></i> Microphone Troubleshooting
                     </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vignette Panel -->
+        <div class="vignette-panel" id="vignettePanel" style="display: none;">
+            <div class="panel-content">
+                <h3><i class="fas fa-book"></i> Vignette Workflow</h3>
+                
+                <!-- Current Vignette Info -->
+                <div class="setting-group">
+                    <label>Current Vignette:</label>
+                    <div id="currentVignetteName" class="current-vignette-name">None</div>
+                </div>
+                
+                <!-- Workflow Progress -->
+                <div class="setting-group">
+                    <label>Progress:</label>
+                    <div class="workflow-progress-container">
+                        <div class="workflow-progress" id="workflowProgress">
+                            <div class="workflow-progress-bar" style="width: 0%;"></div>
+                        </div>
+                        <div class="workflow-step" id="workflowStepName">No active workflow</div>
+                    </div>
+                </div>
+                
+                <!-- Workflow Controls -->
+                <div class="setting-group">
+                    <div class="workflow-controls">
+                        <button id="newVignetteButton" class="vignette-button primary">
+                            <i class="fas fa-plus"></i>
+                            <span>New Vignette</span>
+                        </button>
+                        <button id="workflowPrevButton" class="vignette-button" disabled>
+                            <i class="fas fa-chevron-left"></i>
+                            <span>Previous</span>
+                        </button>
+                        <button id="workflowNextButton" class="vignette-button" disabled>
+                            <i class="fas fa-chevron-right"></i>
+                            <span>Next</span>
+                        </button>
+                        <button id="completeVignetteButton" class="vignette-button success" disabled>
+                            <i class="fas fa-check"></i>
+                            <span>Complete</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Vignette Screenshots -->
+                <div class="setting-group">
+                    <label>Screenshots in Vignette:</label>
+                    <div class="vignette-screenshots" id="vignetteScreenshots">
+                        <div class="vignette-empty">
+                            <i class="fas fa-images"></i>
+                            <p>No screenshots in current vignette</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Vignette List -->
+                <div class="setting-group">
+                    <label>Saved Vignettes:</label>
+                    <div class="vignette-list" id="vignetteList">
+                        <div class="vignette-empty">
+                            <i class="fas fa-folder-open"></i>
+                            <p>No saved vignettes</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Annotation Panel -->
+        <div class="annotation-panel" id="annotationPanel" style="display: none;">
+            <div class="panel-content">
+                <h3><i class="fas fa-edit"></i> Annotation Tools</h3>
+                
+                <!-- Mode Selector -->
+                <div class="setting-group">
+                    <label>Mode:</label>
+                    <div class="annotation-mode-selector" id="annotationModeSelector">
+                        <button id="screenshotModeButton" class="mode-button active" data-mode="screenshot">
+                            <i class="fas fa-camera"></i>
+                            <span>Screenshot</span>
+                        </button>
+                        <button id="vignetteModeButton" class="mode-button" data-mode="vignette">
+                            <i class="fas fa-book"></i>
+                            <span>Vignette</span>
+                        </button>
+                        <button id="annotationModeButton" class="mode-button" data-mode="annotation">
+                            <i class="fas fa-edit"></i>
+                            <span>Annotation</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Drawing Tools -->
+                <div class="setting-group">
+                    <label>Drawing Tools:</label>
+                    <div class="drawing-toolbar" id="drawingToolbar">
+                        <button id="drawingToolNone" class="drawing-tool active" data-tool="none" title="Pointer Tool">
+                            <i class="fas fa-mouse-pointer"></i>
+                        </button>
+                        <button id="drawingToolRectangle" class="drawing-tool" data-tool="rectangle" title="Rectangle">
+                            <i class="far fa-square"></i>
+                        </button>
+                        <button id="drawingToolCircle" class="drawing-tool" data-tool="circle" title="Circle">
+                            <i class="far fa-circle"></i>
+                        </button>
+                        <button id="drawingToolArrow" class="drawing-tool" data-tool="arrow" title="Arrow">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                        <button id="drawingToolText" class="drawing-tool" data-tool="text" title="Text">
+                            <i class="fas fa-font"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Tool Settings -->
+                <div class="setting-group">
+                    <label>Tool Settings:</label>
+                    <div class="tool-settings">
+                        <div class="setting-row">
+                            <label for="strokeColor">Color:</label>
+                            <input type="color" id="strokeColor" value="#ff0000">
+                        </div>
+                        <div class="setting-row">
+                            <label for="strokeWidth">Width:</label>
+                            <input type="range" id="strokeWidth" min="1" max="10" value="3">
+                            <span id="strokeWidthValue">3</span>px
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -774,7 +920,7 @@
                     <i class="fas fa-spinner fa-spin"></i>
                     <span>Loading vignettes...</span>
                 </div>
-                <div class="vignette-list" id="vignetteList" style="display: none;">
+                <div class="vignette-modal-list" id="vignetteModalList" style="display: none;">
                     <div class="vignette-list-header">
                         <span>Select a vignette to open:</span>
                     </div>
@@ -844,6 +990,81 @@
         </div>
     </div>
 
+    <!-- Annotation Modal -->
+    <div class="annotation-modal" id="annotationModal" style="display: none;">
+        <div class="modal-overlay" id="modalOverlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> Annotation Workspace</h3>
+                <button class="modal-close" id="annotationModalClose" title="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="annotation-workspace">
+                    <div class="annotation-image-container">
+                        <img id="annotationImage" src="" alt="Image to annotate" />
+                        <canvas id="annotationCanvas" class="annotation-overlay"></canvas>
+                    </div>
+                    <div class="annotation-sidebar">
+                        <h4>Annotation Tools</h4>
+                        <div class="annotation-tools">
+                            <div class="tool-group">
+                                <label>Tool:</label>
+                                <div class="tool-buttons">
+                                    <button class="annotation-tool-btn active" data-tool="none">
+                                        <i class="fas fa-mouse-pointer"></i>
+                                        <span>Select</span>
+                                    </button>
+                                    <button class="annotation-tool-btn" data-tool="rectangle">
+                                        <i class="far fa-square"></i>
+                                        <span>Rectangle</span>
+                                    </button>
+                                    <button class="annotation-tool-btn" data-tool="circle">
+                                        <i class="far fa-circle"></i>
+                                        <span>Circle</span>
+                                    </button>
+                                    <button class="annotation-tool-btn" data-tool="arrow">
+                                        <i class="fas fa-arrow-right"></i>
+                                        <span>Arrow</span>
+                                    </button>
+                                    <button class="annotation-tool-btn" data-tool="text">
+                                        <i class="fas fa-font"></i>
+                                        <span>Text</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="tool-group">
+                                <label for="annotationStrokeColor">Color:</label>
+                                <input type="color" id="annotationStrokeColor" value="#ff0000">
+                            </div>
+                            <div class="tool-group">
+                                <label for="annotationStrokeWidth">Width:</label>
+                                <input type="range" id="annotationStrokeWidth" min="1" max="10" value="3">
+                                <span id="annotationStrokeWidthValue">3</span>px
+                            </div>
+                        </div>
+                        <div class="annotation-notes">
+                            <h4>Notes</h4>
+                            <textarea id="annotationNotes" placeholder="Add annotation notes..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="saveAnnotation" class="modal-button primary">
+                    <i class="fas fa-save"></i> Save Annotation
+                </button>
+                <button id="clearAnnotations" class="modal-button secondary">
+                    <i class="fas fa-eraser"></i> Clear All
+                </button>
+                <button id="cancelAnnotation" class="modal-button">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Draggable Annotation Elements Panel -->
     <div class="elements-panel annotation-elements-panel" id="annotationElementsPanel" style="display: none;">
         <div class="elements-panel-header" id="annotationElementsPanelHeader">
@@ -885,6 +1106,7 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=20241229-001"></script>
+    <!-- Modular JavaScript Architecture with ES6 Modules -->
+    <script type="module" src="/static/js/Application.js?v=20250101-007"></script>
 </body>
 </html>

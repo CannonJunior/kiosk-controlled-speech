@@ -37,16 +37,17 @@ class WebSocketConnection:
     """WebSocket connection wrapper with session management"""
     client_id: str
     websocket: WebSocket
-    session: ClientSession
     is_active: bool = True
+    session: Optional[ClientSession] = None
     
     def __post_init__(self):
         """Initialize connection state"""
-        self.session = ClientSession(
-            client_id=self.client_id,
-            connected_at=datetime.now(),
-            last_activity=datetime.now()
-        )
+        if self.session is None:
+            self.session = ClientSession(
+                client_id=self.client_id,
+                connected_at=datetime.now(),
+                last_activity=datetime.now()
+            )
     
     async def send_message(self, message_data: Dict[str, Any]) -> bool:
         """

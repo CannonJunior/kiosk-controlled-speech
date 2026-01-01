@@ -3,8 +3,8 @@
 
 set -e
 
-echo "🎤 Starting Kiosk Speech Web Application (Simple Setup)"
-echo "===================================================="
+echo "🎤 Starting Kiosk Speech Web Application (Modular Architecture)"
+echo "============================================================="
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -63,7 +63,10 @@ else
     print_warning "Ollama not found in PATH, skipping model preload"
 fi
 
-print_status "Starting web application on port 8000..."
+print_status "Starting modular web application on port 8000..."
+print_info "📦 Architecture: Domain-driven modules (Audio, UI, Annotation, Core)"
+print_info "🔧 Backend: FastAPI with service-oriented architecture"  
+print_info "🌐 Frontend: ES6 modules with EventBus communication"
 
 print_info ""
 print_info "🌐 Access Options for Microphone:"

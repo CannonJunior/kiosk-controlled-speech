@@ -11,6 +11,8 @@ from web_app.domains.speech.services.chat_processor import ChatProcessor
 from web_app.domains.speech.services.text_reading_service import TextReadingService
 from web_app.domains.communication.services.communication_service import CommunicationService
 from web_app.domains.configuration.services.config_service import ConfigurationService
+from web_app.domains.configuration.services.optimization_service import OptimizationService
+from web_app.domains.configuration.services.cache_service import CacheService
 from web_app.domains.annotation.services.screenshot_service import ScreenshotService
 from web_app.domains.annotation.services.vignette_service import VignetteService
 from web_app.infrastructure.mcp.mcp_client import EnhancedMCPClient
@@ -62,6 +64,22 @@ def get_communication_service(
 def get_configuration_service() -> ConfigurationService:
     """Get Configuration Domain service"""
     return ConfigurationService()
+
+
+def get_optimization_service(
+    config_service: Annotated[ConfigurationService, Depends(get_configuration_service)]
+) -> OptimizationService:
+    """Get Configuration Domain optimization service"""
+    app_config = config_service.load_configuration()
+    return OptimizationService(app_config)
+
+
+def get_cache_service(
+    config_service: Annotated[ConfigurationService, Depends(get_configuration_service)]
+) -> CacheService:
+    """Get Configuration Domain cache service"""
+    app_config = config_service.load_configuration()
+    return CacheService(app_config.cache_config)
 
 
 def get_screenshot_service(

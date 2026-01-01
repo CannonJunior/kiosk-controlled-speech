@@ -10,6 +10,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from web_app.domains.communication.services.websocket_manager import WebSocketManager
 from web_app.domains.communication.services.message_router import MessageRouter
 from web_app.domains.communication.services.session_service import SessionService
+from web_app.domains.communication.services.message_handlers import MessageHandlers
 from web_app.domains.communication.models.message_types import MessageType
 from web_app.infrastructure.monitoring.metrics import MetricsCollector
 
@@ -32,10 +33,32 @@ class CommunicationService:
         self.message_router = MessageRouter()
         self.session_service = SessionService()
         self.metrics = metrics_collector
+        self.message_handlers = None  # Will be set via configure_handlers
         
         # Track communication metrics
         self._domain_name = "communication"
         
+    def configure_handlers(self, speech_bridge=None, text_reading_service=None, mcp_client=None):
+        """
+        Configure message handlers with bridge dependencies.
+        
+        Args:
+            speech_bridge: SpeechWebBridge instance for processing
+            text_reading_service: TextReadingService instance
+            mcp_client: MCP client for tool calls
+        """
+        self.message_handlers = MessageHandlers(speech_bridge, text_reading_service, mcp_client)
+        
+        # Register handlers with message router
+        self.message_router.register_handler(MessageType.CHAT_MESSAGE, self.message_handlers.handle_chat_message)
+        self.message_router.register_handler(MessageType.AUDIO_DATA, self.message_handlers.handle_audio_data)
+        self.message_router.register_handler(MessageType.TEXT_READING, self.message_handlers.handle_text_reading)
+        self.message_router.register_handler(MessageType.MCP_TOOL_CALL, self.message_handlers.handle_mcp_tool_call)
+        self.message_router.register_handler(MessageType.PING, self.message_handlers.handle_ping)
+        self.message_router.register_handler(MessageType.CONNECTION, self.message_handlers.handle_connection)
+        
+        logger.info("Message handlers configured successfully")
+    
     def register_message_handler(self, message_type: MessageType, handler: Callable):
         """Register handler for specific message type"""
         self.message_router.register_handler(message_type, handler)

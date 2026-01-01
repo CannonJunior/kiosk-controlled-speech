@@ -29,19 +29,24 @@ class PathResolver:
         """Auto-detect project root by looking for key files"""
         current = Path.cwd()
         
+        # Special case: if we're running from web_app, go up one level to find services
+        if current.name == "web_app":
+            potential_root = current.parent
+            if (potential_root / "services").exists() and (potential_root / "config").exists():
+                return potential_root
+        
         # Look for project markers going up the directory tree
         markers = [
-            "web_app",
-            "config",
-            "services", 
+            "services",  # This is the key marker - services directory
             ".git",
-            "requirements.txt",
             "pyproject.toml"
         ]
         
         for parent in [current] + list(current.parents):
             if any((parent / marker).exists() for marker in markers):
-                return parent
+                # Ensure this parent also has the services directory
+                if (parent / "services").exists():
+                    return parent
         
         # Fallback to current working directory
         return current

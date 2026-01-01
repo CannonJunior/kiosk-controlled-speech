@@ -102,7 +102,7 @@ class KioskSpeechChat {
         // Initialize annotation mode after elements are available
         this.annotationMode = new ScreenshotAnnotationMode(this);
         
-        this.initializeEventListeners();
+        this.initializeElementEventListeners();
         this.initializeNavbar();
         this.loadVADConfig();
         this.loadKioskData();
@@ -6030,6 +6030,34 @@ class ScreenshotAnnotationMode {
             this.kioskChat.addMessage('system', `❌ Error loading vignette: ${error.message}`);
         }
     }
+    
+    populateScreenshotAnnotationDropdown() {
+        const screenshotSelect = document.getElementById('mainScreenshotAnnotation');
+        
+        if (!screenshotSelect) {
+            console.warn('Screenshot annotation dropdown element not found');
+            return;
+        }
+        
+        // Clear existing options
+        screenshotSelect.innerHTML = '<option value="">Select Screenshot</option>';
+        
+        // Add options for each screenshot in the current vignette
+        if (this.kioskChat.vignettes.current && this.kioskChat.vignettes.current.screenshots) {
+            this.kioskChat.vignettes.current.screenshots.forEach((screenshot, index) => {
+                const option = document.createElement('option');
+                option.value = screenshot.id || screenshot.filename;
+                option.textContent = `Screenshot ${index + 1} (${screenshot.filename})`;
+                screenshotSelect.appendChild(option);
+            });
+            
+            // Select the first screenshot by default if available
+            if (this.kioskChat.vignettes.current.screenshots.length > 0) {
+                screenshotSelect.value = this.kioskChat.vignettes.current.screenshots[0].id || 
+                                       this.kioskChat.vignettes.current.screenshots[0].filename;
+            }
+        }
+    }
 
     // Text Reading Functionality
     initializeTextReading() {
@@ -6441,6 +6469,234 @@ class ScreenshotAnnotationMode {
         this.elements.copyTextButton.style.display = 'none';
         this.elements.retryExtractionButton.style.display = 'none';
     }
+
+    // Initialize elements for Add New Element functionality
+    initializeElements() {
+        this.elements.addElementBtn = document.getElementById('addElementBtn');
+        this.elements.annotationAddElementBtn = document.getElementById('annotationAddElementBtn');
+        this.elements.addElementModal = document.getElementById('addElementModal');
+        this.elements.addElementForm = document.getElementById('addElementForm');
+        this.elements.elementsTable = document.getElementById('elementsTable');
+        this.elements.annotationElementsTable = document.getElementById('annotationElementsTable');
+        
+        // Form fields
+        this.elements.elementNameInput = document.getElementById('elementName');
+        this.elements.elementTypeSelect = document.getElementById('elementType');
+        this.elements.elementXInput = document.getElementById('elementX');
+        this.elements.elementYInput = document.getElementById('elementY');
+        this.elements.elementWidthInput = document.getElementById('elementWidth');
+        this.elements.elementHeightInput = document.getElementById('elementHeight');
+        
+        // Modal controls
+        this.elements.saveElementBtn = document.getElementById('saveElementBtn');
+        this.elements.cancelElementBtn = document.getElementById('cancelElementBtn');
+        this.elements.closeElementModalBtn = document.getElementById('closeElementModalBtn');
+        
+        // Initialize data structures for elements
+        if (!this.elements.data) {
+            this.elements.data = [];
+        }
+        if (!this.elements.annotationData) {
+            this.elements.annotationData = [];
+        }
+    }
+
+    // Initialize event listeners for Add New Element functionality
+    initializeElementEventListeners() {
+        if (!this.elements.addElementBtn || !this.elements.annotationAddElementBtn) {
+            console.warn('Add element buttons not found during initialization');
+            return;
+        }
+
+        // Main Add Element button
+        this.elements.addElementBtn.addEventListener('click', () => {
+            this.showAddElementModal('main');
+        });
+
+        // Annotation Add Element button
+        this.elements.annotationAddElementBtn.addEventListener('click', () => {
+            this.showAddElementModal('annotation');
+        });
+
+        // Modal form submission
+        this.elements.addElementForm?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleAddElement();
+        });
+
+        // Modal close buttons
+        this.elements.cancelElementBtn?.addEventListener('click', () => {
+            this.hideAddElementModal();
+        });
+
+        this.elements.closeElementModalBtn?.addEventListener('click', () => {
+            this.hideAddElementModal();
+        });
+
+        // Modal backdrop click to close
+        this.elements.addElementModal?.addEventListener('click', (e) => {
+            if (e.target === this.elements.addElementModal) {
+                this.hideAddElementModal();
+            }
+        });
+    }
+
+    // Show the Add Element modal
+    showAddElementModal(context = 'main') {
+        this.currentElementContext = context;
+        this.resetAddElementForm();
+        
+        if (this.elements.addElementModal) {
+            this.elements.addElementModal.style.display = 'flex';
+            this.elements.elementNameInput?.focus();
+        }
+    }
+
+    // Hide the Add Element modal
+    hideAddElementModal() {
+        if (this.elements.addElementModal) {
+            this.elements.addElementModal.style.display = 'none';
+        }
+        this.currentElementContext = null;
+    }
+
+    // Reset the Add Element form
+    resetAddElementForm() {
+        if (this.elements.elementNameInput) this.elements.elementNameInput.value = '';
+        if (this.elements.elementTypeSelect) this.elements.elementTypeSelect.value = 'button';
+        if (this.elements.elementXInput) this.elements.elementXInput.value = '0';
+        if (this.elements.elementYInput) this.elements.elementYInput.value = '0';
+        if (this.elements.elementWidthInput) this.elements.elementWidthInput.value = '100';
+        if (this.elements.elementHeightInput) this.elements.elementHeightInput.value = '30';
+    }
+
+    // Validate the Add Element form
+    validateAddElementForm() {
+        const name = this.elements.elementNameInput?.value?.trim();
+        const x = parseInt(this.elements.elementXInput?.value || '0');
+        const y = parseInt(this.elements.elementYInput?.value || '0');
+        const width = parseInt(this.elements.elementWidthInput?.value || '0');
+        const height = parseInt(this.elements.elementHeightInput?.value || '0');
+
+        if (!name) {
+            this.addMessage('system', '❌ Element name is required');
+            return false;
+        }
+
+        if (isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height)) {
+            this.addMessage('system', '❌ All coordinates and dimensions must be valid numbers');
+            return false;
+        }
+
+        if (width <= 0 || height <= 0) {
+            this.addMessage('system', '❌ Width and height must be greater than 0');
+            return false;
+        }
+
+        return true;
+    }
+
+    // Handle adding a new element
+    handleAddElement() {
+        if (!this.validateAddElementForm()) {
+            return;
+        }
+
+        const newElement = {
+            id: `element_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            name: this.elements.elementNameInput.value.trim(),
+            type: this.elements.elementTypeSelect.value,
+            x: parseInt(this.elements.elementXInput.value),
+            y: parseInt(this.elements.elementYInput.value),
+            width: parseInt(this.elements.elementWidthInput.value),
+            height: parseInt(this.elements.elementHeightInput.value),
+            created: new Date().toISOString()
+        };
+
+        // Add to appropriate data structure
+        if (this.currentElementContext === 'annotation') {
+            this.elements.annotationData.push(newElement);
+            this.renderElementsTable(this.elements.annotationElementsTable, this.elements.annotationData);
+        } else {
+            this.elements.data.push(newElement);
+            this.renderElementsTable(this.elements.elementsTable, this.elements.data);
+        }
+
+        // Hide modal and show success message
+        this.hideAddElementModal();
+        this.addMessage('system', `✅ Element "${newElement.name}" added successfully`);
+        
+        console.log('Element added:', newElement);
+        console.log('Current elements data:', this.currentElementContext === 'annotation' ? this.elements.annotationData : this.elements.data);
+    }
+
+    // Render elements table
+    renderElementsTable(tableElement, elementsData) {
+        if (!tableElement) {
+            console.warn('Table element not found for rendering');
+            return;
+        }
+
+        // Clear existing rows (keep header)
+        const tbody = tableElement.querySelector('tbody');
+        if (tbody) {
+            tbody.innerHTML = '';
+        } else {
+            // Create tbody if it doesn't exist
+            const newTbody = document.createElement('tbody');
+            tableElement.appendChild(newTbody);
+        }
+
+        // Add rows for each element
+        const tbodyElement = tableElement.querySelector('tbody');
+        elementsData.forEach((element, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${element.name}</td>
+                <td>${element.type}</td>
+                <td>${element.x}, ${element.y}</td>
+                <td>${element.width}x${element.height}</td>
+                <td>
+                    <button onclick="kioskChat.editElement('${element.id}')" class="btn btn-sm btn-primary">Edit</button>
+                    <button onclick="kioskChat.deleteElement('${element.id}')" class="btn btn-sm btn-danger">Delete</button>
+                </td>
+            `;
+            tbodyElement.appendChild(row);
+        });
+    }
+
+    // Edit element (placeholder)
+    editElement(elementId) {
+        console.log('Edit element:', elementId);
+        this.addMessage('system', '🔧 Edit functionality coming soon');
+    }
+
+    // Delete element
+    deleteElement(elementId) {
+        if (!confirm('Are you sure you want to delete this element?')) {
+            return;
+        }
+
+        // Remove from main elements
+        const mainIndex = this.elements.data.findIndex(el => el.id === elementId);
+        if (mainIndex !== -1) {
+            const deletedElement = this.elements.data.splice(mainIndex, 1)[0];
+            this.renderElementsTable(this.elements.elementsTable, this.elements.data);
+            this.addMessage('system', `✅ Element "${deletedElement.name}" deleted`);
+            return;
+        }
+
+        // Remove from annotation elements
+        const annotationIndex = this.elements.annotationData.findIndex(el => el.id === elementId);
+        if (annotationIndex !== -1) {
+            const deletedElement = this.elements.annotationData.splice(annotationIndex, 1)[0];
+            this.renderElementsTable(this.elements.annotationElementsTable, this.elements.annotationData);
+            this.addMessage('system', `✅ Element "${deletedElement.name}" deleted`);
+            return;
+        }
+
+        console.warn('Element not found for deletion:', elementId);
+    }
 }
 
 // Debug: Check if script is loading
@@ -6664,3 +6920,13 @@ window.handleUpdateCoordinates = function(messageId) {
         console.error('window.kioskChat.handleUpdateCoordinates not available');
     }
 };
+
+// Initialize the application when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing KioskSpeechChat...');
+    window.kioskChat = new KioskSpeechChat();
+    console.log('KioskSpeechChat initialized successfully');
+});
+
+// Export for potential external use
+window.KioskSpeechChat = KioskSpeechChat;

@@ -10,6 +10,8 @@ from fastapi.responses import JSONResponse
 
 from web_app.domains.communication.services.communication_service import CommunicationService
 from web_app.infrastructure.monitoring.metrics import metrics_collector
+from web_app.services.speech_bridge import SpeechWebBridge
+from web_app.api.dependencies.domain_services import get_mcp_client
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +20,21 @@ router = APIRouter()
 
 # Initialize communication service with metrics
 communication_service = CommunicationService(metrics_collector)
+
+# Speech bridge will be initialized on first request when MCP client is available
+speech_bridge = None
+
+def get_or_create_speech_bridge():
+    global speech_bridge
+    if speech_bridge is None:
+        mcp_client = get_mcp_client()
+        if mcp_client:
+            speech_bridge = SpeechWebBridge(mcp_client, metrics_collector)
+            communication_service.configure_handlers(speech_bridge=speech_bridge, text_reading_service=None)
+    return speech_bridge
+
+# Configure handlers without speech bridge initially (MCP client added on first connection)
+communication_service.configure_handlers(speech_bridge=None, text_reading_service=None, mcp_client=None)
 
 
 @router.websocket("/ws/{client_id}")
@@ -30,6 +47,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         client_id: Unique client identifier
     """
     logger.info(f"WebSocket connection request from client: {client_id}")
+    
+    # Ensure MCP client is available for tool calls
+    if not communication_service.message_handlers.mcp_client:
+        mcp_client = get_mcp_client()
+        if mcp_client:
+            communication_service.configure_handlers(speech_bridge=None, text_reading_service=None, mcp_client=mcp_client)
     
     # Delegate to communication service for full lifecycle management
     await communication_service.handle_websocket_connection(websocket, client_id)

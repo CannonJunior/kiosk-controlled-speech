@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Module Loading Test</title>
+</head>
+<body>
+    <h1>Testing Module Loading</h1>
+    <div id="test-output"></div>
+    
+    <script type="module">
+        const output = document.getElementById('test-output');
+        
+        try {
+            output.innerHTML += '<p>✅ ES6 modules supported</p>';
+            
+            // Test import of core modules
+            import('./web_app/static/js/core/EventBus.js')
+                .then(module => {
+                    output.innerHTML += '<p>✅ EventBus loaded</p>';
+                    
+                    return import('./web_app/static/js/core/StateManager.js');
+                })
+                .then(module => {
+                    output.innerHTML += '<p>✅ StateManager loaded</p>';
+                    
+                    return import('./web_app/static/js/Application.js');
+                })
+                .then(module => {
+                    output.innerHTML += '<p>✅ Application.js loaded</p>';
+                    output.innerHTML += '<p><strong>All core modules loaded successfully!</strong></p>';
+                })
+                .catch(error => {
+                    output.innerHTML += `<p>❌ Module loading failed: ${error.message}</p>`;
+                    console.error('Module loading error:', error);
+                });
+                
+        } catch (error) {
+            output.innerHTML += `<p>❌ ES6 modules not supported: ${error.message}</p>`;
+        }
+    </script>
+</body>
+</html>

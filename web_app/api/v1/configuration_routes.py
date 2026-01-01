@@ -6,8 +6,13 @@ REST endpoints for VAD configuration, model optimization, and performance settin
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from web_app.api.dependencies.domain_services import get_configuration_service
+from web_app.api.dependencies.domain_services import (
+    get_configuration_service, get_optimization_service, get_cache_service
+)
 from web_app.domains.configuration.services.config_service import ConfigurationService
+from web_app.domains.configuration.services.optimization_service import OptimizationService
+from web_app.domains.configuration.services.cache_service import CacheService
+from web_app.api.middleware.metrics_middleware import config_metrics_collector
 
 router = APIRouter(prefix="/api/v1/config", tags=["configuration"])
 
@@ -202,6 +207,9 @@ async def reload_configuration(
         config = config_service.reload_configuration()
         validation_errors = config_service.get_validation_errors()
         
+        # Record metrics
+        config_metrics_collector.record_config_load(success=len(validation_errors) == 0)
+        
         return {
             "success": True,
             "message": "Configuration reloaded successfully",
@@ -209,4 +217,155 @@ async def reload_configuration(
             "available_models": config_service.get_available_models()
         }
     except Exception as e:
+        config_metrics_collector.record_config_load(success=False)
         raise HTTPException(status_code=500, detail=f"Failed to reload configuration: {str(e)}")
+
+
+# === CACHE MANAGEMENT ENDPOINTS ===
+
+@router.get("/cache/statistics")
+async def get_cache_statistics(
+    cache_service: Annotated[CacheService, Depends(get_cache_service)] = None
+):
+    """Get comprehensive cache performance statistics"""
+    try:
+        stats = cache_service.get_comprehensive_statistics()
+        return {
+            "success": True,
+            "statistics": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get cache statistics: {str(e)}")
+
+
+@router.post("/cache/clear")
+async def clear_all_caches(
+    cache_service: Annotated[CacheService, Depends(get_cache_service)] = None
+):
+    """Clear all caches"""
+    try:
+        cache_service.clear_all_caches()
+        return {
+            "success": True,
+            "message": "All caches cleared successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear caches: {str(e)}")
+
+
+# === OPTIMIZATION ANALYTICS ENDPOINTS ===
+
+@router.get("/analytics/performance")
+async def get_performance_analytics(
+    optimization_service: Annotated[OptimizationService, Depends(get_optimization_service)] = None
+):
+    """Get performance analytics and optimization insights"""
+    try:
+        stats = optimization_service.get_performance_statistics()
+        return {
+            "success": True,
+            "analytics": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get performance analytics: {str(e)}")
+
+
+@router.post("/analytics/query-complexity")
+async def analyze_query_complexity(
+    request: Request,
+    optimization_service: Annotated[OptimizationService, Depends(get_optimization_service)] = None
+):
+    """Analyze query complexity and get model recommendations"""
+    try:
+        data = await request.json()
+        query = data.get("query", "")
+        
+        if not query:
+            raise HTTPException(status_code=400, detail="query is required")
+        
+        analysis = optimization_service.analyze_query_complexity(query)
+        config_metrics_collector.record_query_complexity(analysis.complexity_score)
+        
+        return {
+            "success": True,
+            "analysis": analysis.to_dict()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to analyze query: {str(e)}")
+
+
+@router.get("/analytics/recommendations")
+async def get_optimization_recommendations(
+    optimization_service: Annotated[OptimizationService, Depends(get_optimization_service)] = None
+):
+    """Get optimization recommendations based on usage patterns"""
+    try:
+        # Get recent performance data
+        stats = optimization_service.get_performance_statistics()
+        
+        # Generate basic recommendations
+        recommendations = []
+        
+        performance = stats.get("performance", {})
+        cache_stats = performance.get("cache", {})
+        complexity = performance.get("complexity", {})
+        
+        # Cache performance recommendations
+        hit_rate = cache_stats.get("hit_rate_percent", 0)
+        if hit_rate < 50:
+            recommendations.append({
+                "type": "cache_optimization",
+                "priority": "high",
+                "message": f"Cache hit rate is low ({hit_rate:.1f}%). Consider increasing cache TTL or size.",
+                "action": "increase_cache_settings"
+            })
+        elif hit_rate > 85:
+            recommendations.append({
+                "type": "cache_optimization", 
+                "priority": "info",
+                "message": f"Excellent cache performance ({hit_rate:.1f}% hit rate).",
+                "action": "maintain_current_settings"
+            })
+        
+        # Model complexity recommendations
+        avg_complexity = complexity.get("average_complexity", 0)
+        if avg_complexity < 2.5:
+            recommendations.append({
+                "type": "model_optimization",
+                "priority": "medium",
+                "message": f"Average query complexity is low ({avg_complexity:.1f}). Consider using 'speed' preset.",
+                "action": "switch_to_speed_preset"
+            })
+        elif avg_complexity > 4.0:
+            recommendations.append({
+                "type": "model_optimization",
+                "priority": "medium", 
+                "message": f"Average query complexity is high ({avg_complexity:.1f}). Consider using 'accuracy' preset.",
+                "action": "switch_to_accuracy_preset"
+            })
+        
+        return {
+            "success": True,
+            "recommendations": recommendations,
+            "performance_summary": stats
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get recommendations: {str(e)}")
+
+
+# === DOMAIN METRICS ENDPOINTS ===
+
+@router.get("/metrics/domain")
+async def get_configuration_domain_metrics():
+    """Get Configuration Domain specific metrics"""
+    try:
+        metrics = config_metrics_collector.get_configuration_metrics()
+        return {
+            "success": True,
+            "domain": "configuration",
+            "metrics": metrics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get domain metrics: {str(e)}")

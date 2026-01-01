@@ -282,6 +282,18 @@ class MetricsCollector:
         
         return alerts
     
+    def record_mcp_tool_call(self, tool_name: str, success: bool, duration_ms: float):
+        """Record MCP tool call metrics"""
+        domain = "mcp"
+        if domain not in self.domain_metrics:
+            self.domain_metrics[domain] = DomainMetrics(domain_name=domain)
+        
+        duration_seconds = duration_ms / 1000.0
+        self.record_domain_request(domain, success, duration_seconds, context={
+            "operation": "tool_call",
+            "tool_name": tool_name
+        })
+    
     def reset_metrics(self, domain: Optional[str] = None):
         """Reset metrics for a domain or all domains"""
         if domain:

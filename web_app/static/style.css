@@ -2000,7 +2000,24 @@ body:has(.screenshot-annotation-modal[style*="display: block"]) .element-overlay
     color: #2c3e50;
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: space-between;
+}
+
+.settings-content h3 .close-btn {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    color: #666;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    margin-left: auto;
+}
+
+.settings-content h3 .close-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
 }
 
 .setting-group {
@@ -3524,5 +3541,479 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
 
 .screenshot-thumbnail:hover .thumbnail-checkbox {
     background: rgba(255, 255, 255, 1);
+}
+
+/* Vignette Panel Styles */
+.vignette-panel {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    max-width: 90vw;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.vignette-panel .panel-content {
+    padding: 20px;
+}
+
+.current-vignette-name {
+    font-weight: bold;
+    color: #007bff;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    border: 1px solid #e9ecef;
+}
+
+.workflow-progress-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.workflow-progress {
+    width: 100%;
+    height: 8px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.workflow-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #007bff, #28a745);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.workflow-step {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.workflow-controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.vignette-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #495057;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+}
+
+.vignette-button:hover:not(:disabled) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+    transform: translateY(-1px);
+}
+
+.vignette-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.vignette-button.primary {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.vignette-button.primary:hover:not(:disabled) {
+    background: #0056b3;
+    border-color: #004085;
+}
+
+.vignette-button.success {
+    background: #28a745;
+    color: white;
+    border-color: #28a745;
+}
+
+.vignette-button.success:hover:not(:disabled) {
+    background: #1e7e34;
+    border-color: #1c7430;
+}
+
+.vignette-screenshots {
+    min-height: 100px;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 12px;
+    background: #f8f9fa;
+}
+
+.vignette-screenshots .vignette-empty {
+    text-align: center;
+    color: #6c757d;
+    padding: 20px;
+}
+
+.vignette-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    background: white;
+}
+
+.vignette-item {
+    padding: 12px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s ease;
+}
+
+.vignette-item:hover {
+    background: #f8f9fa;
+}
+
+.vignette-item.active {
+    background: #e3f2fd;
+    border-left: 4px solid #007bff;
+}
+
+.vignette-item:last-child {
+    border-bottom: none;
+}
+
+.vignette-info h4 {
+    margin: 0 0 4px 0;
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+.vignette-info p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.vignette-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.vignette-actions button {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    border: 1px solid #ddd;
+    background: white;
+    color: #495057;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.vignette-actions button:hover {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.vignette-empty {
+    text-align: center;
+    padding: 30px 20px;
+    color: #6c757d;
+}
+
+.vignette-empty i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    display: block;
+}
+
+/* Annotation Panel Styles */
+.annotation-panel {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    width: 300px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.annotation-panel .panel-content {
+    padding: 15px;
+}
+
+.annotation-mode-selector {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.mode-button {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #6c757d;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.mode-button i {
+    font-size: 1.2rem;
+}
+
+.mode-button span {
+    font-size: 0.7rem;
+}
+
+.mode-button:hover:not(.active) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.mode-button.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.drawing-toolbar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
+.drawing-tool {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #6c757d;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.drawing-tool:hover:not(.active) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.drawing-tool.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.tool-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.setting-row label {
+    min-width: 50px;
+    margin: 0;
+    font-size: 0.85rem;
+}
+
+.setting-row input[type="color"] {
+    width: 40px;
+    height: 30px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.setting-row input[type="range"] {
+    flex: 1;
+}
+
+/* Annotation Modal Styles */
+.annotation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 1;
+}
+
+.annotation-modal .modal-content {
+    position: relative;
+    z-index: 2;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    max-width: 95vw;
+    max-height: 95vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    width: 1200px;
+    height: 800px;
+}
+
+.annotation-modal .modal-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.annotation-workspace {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+.annotation-image-container {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f5f5f5;
+    overflow: auto;
+}
+
+.annotation-image-container img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+
+.annotation-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: auto;
+    z-index: 10;
+}
+
+.annotation-sidebar {
+    width: 300px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-left: 1px solid #dee2e6;
+    overflow-y: auto;
+}
+
+.annotation-sidebar h4 {
+    margin: 0 0 10px 0;
+    font-size: 1rem;
+    color: #495057;
+}
+
+.annotation-tools {
+    margin-bottom: 20px;
+}
+
+.tool-group {
+    margin-bottom: 15px;
+}
+
+.tool-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: #495057;
+}
+
+.tool-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.annotation-tool-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 6px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #6c757d;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.annotation-tool-btn:hover:not(.active) {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.annotation-tool-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.annotation-tool-btn i {
+    font-size: 1.1rem;
+}
+
+.annotation-notes textarea {
+    width: 100%;
+    height: 100px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 8px;
+    resize: vertical;
+    font-family: inherit;
+    font-size: 0.9rem;
 }
 

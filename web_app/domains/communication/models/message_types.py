@@ -16,6 +16,7 @@ class MessageType(Enum):
     TRANSCRIPTION = "transcription"
     CHAT_RESPONSE = "chat_response"
     TEXT_READING = "text_reading"
+    MCP_TOOL_CALL = "mcp_tool_call"
     PING = "ping"
     PONG = "pong"
     ERROR = "error"
@@ -118,6 +119,17 @@ MESSAGE_SCHEMAS = {
             "text": str,
             "coordinates": dict,
             "element_id": str
+        }
+    ),
+    
+    MessageType.MCP_TOOL_CALL: MessageSchema(
+        message_type=MessageType.MCP_TOOL_CALL,
+        required_fields=["tool", "parameters"],
+        optional_fields=["request_id"],
+        field_types={
+            "tool": str,
+            "parameters": dict,
+            "request_id": str
         }
     ),
     

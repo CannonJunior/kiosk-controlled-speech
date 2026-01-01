@@ -215,9 +215,17 @@ class EnhancedMCPClient:
             
             for name, server_data in config_data.get("servers", {}).items():
                 if server_data.get("enabled", True):
+                    # Convert relative paths to absolute paths based on project root
+                    args = server_data["args"].copy()
+                    for i, arg in enumerate(args):
+                        if arg.endswith('.py') and not Path(arg).is_absolute():
+                            # Convert relative path to absolute path from project root
+                            absolute_path = path_resolver.project_root / arg
+                            args[i] = str(absolute_path)
+                    
                     self.mcp_config["mcpServers"][name] = {
                         "command": server_data["command"],
-                        "args": server_data["args"]
+                        "args": args
                     }
                     
                     # Add environment variables if present
