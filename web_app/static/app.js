@@ -14,6 +14,10 @@ class KioskSpeechChat {
         this.audioStream = null;
         this.audioChunks = [];
         
+        // Micro-ize functionality
+        this.isMicroized = false;
+        this.previousWindowSize = { width: window.innerWidth, height: window.innerHeight };
+        
         // Voice Activity Detection
         this.vadAnalyser = null;
         this.vadDataArray = null;
@@ -104,6 +108,8 @@ class KioskSpeechChat {
         
         // Initialize annotation mode after elements are available
         this.annotationMode = new ScreenshotAnnotationMode(this);
+        
+        // Annotation exit button is handled by ScreenshotAnnotationMode class
         
         this.initializeEventListeners();
         this.initializeNavbar();
@@ -413,7 +419,11 @@ class KioskSpeechChat {
             drawtoolsVisibilityToggle: document.getElementById('drawtoolsVisibilityToggle'),
             drawtoolsVisibilityCheckbox: document.getElementById('drawtoolsVisibilityCheckbox'),
             drawtoolsVisibilityText: document.getElementById('drawtoolsVisibilityText'),
-            annotationDrawingElements: document.getElementById('annotationDrawingElements')
+            annotationDrawingElements: document.getElementById('annotationDrawingElements'),
+            // Micro-ize toggle elements
+            microIzeToggle: document.getElementById('microIzeToggle'),
+            microIzeCheckbox: document.getElementById('microIzeCheckbox'),
+            microIzeText: document.getElementById('microIzeText')
         };
     }
     
@@ -1743,6 +1753,8 @@ class KioskSpeechChat {
                 this.toggleElementsVisibility(this.elements.annotationElementsVisibilityCheckbox);
             });
         }
+        
+        // Micro-ize toggle - handled by separate MicroIze module
         
         // Screen dropdown
         this.elements.screenDropdown.addEventListener('change', () => {
@@ -5028,9 +5040,11 @@ class ScreenshotAnnotationMode {
     
     initializeEventListeners() {
         // Exit annotation mode
-        this.kioskChat.elements.annotationExit.addEventListener('click', () => {
-            this.exitMode();
-        });
+        if (this.kioskChat.elements.annotationExit) {
+            this.kioskChat.elements.annotationExit.addEventListener('click', () => {
+                this.exitMode();
+            });
+        }
         
         // ESC key to exit
         document.addEventListener('keydown', (e) => {
@@ -5161,6 +5175,8 @@ class ScreenshotAnnotationMode {
             this.toggleAnnotationDrawingElements();
         });
         
+        // Micro-ize toggle - handled by separate MicroIze module
+        
         // Vignette modal event listeners
         this.kioskChat.elements.vignetteModalClose.addEventListener('click', () => {
             this.closeVignetteModal();
@@ -5279,7 +5295,9 @@ class ScreenshotAnnotationMode {
     }
     
     exitMode() {
-        if (!this.isActive) return;
+        if (!this.isActive) {
+            return;
+        }
         
         this.isActive = false;
         this.currentScreenshot = null;
@@ -5289,19 +5307,29 @@ class ScreenshotAnnotationMode {
         
         // Clean up drawing mode
         document.body.classList.remove('drawing-mode');
-        this.kioskChat.elements.annotationDrawingOverlay.classList.remove('drawing-mode');
-        this.kioskChat.elements.annotationDrawingMode.value = 'none';
+        if (this.kioskChat.elements.annotationDrawingOverlay) {
+            this.kioskChat.elements.annotationDrawingOverlay.classList.remove('drawing-mode');
+        }
+        if (this.kioskChat.elements.annotationDrawingMode) {
+            this.kioskChat.elements.annotationDrawingMode.value = 'none';
+        }
         
         // Hide modal
-        this.kioskChat.elements.screenshotAnnotationModal.style.display = 'none';
+        if (this.kioskChat.elements.screenshotAnnotationModal) {
+            this.kioskChat.elements.screenshotAnnotationModal.style.display = 'none';
+        }
         
         // Restore body scroll
         document.body.style.overflow = '';
         
         // Clean up annotation-specific state
         this.currentRectangle = null;
-        this.kioskChat.elements.annotationUpdateButton.style.display = 'none';
-        this.kioskChat.elements.annotationSaveButton.disabled = true;
+        if (this.kioskChat.elements.annotationUpdateButton) {
+            this.kioskChat.elements.annotationUpdateButton.style.display = 'none';
+        }
+        if (this.kioskChat.elements.annotationSaveButton) {
+            this.kioskChat.elements.annotationSaveButton.disabled = true;
+        }
         
         // Reset drawing state
         this.resetDrawing();

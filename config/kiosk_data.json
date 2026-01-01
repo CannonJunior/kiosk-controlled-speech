@@ -304,6 +304,26 @@
           ],
           "action": "click",
           "description": "b"
+        },
+        {
+          "id": "a",
+          "name": "a",
+          "coordinates": {
+            "x": 692,
+            "y": 287
+          },
+          "size": {
+            "width": 539,
+            "height": 407
+          },
+          "voice_commands": [
+            "a"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "a"
         }
       ]
     },

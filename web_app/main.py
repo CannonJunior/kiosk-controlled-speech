@@ -1189,6 +1189,44 @@ async def shutdown_event():
         logger.error(f"Shutdown error: {e}")
 
 @app.get("/", response_class=HTMLResponse)
+async def get_landing_page():
+    """Serve the landing page"""
+    html_file = Path("web_app/static/landing.html")
+    if html_file.exists():
+        return FileResponse(html_file)
+    else:
+        # Return basic landing page if static file not found
+        return HTMLResponse("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kiosk Controlled Speech</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { max-width: 600px; padding: 2rem; }
+        h1 { font-size: 3rem; margin-bottom: 1rem; }
+        .launch-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 1rem 2rem; font-size: 1.2rem; border-radius: 50px; cursor: pointer; }
+        .launch-btn:hover { background: rgba(255,255,255,0.3); }
+    </style>
+    <script>
+        function launchApp() {
+            window.open('/app', 'KioskControlledSpeech', 'width=1200,height=800,resizable=yes');
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Kiosk Controlled Speech</h1>
+        <p>Landing page file not found. Click below to launch the application:</p>
+        <button class="launch-btn" onclick="launchApp()">Launch Application</button>
+    </div>
+</body>
+</html>
+        """)
+
+@app.get("/app", response_class=HTMLResponse)
 async def get_chat_interface():
     """Serve the main chat interface"""
     html_file = Path("web_app/static/index.html")

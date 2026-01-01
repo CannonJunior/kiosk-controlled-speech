@@ -3094,6 +3094,40 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
     transform: translateX(23px);
 }
 
+/* Micro-ize Toggle */
+.micro-ize-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 193, 7, 0.1);
+    padding: 6px 12px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 193, 7, 0.2);
+    min-width: 140px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+
+.micro-ize-toggle i {
+    color: #ffc107;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.micro-ize-toggle .toggle-slider {
+    width: 45px;
+    height: 22px;
+}
+
+.micro-ize-toggle .toggle-slider::before {
+    width: 18px;
+    height: 18px;
+}
+
+.micro-ize-toggle .toggle-label input[type="checkbox"]:checked + .toggle-slider::before {
+    transform: translateX(23px);
+}
+
 /* Main Drawing Elements */
 .main-drawing-elements {
     display: flex;
