@@ -1,6 +1,6 @@
 {
-  "name": "My Vignette",
-  "safe_name": "My_Vignette",
+  "name": "CCA Vignette",
+  "safe_name": "CCA_Vignette",
   "screenshots": [
     "screenshot_20260103_100440",
     "screenshot_20260103_100502",
@@ -38,7 +38,7 @@
     }
   },
   "created": "2026-01-03T16:25:18.937Z",
-  "modified": "2026-01-03T16:28:48.581Z",
+  "modified": "2026-01-03T16:29:46.648Z",
   "screenshot_count": 8,
   "annotation_count": 8,
   "copied_screenshots": [
@@ -46,7 +46,7 @@
       "id": "screenshot_20260103_100440",
       "filename": "screenshot_20260103_100440.png",
       "original_path": "/static/screenshots/screenshot_20260103_100440.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_100440.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_100440.png",
       "size": 1496477,
       "timestamp": "2026-01-03T10:04:43.220571"
     },
@@ -54,7 +54,7 @@
       "id": "screenshot_20260103_100502",
       "filename": "screenshot_20260103_100502.png",
       "original_path": "/static/screenshots/screenshot_20260103_100502.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_100502.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_100502.png",
       "size": 994803,
       "timestamp": "2026-01-03T10:05:04.062028"
     },
@@ -62,7 +62,7 @@
       "id": "screenshot_20260103_100518",
       "filename": "screenshot_20260103_100518.png",
       "original_path": "/static/screenshots/screenshot_20260103_100518.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_100518.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_100518.png",
       "size": 1179365,
       "timestamp": "2026-01-03T10:05:20.412711"
     },
@@ -70,7 +70,7 @@
       "id": "screenshot_20260103_100741",
       "filename": "screenshot_20260103_100741.png",
       "original_path": "/static/screenshots/screenshot_20260103_100741.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_100741.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_100741.png",
       "size": 1664048,
       "timestamp": "2026-01-03T10:07:43.220046"
     },
@@ -78,7 +78,7 @@
       "id": "screenshot_20260103_100857",
       "filename": "screenshot_20260103_100857.png",
       "original_path": "/static/screenshots/screenshot_20260103_100857.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_100857.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_100857.png",
       "size": 1790465,
       "timestamp": "2026-01-03T10:08:59.371276"
     },
@@ -86,7 +86,7 @@
       "id": "screenshot_20260103_101019",
       "filename": "screenshot_20260103_101019.png",
       "original_path": "/static/screenshots/screenshot_20260103_101019.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_101019.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_101019.png",
       "size": 1846982,
       "timestamp": "2026-01-03T10:10:20.759283"
     },
@@ -94,7 +94,7 @@
       "id": "screenshot_20260103_101248",
       "filename": "screenshot_20260103_101248.png",
       "original_path": "/static/screenshots/screenshot_20260103_101248.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_101248.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_101248.png",
       "size": 1747087,
       "timestamp": "2026-01-03T10:12:50.483847"
     },
@@ -102,7 +102,7 @@
       "id": "screenshot_20260103_101323",
       "filename": "screenshot_20260103_101323.png",
       "original_path": "/static/screenshots/screenshot_20260103_101323.png",
-      "vignette_path": "config/vignettes/My_Vignette/screenshots/screenshot_20260103_101323.png",
+      "vignette_path": "config/vignettes/CCA_Vignette/screenshots/screenshot_20260103_101323.png",
       "size": 1121129,
       "timestamp": "2026-01-03T10:13:25.367255"
     }

@@ -12,10 +12,10 @@
     {
       "name": "My Vignette",
       "safe_name": "My_Vignette",
-      "created": "2025-12-29T19:52:35.552Z",
-      "modified": "2025-12-29T20:39:50.743Z",
-      "screenshot_count": 2,
-      "annotation_count": 1,
+      "created": "2026-01-03T16:25:18.937Z",
+      "modified": "2026-01-03T16:28:48.581Z",
+      "screenshot_count": 8,
+      "annotation_count": 8,
       "directory": "config/vignettes/My_Vignette"
     },
     {
@@ -26,6 +26,15 @@
       "screenshot_count": 3,
       "annotation_count": 3,
       "directory": "config/vignettes/test3"
+    },
+    {
+      "name": "CCA Vignette",
+      "safe_name": "CCA_Vignette",
+      "created": "2026-01-03T16:25:18.937Z",
+      "modified": "2026-01-03T16:29:46.648Z",
+      "screenshot_count": 8,
+      "annotation_count": 8,
+      "directory": "config/vignettes/CCA_Vignette"
     }
   ]
 }

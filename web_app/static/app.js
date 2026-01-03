@@ -777,6 +777,7 @@ class KioskSpeechChat {
             this.elements.screenDropdown.appendChild(option);
         });
         
+        
         // Auto-select the first screen if available
         if (screenKeys.length > 0) {
             this.elements.screenDropdown.value = screenKeys[0];
@@ -4260,28 +4261,108 @@ class KioskSpeechChat {
             elements: []
         };
         
-        // Add to pending updates (this will be saved when Save button is clicked)
-        if (!this.pendingNewScreens) {
-            this.pendingNewScreens = {};
+        // Add directly to kioskData for immediate availability
+        if (!this.kioskData.screens) {
+            this.kioskData.screens = {};
         }
-        this.pendingNewScreens[screenId] = newScreen;
+        this.kioskData.screens[screenId] = newScreen;
         
-        // Enable save button
-        this.elements.saveButton.disabled = false;
+        // Immediately update all relevant dropdowns
+        this.updateDropdownsWithNewScreen(screenId, newScreen);
+        
+        // Save the updated kiosk data to server
+        this.saveKioskDataToServer();
         
         // Close modal
         this.closeAddScreenModal();
         
         // Add success message
         this.addMessage('system', 
-            `✅ New Screen Queued for Addition\n` +
+            `✅ New Screen Added Successfully\n` +
             `Screen ID: ${screenId}\n` +
             `Name: ${screenName}\n` +
             `Description: ${newScreen.description}\n` +
-            `Click Save to add this screen to the configuration.`
+            `The screen is now available in all dropdowns and has been saved.`
         );
         
         console.log('New screen queued:', screenId, newScreen);
+    }
+    
+    updateDropdownsWithNewScreen(screenId, screenData) {
+        // Update all screen-related dropdowns with the new screen
+        
+        // 1. Main screen dropdown
+        if (this.elements && this.elements.screenDropdown) {
+            this.addScreenToDropdown(this.elements.screenDropdown, screenId, screenData, '__add_new_screen__');
+        }
+        
+        // 2. Annotation screen dropdown  
+        if (this.elements && this.elements.annotationScreen) {
+            this.addScreenToDropdown(this.elements.annotationScreen, screenId, screenData, '__add_new_screen__');
+        }
+        
+        // 3. Screenshot annotation dropdowns (both main and annotation navbar)
+        if (this.elements && this.elements.screenshotAnnotation) {
+            this.addScreenToDropdown(this.elements.screenshotAnnotation, screenId, screenData);
+        }
+        if (this.elements && this.elements.mainScreenshotAnnotation) {
+            this.addScreenToDropdown(this.elements.mainScreenshotAnnotation, screenId, screenData);
+        }
+        
+        console.log(`Updated all dropdowns with new screen "${screenId}": ${screenData.name}`);
+    }
+    
+    addScreenToDropdown(dropdown, screenId, screenData, insertBeforeValue = null) {
+        if (!dropdown) return;
+        
+        // Check if option already exists
+        const existingOption = Array.from(dropdown.options).find(opt => opt.value === screenId);
+        if (existingOption) return;
+        
+        // Create new option
+        const option = document.createElement('option');
+        option.value = screenId;
+        option.textContent = screenData.name || screenId;
+        
+        // Insert before specific option if specified, otherwise append
+        if (insertBeforeValue) {
+            const insertBeforeOption = Array.from(dropdown.options).find(opt => opt.value === insertBeforeValue);
+            if (insertBeforeOption) {
+                dropdown.insertBefore(option, insertBeforeOption);
+                return;
+            }
+        }
+        
+        dropdown.appendChild(option);
+    }
+    
+    async saveKioskDataToServer() {
+        try {
+            console.log('Saving kiosk data to server...', this.kioskData);
+            
+            const response = await fetch('/api/save-kiosk-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    kiosk_data: this.kioskData
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('Kiosk data saved successfully');
+                this.addMessage('system', '✅ Configuration saved to server successfully.');
+            } else {
+                console.error('Failed to save kiosk data:', result.error);
+                this.addMessage('system', `❌ Failed to save configuration: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Error saving kiosk data:', error);
+            this.addMessage('system', `❌ Error saving configuration: ${error.message}`);
+        }
     }
     
     showAddElementModal(element = null, screenId = null) {
@@ -5351,6 +5432,7 @@ class ScreenshotAnnotationMode {
                 annotationOption.textContent = screen.name || screenKey;
                 this.kioskChat.elements.annotationScreen.appendChild(annotationOption);
             });
+            
             
             // Add "Add New Screen..." option to annotation screen dropdown
             const addNewOption = document.createElement('option');
