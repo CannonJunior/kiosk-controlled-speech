@@ -324,6 +324,46 @@
           ],
           "action": "click",
           "description": "a"
+        },
+        {
+          "id": "selectVignette",
+          "name": "selectVignette",
+          "coordinates": {
+            "x": 1047,
+            "y": 469
+          },
+          "size": {
+            "width": 674,
+            "height": 383
+          },
+          "voice_commands": [
+            "Click the Interactive Mission Vignettes button."
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Go to the Interactive Mission Vignettes"
+        },
+        {
+          "id": "foo",
+          "name": "foo",
+          "coordinates": {
+            "x": 1033,
+            "y": 453
+          },
+          "size": {
+            "width": 705,
+            "height": 413
+          },
+          "voice_commands": [
+            "foo"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "foo"
         }
       ]
     },

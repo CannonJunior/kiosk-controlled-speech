@@ -1419,8 +1419,13 @@ class KioskSpeechChat {
         // Update element dropdown based on selected screen (for compatibility)
         this.updateElementDropdown(selectedScreen);
         
-        // Update and show/hide elements table
-        this.populateElementsTable(selectedScreen);
+        // Hide the old main elements panel (now using unified annotation elements panel)
+        if (this.elements.elementsPanel) {
+            this.elements.elementsPanel.style.display = 'none';
+        }
+        
+        // Update and show/hide elements table - use annotation elements panel for consistency
+        this.populateAnnotationElementsTable(selectedScreen);
         
         // If elements are currently visible, redraw them for the new screen
         if (this.elementsVisible && selectedScreen) {
@@ -4396,6 +4401,9 @@ class KioskSpeechChat {
         
         console.log('🎯 Using screen for modal:', selectedScreen);
         
+        // Store the selected screen for the modal context
+        this.currentModalScreen = selectedScreen;
+        
         // Clear form fields or populate if editing
         if (element) {
             // Editing existing element
@@ -4683,6 +4691,9 @@ class KioskSpeechChat {
     closeAddElementModal() {
         this.elements.addElementModal.style.display = 'none';
         
+        // Clear modal screen context
+        this.currentModalScreen = null;
+        
         // Clean up dragging functionality
         if (this._cleanupDragging) {
             this._cleanupDragging();
@@ -4716,11 +4727,14 @@ class KioskSpeechChat {
     }
     
     async handleAddNewElement() {
-        const selectedScreen = this.elements.screenDropdown.value;
+        // Use the modal's stored screen context (for annotation mode) or fallback to main dropdown
+        const selectedScreen = this.currentModalScreen || this.elements.screenDropdown.value;
         if (!selectedScreen) {
-            console.error('No screen selected');
+            console.error('No screen selected for adding element');
             return;
         }
+        
+        console.log('🎯 Adding element to screen:', selectedScreen, 'from context:', this.currentModalScreen ? 'modal' : 'dropdown');
         
         const elementId = this.elements.elementId.value.trim();
         const elementName = this.elements.elementName.value.trim();
@@ -4772,9 +4786,11 @@ class KioskSpeechChat {
         // Close modal
         this.closeAddElementModal();
         
-        // Refresh the UI to show the new element
+        // Refresh the UI to show the new element in the appropriate panel
         this.updateElementDropdown(selectedScreen);
-        this.populateElementsTable(selectedScreen);
+        
+        // Always update the annotation elements panel (now unified interface)
+        this.populateAnnotationElementsTable(selectedScreen);
         
         // Add success message
         this.addMessage('system', 
@@ -4789,6 +4805,11 @@ class KioskSpeechChat {
         );
         
         console.log('New element added and saved for screen:', selectedScreen, newElement);
+    }
+    
+    isAnnotationMode() {
+        // Check if annotation mode is active by looking for annotation-specific elements or state
+        return this.annotationMode && this.annotationMode.isActive;
     }
     
     async saveKioskData(screenName = null, newElement = null) {
@@ -5519,7 +5540,11 @@ class ScreenshotAnnotationMode {
         
         // Show panel and update screen name
         this.kioskChat.elements.annotationElementsPanel.style.display = 'block';
-        this.kioskChat.elements.annotationElementsPanelScreenName.textContent = `${selectedScreen} Annotation Elements`;
+        
+        // Use context-appropriate title
+        const isInAnnotationMode = this.kioskChat.isAnnotationMode();
+        const panelTitle = isInAnnotationMode ? `${selectedScreen} Annotation Elements` : `${selectedScreen} Elements`;
+        this.kioskChat.elements.annotationElementsPanelScreenName.textContent = panelTitle;
         
         // Store the current annotation screen for use by the Add Element button
         this.kioskChat.currentAnnotationScreen = selectedScreen;
