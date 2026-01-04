@@ -554,28 +554,227 @@
           ],
           "action": "click",
           "description": "tempElement2"
-        },
+        }
+      ]
+    },
+    "main_landing_page": {
+      "name": "main_landing_page",
+      "description": "Vignette screen: main_landing_page",
+      "detection_criteria": {
+        "title_text": "main_landing_page",
+        "elements": []
+      },
+      "elements": [
         {
-          "id": "tempElement3",
-          "name": "tempElement3",
+          "id": "interactive_mission_vignettes",
+          "name": "interactive_mission_vignettes",
           "coordinates": {
-            "x": 748,
-            "y": 299
+            "x": 1045,
+            "y": 468
           },
           "size": {
-            "width": 204,
-            "height": 199
+            "width": 679,
+            "height": 386
           },
           "voice_commands": [
-            "tempElement3"
+            "Click on Interactive Mission Vignettes"
           ],
           "conditions": [
             "always_visible"
           ],
           "action": "click",
-          "description": "tempElement3"
+          "description": "Interactive Mission Vignettes"
         }
       ]
+    },
+    "vignette_selection_page": {
+      "name": "vignette_selection_page",
+      "description": "Vignette screen: vignette_selection_page",
+      "detection_criteria": {
+        "title_text": "vignette_selection_page",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "engagement_orchestration",
+          "name": "engagement_orchestration",
+          "coordinates": {
+            "x": 114,
+            "y": 312
+          },
+          "size": {
+            "width": 200,
+            "height": 75
+          },
+          "voice_commands": [
+            "Click on engagement orchestration"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Engagement Orchestration"
+        }
+      ]
+    },
+    "CCA_00": {
+      "name": "CCA_00",
+      "description": "Vignette screen: CCA_00",
+      "detection_criteria": {
+        "title_text": "CCA_00",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "load_saved_state",
+          "name": "load_saved_state",
+          "coordinates": {
+            "x": 1409,
+            "y": 524
+          },
+          "size": {
+            "width": 248,
+            "height": 296
+          },
+          "voice_commands": [
+            "Click on Load Saved State"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Load Saved State"
+        }
+      ]
+    },
+    "CCA_01": {
+      "name": "CCA_01",
+      "description": "Vignette screen: CCA_01",
+      "detection_criteria": {
+        "title_text": "CCA_01",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "start_mission",
+          "name": "start_mission",
+          "coordinates": {
+            "x": 373,
+            "y": 467
+          },
+          "size": {
+            "width": 246,
+            "height": 293
+          },
+          "voice_commands": [
+            "Click on Start Mission"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Start Mission"
+        }
+      ]
+    },
+    "CCA_02": {
+      "name": "CCA_02",
+      "description": "Vignette screen: CCA_02",
+      "detection_criteria": {
+        "title_text": "CCA_02",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "create_engagements",
+          "name": "create_engagements",
+          "coordinates": {
+            "x": 1575,
+            "y": 482
+          },
+          "size": {
+            "width": 244,
+            "height": 293
+          },
+          "voice_commands": [
+            "Click on Create Engagements"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Create Engagements"
+        }
+      ]
+    },
+    "CCA_03": {
+      "name": "CCA_03",
+      "description": "Vignette screen: CCA_03",
+      "detection_criteria": {
+        "title_text": "CCA_03",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "mission_execution",
+          "name": "mission_execution",
+          "coordinates": {
+            "x": 1596,
+            "y": 522
+          },
+          "size": {
+            "width": 245,
+            "height": 294
+          },
+          "voice_commands": [
+            "Click on Mission Execution"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Mission Execution"
+        }
+      ]
+    },
+    "CCA_04": {
+      "name": "CCA_04",
+      "description": "Vignette screen: CCA_04",
+      "detection_criteria": {
+        "title_text": "CCA_04",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "generate_report",
+          "name": "generate_report",
+          "coordinates": {
+            "x": 1590,
+            "y": 511
+          },
+          "size": {
+            "width": 244,
+            "height": 291
+          },
+          "voice_commands": [
+            "Click on Generate Report"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Generate Report"
+        }
+      ]
+    },
+    "CCA_report": {
+      "name": "CCA_report",
+      "description": "Vignette screen: CCA_report",
+      "detection_criteria": {
+        "title_text": "CCA_report",
+        "elements": []
+      },
+      "elements": []
     }
   },
   "global_commands": {

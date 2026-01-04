@@ -4775,6 +4775,19 @@ class KioskSpeechChat {
         };
         
         // Add element to local kioskData first
+        // Ensure the screen exists in kioskData
+        if (!this.kioskData.screens[selectedScreen]) {
+            this.kioskData.screens[selectedScreen] = {
+                name: selectedScreen,
+                description: `Screen: ${selectedScreen}`,
+                detection_criteria: {
+                    title_text: selectedScreen,
+                    elements: []
+                },
+                elements: []
+            };
+        }
+        
         if (!this.kioskData.screens[selectedScreen].elements) {
             this.kioskData.screens[selectedScreen].elements = [];
         }
@@ -5770,7 +5783,7 @@ class ScreenshotAnnotationMode {
                 }
                 
                 // Save changes
-                this.kioskChat.saveKioskData();
+                this.kioskChat.saveKioskDataToServer();
                 
                 this.kioskChat.addMessage('system', `🗑️ Element "${elementId}" deleted from annotation`);
             }
@@ -6198,6 +6211,14 @@ class ScreenshotAnnotationMode {
         this.kioskChat.elements.screenshotAnnotation.value = annotationValue;
         this.kioskChat.elements.mainScreenshotAnnotation.value = annotationValue;
         
+        // Update the annotation screen dropdown to match the current screenshot's assigned screen
+        this.kioskChat.elements.annotationScreen.value = annotationValue;
+        
+        // Update the annotation elements panel to show elements for the current screen
+        if (annotationValue) {
+            this.populateAnnotationElementsTable(annotationValue);
+        }
+        
         // Verify the value was set correctly
         console.log('Dropdown value after setting:', this.kioskChat.elements.screenshotAnnotation.value);
         
@@ -6586,13 +6607,33 @@ class ScreenshotAnnotationMode {
             this.kioskChat.currentVignetteName = vignetteData.name;
             this.kioskChat.currentScreenshotIndex = 0;
             
+            // Load vignette annotation screens into kioskData.screens
+            this.loadVignetteScreensIntoKioskData();
+            
             // Update UI
             this.kioskChat.elements.vignetteLabel.textContent = vignetteData.name;
             this.kioskChat.elements.mainVignetteLabel.textContent = vignetteData.name;
+            
+            // Populate dropdown with all available screens (including vignette screens)
             this.populateScreenshotAnnotationDropdown();
             
             if (this.kioskChat.vignettes.current.screenshots.length > 0) {
                 this.updateScreenshotDisplay();
+                
+                // Ensure initial annotation is loaded from vignette data
+                const firstScreenshotId = this.kioskChat.vignettes.current.screenshots[0];
+                const annotation = this.kioskChat.vignettes.current.annotations[firstScreenshotId];
+                const annotationValue = (annotation && annotation.screenAnnotation) ? annotation.screenAnnotation : '';
+                
+                // Set the annotation dropdown values directly
+                this.kioskChat.elements.screenshotAnnotation.value = annotationValue;
+                this.kioskChat.elements.mainScreenshotAnnotation.value = annotationValue;
+                
+                console.log(`Initial vignette annotation loaded: ${annotationValue} for screenshot ${firstScreenshotId}`);
+            } else {
+                // If no screenshots, ensure initial state is set
+                this.kioskChat.elements.screenshotAnnotation.value = '';
+                this.kioskChat.elements.mainScreenshotAnnotation.value = '';
             }
             this.updateNavigationButtons();
             this.updateScreenshotOrder();
@@ -6642,6 +6683,44 @@ class ScreenshotAnnotationMode {
             console.error('Error loading vignette:', error);
             this.kioskChat.addMessage('system', `❌ Error loading vignette: ${error.message}`);
         }
+    }
+    
+    loadVignetteScreensIntoKioskData() {
+        if (!this.kioskChat.vignettes.current || !this.kioskChat.vignettes.current.annotations) {
+            return;
+        }
+        
+        // Extract unique screen names from vignette annotations
+        const uniqueScreens = new Set();
+        for (const [screenshotId, annotation] of Object.entries(this.kioskChat.vignettes.current.annotations)) {
+            if (annotation.screenAnnotation && annotation.screenAnnotation.trim()) {
+                uniqueScreens.add(annotation.screenAnnotation);
+            }
+        }
+        
+        // Add each unique screen to kioskData.screens if it doesn't already exist
+        for (const screenName of uniqueScreens) {
+            if (!this.kioskChat.kioskData.screens[screenName]) {
+                this.kioskChat.kioskData.screens[screenName] = {
+                    name: screenName,
+                    description: `Vignette screen: ${screenName}`,
+                    detection_criteria: {
+                        title_text: screenName,
+                        elements: []
+                    },
+                    elements: []
+                };
+                
+                console.log(`Added vignette screen to kioskData: ${screenName}`);
+            } else {
+                console.log(`Vignette screen already exists in kioskData: ${screenName}`);
+            }
+        }
+        
+        // Update the annotation screen dropdown with the new screens
+        this.populateAnnotationDropdowns();
+        
+        console.log(`Loaded ${uniqueScreens.size} unique vignette screens into kioskData`);
     }
 
     // Text Reading Functionality
