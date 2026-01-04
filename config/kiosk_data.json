@@ -506,6 +506,76 @@
           "description": "First click in CCA demo"
         }
       ]
+    },
+    "tempScreen": {
+      "name": "tempScreen",
+      "description": "tempScreen",
+      "detection_criteria": {
+        "title_text": "tempScreen",
+        "elements": []
+      },
+      "elements": [
+        {
+          "id": "tempElement",
+          "name": "tempElement",
+          "coordinates": {
+            "x": 863,
+            "y": 400
+          },
+          "size": {
+            "width": 281,
+            "height": 211
+          },
+          "voice_commands": [
+            "click tempElement"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "tempElement"
+        },
+        {
+          "id": "tempElement2",
+          "name": "tempElement2",
+          "coordinates": {
+            "x": 805,
+            "y": 652
+          },
+          "size": {
+            "width": 363,
+            "height": 175
+          },
+          "voice_commands": [
+            "click tempElement2"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "tempElement2"
+        },
+        {
+          "id": "tempElement3",
+          "name": "tempElement3",
+          "coordinates": {
+            "x": 748,
+            "y": 299
+          },
+          "size": {
+            "width": 204,
+            "height": 199
+          },
+          "voice_commands": [
+            "tempElement3"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "tempElement3"
+        }
+      ]
     }
   },
   "global_commands": {

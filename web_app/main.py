@@ -1490,6 +1490,47 @@ async def save_kiosk_data(request: Request):
             "error": str(e)
         }
 
+@app.post("/api/kiosk-data/save-complete")
+async def save_complete_kiosk_data(request: Request):
+    """Save complete kiosk data structure to kiosk_data.json"""
+    try:
+        data = await request.json()
+        kiosk_data = data.get("kiosk_data")
+        
+        if not kiosk_data:
+            raise ValueError("No kiosk_data provided")
+        
+        # Debug logging
+        logger.info(f"Received complete kiosk data save request")
+        logger.info(f"Screens in data: {list(kiosk_data.get('screens', {}).keys())}")
+        
+        # Find the kiosk_data.json file using path resolver
+        config_path = path_resolver.resolve_config("kiosk_data.json", required=True)
+        
+        # Create backup before modifying
+        backup_path = config_path.with_suffix('.json.backup')
+        shutil.copy2(config_path, backup_path)
+        logger.info(f"Created backup at {backup_path}")
+        
+        # Save the complete kiosk data
+        with open(config_path, 'w') as f:
+            json.dump(kiosk_data, f, indent=2)
+        
+        logger.info(f"Successfully saved complete kiosk data to {config_path}")
+        
+        return {
+            "success": True,
+            "message": "Kiosk data saved successfully",
+            "backup_created": str(backup_path)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to save complete kiosk data: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""

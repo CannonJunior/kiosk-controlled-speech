@@ -4345,7 +4345,7 @@ class KioskSpeechChat {
         try {
             console.log('Saving kiosk data to server...', this.kioskData);
             
-            const response = await fetch('/api/save-kiosk-data', {
+            const response = await fetch('/api/kiosk-data/save-complete', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -4774,14 +4774,14 @@ class KioskSpeechChat {
             description: elementDescription || `${elementName} element`
         };
         
-        // Save the new element to the server
-        await this.saveKioskData(selectedScreen, newElement);
-        
-        // Add element to local kioskData after successful save
+        // Add element to local kioskData first
         if (!this.kioskData.screens[selectedScreen].elements) {
             this.kioskData.screens[selectedScreen].elements = [];
         }
         this.kioskData.screens[selectedScreen].elements.push(newElement);
+        
+        // Save the complete kioskData to the server
+        await this.saveKioskDataToServer();
         
         // Close modal
         this.closeAddElementModal();
@@ -4790,7 +4790,12 @@ class KioskSpeechChat {
         this.updateElementDropdown(selectedScreen);
         
         // Always update the annotation elements panel (now unified interface)
-        this.populateAnnotationElementsTable(selectedScreen);
+        // Check if annotation mode is active and call from correct context
+        if (this.annotationMode && this.annotationMode.populateAnnotationElementsTable) {
+            this.annotationMode.populateAnnotationElementsTable(selectedScreen);
+        } else {
+            this.populateAnnotationElementsTable(selectedScreen);
+        }
         
         // Add success message
         this.addMessage('system', 
