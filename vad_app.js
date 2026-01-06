@@ -34,7 +34,6 @@ class KioskSpeechChat {
         // Processing timing metrics
         this.processingStartTime = null;
         this.processingTimer = null;
-        this.processingTimeouts = [];
         this.maxProcessingTime = 3000; // 3 second limit
         this.targetMedianTime = 1000; // Target 1 second median
         
@@ -1065,11 +1064,7 @@ class KioskSpeechChat {
         // Start real-time timer display
         this.startProcessingTimer();
         
-        // AGGRESSIVE timeout enforcement (2 second limit)
-        const timeoutId = setTimeout(() => {
-            this.enforceProcessingTimeout();
-        }, 2000);  // Reduced from 3s to 2s to be more aggressive
-        this.processingTimeouts.push(timeoutId);
+        // Processing indicator without timeout - let successful commands complete
         
         // Update indicator text with timing info
         this.updateProcessingIndicatorText();
@@ -1084,9 +1079,8 @@ class KioskSpeechChat {
             const startTimeStr = new Date(this.processingStartTime).toISOString();
             const endTimeStr = new Date(endTime).toISOString();
             
-            // Clear timers and timeouts
+            // Clear timer
             this.stopProcessingTimer();
-            this.clearProcessingTimeouts();
             
             // Log timing metrics
             console.log(`[TIMING] Processing completed:`);
@@ -1123,10 +1117,6 @@ class KioskSpeechChat {
         }
     }
     
-    clearProcessingTimeouts() {
-        this.processingTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
-        this.processingTimeouts = [];
-    }
     
     updateProcessingIndicatorText() {
         if (!this.processingStartTime) return;
@@ -1144,30 +1134,6 @@ class KioskSpeechChat {
         }
     }
     
-    enforceProcessingTimeout() {
-        if (this.processingStartTime) {
-            const elapsed = Date.now() - this.processingStartTime;
-            console.error(`[FORCE-TIMEOUT] Processing exceeded 2s (actual: ${elapsed}ms)`);
-            
-            // FORCE hide processing indicator immediately
-            this.hideProcessingIndicator();
-            
-            // Show timeout message with recovery options
-            this.addMessage('system', `🚨 **Processing Timeout**\n\nRequest took ${(elapsed/1000).toFixed(1)}s (max: 2.0s)\n\n**Try these reliable commands:**\n• 'help'\n• 'screenshot' \n• 'settings'`);
-            
-            // Attempt to cancel any ongoing requests
-            if (this.ws && this.isConnected) {
-                this.ws.send(JSON.stringify({
-                    type: 'cancel_processing',
-                    timestamp: new Date().toISOString()
-                }));
-            }
-            
-            // Clear any pending operations
-            this.clearProcessingTimeouts();
-            this.stopProcessingTimer();
-        }
-    }
     
     addTimingMessage(startTime, endTime, elapsedTime) {
         const startStr = new Date(startTime).toLocaleTimeString();

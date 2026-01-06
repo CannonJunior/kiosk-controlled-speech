@@ -3,9 +3,9 @@
     "default": {
       "name": "qwen:0.5b",
       "description": "Fastest lightweight model",
-      "temperature": 0.1,
-      "max_tokens": 512,
-      "estimated_latency": "0.2-0.8s"
+      "temperature": 0.05,
+      "max_tokens": 256,
+      "estimated_latency": "0.1-0.5s"
     },
     "balanced": {
       "name": "llama3.1:8b",

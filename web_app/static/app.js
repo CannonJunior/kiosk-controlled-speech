@@ -3428,33 +3428,10 @@ class KioskSpeechChat {
     }
     
     showProcessingIndicator() {
-        // Clear any existing timeout first
-        if (this.processingTimeout) {
-            clearTimeout(this.processingTimeout);
-            this.processingTimeout = null;
-        }
-        
         this.elements.processingIndicator.style.display = 'flex';
-        
-        // Set a 3-second timeout to automatically hide the indicator
-        // This prevents the UI from hanging indefinitely
-        this.processingTimeout = setTimeout(() => {
-            console.warn('⚠️ Processing timeout reached (3s) - hiding indicator to prevent UI hang');
-            this.hideProcessingIndicator();
-            this.addMessage('system', '⚠️ Processing timed out. Please try again.');
-            
-            // Resume wake word listening if active to ensure system doesn't stay locked
-            this.resumeWakeWordListeningIfActive();
-        }, 3000); // 3 seconds maximum
     }
     
     hideProcessingIndicator() {
-        // Clear the timeout when manually hiding
-        if (this.processingTimeout) {
-            clearTimeout(this.processingTimeout);
-            this.processingTimeout = null;
-        }
-        
         this.elements.processingIndicator.style.display = 'none';
     }
     

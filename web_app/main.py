@@ -131,10 +131,12 @@ class SpeechWebBridge:
         
         # Response caching for common queries
         self._response_cache = {}
-        self._response_cache_duration = 30.0  # Cache responses for 30 seconds
+        self._response_cache_duration = 120.0  # Cache responses for 2 minutes for better performance
         self._common_patterns = [
-            "take screenshot", "click", "help", "what can i do", 
-            "start recording", "stop recording", "open settings"
+            "take screenshot", "screenshot", "capture screen", "click", "help", 
+            "what can i do", "what can you do", "commands", "start recording", 
+            "stop recording", "open settings", "settings", "interactive mission",
+            "mission vignettes", "vignettes"
         ]
         
         # Processing timing metrics and monitoring
@@ -827,60 +829,36 @@ class SpeechWebBridge:
         try:
             logger.info(f"[TIMING-{processing_id}] Processing started for message: '{message[:50]}...' at {datetime.now().isoformat()}")
             
-            # TIMEOUT: Use asyncio.wait_for with 15s limit (enough for complex commands with LLM processing)
-            # Create the task so we can properly cancel it on timeout
-            processing_task = asyncio.create_task(self._process_message_internal(message, context))
+            # PROCESS MESSAGE WITHOUT TIMEOUT - Let successful commands complete
+            result = await self._process_message_internal(message, context)
             
-            try:
-                result = await asyncio.wait_for(processing_task, timeout=15.0)  # Increased to 15s for complex commands
+            # Add timing metrics to result
+            actual_time = time.time() - start_time
+            if result.get("success"):
+                result["actual_processing_time"] = f"{actual_time:.2f}s"
+                result["processing_id"] = processing_id
+                result["processing_start"] = datetime.fromtimestamp(start_time).isoformat()
+                result["processing_end"] = datetime.now().isoformat()
                 
-                # Add timing metrics to result
-                actual_time = time.time() - start_time
-                if result.get("success"):
-                    result["actual_processing_time"] = f"{actual_time:.2f}s"
-                    result["processing_id"] = processing_id
-                    result["processing_start"] = datetime.fromtimestamp(start_time).isoformat()
-                    result["processing_end"] = datetime.now().isoformat()
-                    
-                    # Track successful completion
-                    self.processing_metrics["completed_requests"] += 1
-                    self._track_processing_time(actual_time)
-                    
-                    # Check if this was a cached or fast-path response
-                    if result.get("from_cache"):
-                        self.processing_metrics["cache_hits"] += 1
-                    elif result.get("fast_path"):
-                        self.processing_metrics["fast_path_hits"] += 1
-                    
-                    logger.info(f"[TIMING-{processing_id}] Processing completed successfully - Duration: {actual_time:.2f}s")
-                else:
-                    result["actual_processing_time"] = f"{actual_time:.2f}s"
-                    result["processing_id"] = processing_id
-                    self.processing_metrics["failed_requests"] += 1
-                    self._track_processing_time(actual_time)
-                    logger.warning(f"[TIMING-{processing_id}] Processing failed - Duration: {actual_time:.2f}s")
-                
-                return result
-                
-            except asyncio.TimeoutError:
-                # PROPERLY CANCEL THE TASK to prevent background completion
-                if not processing_task.done():
-                    processing_task.cancel()
-                    try:
-                        await processing_task
-                    except asyncio.CancelledError:
-                        pass  # Expected when cancelling
-                    except Exception:
-                        pass  # Ignore other exceptions during cancellation
-                
-                actual_time = time.time() - start_time
-                self.processing_metrics["timed_out_requests"] += 1
+                # Track successful completion
+                self.processing_metrics["completed_requests"] += 1
                 self._track_processing_time(actual_time)
-                logger.error(f"[FORCE-TIMEOUT-{processing_id}] Processing task cancelled after {actual_time:.2f}s")
                 
-                # Return a helpful fallback response
-                fallback_response = self._create_fallback_response(message, actual_time, processing_id)
-                return fallback_response
+                # Check if this was a cached or fast-path response
+                if result.get("from_cache"):
+                    self.processing_metrics["cache_hits"] += 1
+                elif result.get("fast_path"):
+                    self.processing_metrics["fast_path_hits"] += 1
+                
+                logger.info(f"[TIMING-{processing_id}] Processing completed successfully - Duration: {actual_time:.2f}s")
+            else:
+                result["actual_processing_time"] = f"{actual_time:.2f}s"
+                result["processing_id"] = processing_id
+                self.processing_metrics["failed_requests"] += 1
+                self._track_processing_time(actual_time)
+                logger.warning(f"[TIMING-{processing_id}] Processing failed - Duration: {actual_time:.2f}s")
+            
+            return result
                 
         except Exception as e:
             actual_time = time.time() - start_time
@@ -892,45 +870,42 @@ class SpeechWebBridge:
             fallback_response = self._create_error_fallback_response(message, str(e), actual_time, processing_id)
             return fallback_response
     
-    def _create_fallback_response(self, message: str, timeout_duration: float, processing_id: str) -> Dict[str, Any]:
-        """Create a helpful fallback response when processing times out"""
-        # Try to provide a reasonable response based on message content
+    def _try_fast_path_processing(self, message: str) -> Dict[str, Any]:
+        """Fast-path processing for simple commands that don't need LLM"""
         message_lower = message.lower().strip()
         
-        # For timeout fallbacks, DO NOT return executable actions to avoid false positives
-        # The user should retry their command if they want it executed
-        if "click" in message_lower:
-            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Your command '{message[:50]}...' was not completed. Please try again."
-            action_type = "timeout"
-        elif any(word in message_lower for word in ["screenshot", "capture", "screen"]):
-            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Screenshot command was not completed. Please try again."
-            action_type = "timeout"
-        elif any(word in message_lower for word in ["help", "what", "how", "can"]):
-            response_text = "🎤 **Available Commands**\n\n• 'Take screenshot' - Capture screen\n• 'Click [element name]' - Click interface elements\n• 'Open settings' - Open settings panel\n• 'Help' - Show this help message\n\n⚠️ Your original request timed out, but here's help!"
-            action_type = "help"
-        else:
-            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Command '{message[:50]}...' was not completed. Please try again."
-            action_type = "timeout"
-            
-        return {
-            "success": True,  # Still return success to avoid error display
-            "response": {
-                "message": response_text,
-                "action": action_type,
-                "confidence": 0.5
-            },
-            "action_result": {
-                "action_executed": False,
-                "action_type": action_type,
-                "message": f"⚠️ Processing timeout - returned fallback response"
-            },
-            "actual_processing_time": f"{timeout_duration:.2f}s",
-            "processing_id": processing_id,
-            "timeout": True,
-            "fallback": True,
-            "processing_time": "TIMEOUT",
-            "model_used": "fallback_timeout"
-        }
+        # Screenshot commands
+        if any(keyword in message_lower for keyword in ["screenshot", "capture", "screen shot", "take picture"]):
+            return {
+                "success": True,
+                "response": {
+                    "message": "📸 Taking screenshot...",
+                    "action": "screenshot",
+                    "confidence": 0.95
+                },
+                "action_result": {
+                    "action_type": "screenshot",
+                    "message": "Fast-path screenshot command"
+                }
+            }
+        
+        # Help commands
+        if any(keyword in message_lower for keyword in ["help", "what can you do", "commands", "what commands"]):
+            return {
+                "success": True,
+                "response": {
+                    "message": "🎤 **Available Commands**\n\n• 'Take screenshot' - Capture screen\n• 'Click [element name]' - Click interface elements\n• 'Open settings' - Open settings panel\n• 'Help' - Show this help message",
+                    "action": "help",
+                    "confidence": 0.95
+                },
+                "action_result": {
+                    "action_type": "help",
+                    "message": "Fast-path help command"
+                }
+            }
+        
+        return None  # No fast-path match, continue with standard processing
+
     
     def _create_error_fallback_response(self, message: str, error_msg: str, duration: float, processing_id: str) -> Dict[str, Any]:
         """Create a helpful response when processing fails with an error"""
@@ -1031,7 +1006,14 @@ class SpeechWebBridge:
                         # Remove expired cache entry
                         del self._response_cache[cache_key]
             
-            # Load screen context first for fast-path processing
+            # FAST-PATH: Check for simple direct commands first
+            fast_path_result = self._try_fast_path_processing(message)
+            if fast_path_result:
+                logger.debug(f"Fast-path processing for: {message}")
+                fast_path_result["fast_path"] = True
+                return fast_path_result
+            
+            # Load screen context for standard processing
             current_screen = await self._load_kiosk_data_for_context()
             if not current_screen:
                 # Fallback to basic screen data if kiosk data unavailable

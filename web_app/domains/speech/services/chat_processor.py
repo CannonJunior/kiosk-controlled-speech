@@ -71,36 +71,19 @@ class ChatProcessor:
         try:
             logger.info(f"[TIMING-{processing_id}] Processing started for message: '{message[:50]}...'")
             
-            # TIMEOUT: Use asyncio.wait_for with 15s limit (enough for complex commands with LLM processing)
-            # Create the task so we can properly cancel it on timeout
-            processing_task = asyncio.create_task(self._process_message_internal(message, context))
+            # PROCESS MESSAGE WITHOUT TIMEOUT - Let successful commands complete
+            result = await self._process_message_internal(message, context)
             
-            try:
-                result = await asyncio.wait_for(processing_task, timeout=15.0)  # Increased to 15s for complex commands
-                
-                # Add timing metrics to result
-                actual_time = time.time() - start_time
-                self._add_timing_metrics(result, actual_time, processing_id, start_time)
-                
-                if result.get("success"):
-                    self._track_successful_completion(actual_time, result)
-                else:
-                    self._track_failed_completion(actual_time, processing_id)
-                
-                return result
-                
-            except asyncio.TimeoutError:
-                # PROPERLY CANCEL THE TASK to prevent background completion
-                if not processing_task.done():
-                    processing_task.cancel()
-                    try:
-                        await processing_task
-                    except asyncio.CancelledError:
-                        pass  # Expected when cancelling
-                    except Exception:
-                        pass  # Ignore other exceptions during cancellation
-                
-                return self._handle_timeout(message, start_time, processing_id)
+            # Add timing metrics to result
+            actual_time = time.time() - start_time
+            self._add_timing_metrics(result, actual_time, processing_id, start_time)
+            
+            if result.get("success"):
+                self._track_successful_completion(actual_time, result)
+            else:
+                self._track_failed_completion(actual_time, processing_id)
+            
+            return result
                 
         except Exception as e:
             return self._handle_processing_error(message, str(e), start_time, processing_id)
@@ -192,15 +175,6 @@ class ChatProcessor:
                 "error": f"Internal processing failed: {str(e)}"
             }
     
-    def _handle_timeout(self, message: str, start_time: float, processing_id: str) -> Dict[str, Any]:
-        """Handle processing timeout scenario."""
-        actual_time = time.time() - start_time
-        self.processing_metrics["timed_out_requests"] += 1
-        self._track_processing_time(actual_time)
-        logger.error(f"[FORCE-TIMEOUT-{processing_id}] Processing force-cancelled after {actual_time:.2f}s")
-        
-        return self._create_fallback_response(message, actual_time, processing_id)
-    
     def _handle_processing_error(self, message: str, error_msg: str, start_time: float, processing_id: str) -> Dict[str, Any]:
         """Handle processing error scenario."""
         actual_time = time.time() - start_time
@@ -209,45 +183,6 @@ class ChatProcessor:
         logger.error(f"[ERROR-{processing_id}] Chat processing error after {actual_time:.2f}s: {error_msg}")
         
         return self._create_error_fallback_response(message, error_msg, actual_time, processing_id)
-    
-    def _create_fallback_response(self, message: str, timeout_duration: float, processing_id: str) -> Dict[str, Any]:
-        """Create a helpful fallback response when processing times out."""
-        message_lower = message.lower().strip()
-        
-        # For timeout fallbacks, DO NOT return executable actions to avoid false positives
-        # The user should retry their command if they want it executed
-        if "click" in message_lower:
-            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Your command '{message[:50]}...' was not completed. Please try again."
-            action_type = "timeout"
-        elif any(word in message_lower for word in ["screenshot", "capture", "screen"]):
-            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Screenshot command was not completed. Please try again."
-            action_type = "timeout"
-        elif any(word in message_lower for word in ["help", "what", "how", "can"]):
-            response_text = "🎤 **Available Commands**\\n\\n• 'Take screenshot' - Capture screen\\n• 'Click [element name]' - Click interface elements\\n• 'Open settings' - Open settings panel\\n• 'Help' - Show this help message\\n\\n⚠️ Your original request timed out, but here's help!"
-            action_type = "help"
-        else:
-            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Command '{message[:50]}...' was not completed. Please try again."
-            action_type = "timeout"
-            
-        return {
-            "success": True,  # Still return success to avoid error display
-            "response": {
-                "message": response_text,
-                "action": action_type,
-                "confidence": 0.5
-            },
-            "action_result": {
-                "action_executed": False,
-                "action_type": action_type,
-                "message": "⚠️ Processing timeout - returned fallback response"
-            },
-            "actual_processing_time": f"{timeout_duration:.2f}s",
-            "processing_id": processing_id,
-            "timeout": True,
-            "fallback": True,
-            "processing_time": "TIMEOUT",
-            "model_used": "fallback_timeout"
-        }
     
     def _create_error_fallback_response(self, message: str, error_msg: str, duration: float, processing_id: str) -> Dict[str, Any]:
         """Create a helpful response when processing fails with an error."""
