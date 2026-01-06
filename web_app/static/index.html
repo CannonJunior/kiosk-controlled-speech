@@ -348,6 +348,12 @@
                     </select>
                 </div>
                 <div class="setting-group">
+                    <label for="ollamaModelSelect">Ollama Model:</label>
+                    <select id="ollamaModelSelect">
+                        <option value="">Loading available models...</option>
+                    </select>
+                </div>
+                <div class="setting-group">
                     <label for="autoSendVoice">Auto-send voice messages:</label>
                     <input type="checkbox" id="autoSendVoice" checked>
                 </div>
@@ -890,6 +896,47 @@
                     <button class="add-element-btn" id="annotationAddElementBtn">
                         <i class="fas fa-plus"></i> Add New Element...
                     </button>
+                    <button class="add-element-btn add-from-existing-btn" id="addFromExistingBtn">
+                        <i class="fas fa-copy"></i> Add From Existing...
+                    </button>
+                </div>
+                
+                <!-- Add From Existing Section -->
+                <div class="add-from-existing-section" id="addFromExistingSection" style="display: none;">
+                    <div class="add-from-existing-header">
+                        <h4><i class="fas fa-copy"></i> Copy Elements from Another Screen</h4>
+                        <select id="existingScreenSelect" class="existing-screen-select">
+                            <option value="">Select a screen...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="existing-elements-container" id="existingElementsContainer" style="display: none;">
+                        <div class="existing-elements-header">
+                            <h5>Available Elements:</h5>
+                            <div class="existing-elements-controls">
+                                <button class="select-all-btn" id="selectAllExistingBtn" type="button">Select All</button>
+                                <button class="add-to-screen-btn" id="addToScreenBtn" disabled>
+                                    <i class="fas fa-plus"></i> Add to Screen
+                                </button>
+                            </div>
+                        </div>
+                        <div class="existing-elements-table-wrapper">
+                            <table class="existing-elements-table" id="existingElementsTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"></th>
+                                        <th>Element</th>
+                                        <th>Coordinates</th>
+                                        <th>Size</th>
+                                        <th>Commands</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="existingElementsTableBody">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

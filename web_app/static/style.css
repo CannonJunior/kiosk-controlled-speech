@@ -3771,3 +3771,157 @@ div[style*="position: fixed"][style*="width: 100%"][style*="background"] {
     background: rgba(255, 255, 255, 1);
 }
 
+/* Add From Existing Styles */
+.add-element-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.add-from-existing-btn {
+    background: rgba(54, 162, 235, 0.1);
+    border: 1px solid rgba(54, 162, 235, 0.3);
+    color: #36a2eb;
+}
+
+.add-from-existing-btn:hover {
+    background: rgba(54, 162, 235, 0.2);
+    border-color: rgba(54, 162, 235, 0.5);
+}
+
+.add-from-existing-section {
+    margin-top: 15px;
+    border-top: 1px solid rgba(255, 102, 0, 0.2);
+    padding-top: 15px;
+}
+
+.add-from-existing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.add-from-existing-header h4 {
+    margin: 0;
+    font-size: 13px;
+    color: #36a2eb;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.existing-screen-select {
+    padding: 5px 10px;
+    border: 1px solid rgba(54, 162, 235, 0.3);
+    border-radius: 4px;
+    font-size: 12px;
+    background: white;
+    min-width: 150px;
+}
+
+.existing-elements-container {
+    margin-top: 10px;
+}
+
+.existing-elements-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.existing-elements-header h5 {
+    margin: 0;
+    font-size: 12px;
+    color: #666;
+}
+
+.existing-elements-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.select-all-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    border: 1px solid rgba(54, 162, 235, 0.3);
+    background: rgba(54, 162, 235, 0.1);
+    color: #36a2eb;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.select-all-btn:hover {
+    background: rgba(54, 162, 235, 0.2);
+}
+
+.add-to-screen-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+    border: 1px solid rgba(46, 160, 67, 0.3);
+    background: rgba(46, 160, 67, 0.1);
+    color: #2ea043;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.add-to-screen-btn:hover:not(:disabled) {
+    background: rgba(46, 160, 67, 0.2);
+}
+
+.add-to-screen-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: rgba(128, 128, 128, 0.1);
+    border-color: rgba(128, 128, 128, 0.3);
+    color: #666;
+}
+
+.existing-elements-table-wrapper {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(54, 162, 235, 0.2);
+    border-radius: 4px;
+}
+
+.existing-elements-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.existing-elements-table th {
+    background: rgba(54, 162, 235, 0.1);
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid rgba(54, 162, 235, 0.2);
+    font-weight: 500;
+}
+
+.existing-elements-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid rgba(54, 162, 235, 0.1);
+}
+
+.existing-elements-table tbody tr:hover {
+    background: rgba(54, 162, 235, 0.05);
+}
+
+.existing-element-checkbox {
+    margin: 0;
+    cursor: pointer;
+}
+
+.existing-elements-table tbody tr.selected {
+    background: rgba(54, 162, 235, 0.15);
+}
+

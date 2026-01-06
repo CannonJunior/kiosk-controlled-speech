@@ -57,8 +57,8 @@ fi
 
 print_status "Preloading Ollama model with 1 hour keep-alive..."
 if command -v ollama >/dev/null 2>&1; then
-    ollama run qwen2.5:1.5b --keepalive 3600 >/dev/null 2>&1 &
-    print_status "Ollama model qwen2.5:1.5b loaded with 1 hour keep-alive"
+    ollama run qwen:0.5b --keepalive 3600 >/dev/null 2>&1 &
+    print_status "Ollama model qwen:0.5b loaded with 1 hour keep-alive"
 else
     print_warning "Ollama not found in PATH, skipping model preload"
 fi

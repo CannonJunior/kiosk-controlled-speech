@@ -584,6 +584,106 @@
           ],
           "action": "click",
           "description": "Interactive Mission Vignettes"
+        },
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
+        },
+        {
+          "id": "who_we_are",
+          "name": "who_we_are",
+          "coordinates": {
+            "x": 100,
+            "y": 5
+          },
+          "size": {
+            "width": 380,
+            "height": 80
+          },
+          "voice_commands": [
+            "Click on Who We Are"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Who We Are"
+        },
+        {
+          "id": "what_we_do",
+          "name": "what_we_do",
+          "coordinates": {
+            "x": 485,
+            "y": 0
+          },
+          "size": {
+            "width": 475,
+            "height": 85
+          },
+          "voice_commands": [
+            "Click on What We Do"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "What We Do"
+        },
+        {
+          "id": "own_the_watchfloor",
+          "name": "own_the_watchfloor",
+          "coordinates": {
+            "x": 965,
+            "y": 0
+          },
+          "size": {
+            "width": 475,
+            "height": 85
+          },
+          "voice_commands": [
+            "Click on Own The Watchfloor"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Own The Watchfloor"
+        },
+        {
+          "id": "interactive_vignettes",
+          "name": "interactive_vignettes",
+          "coordinates": {
+            "x": 1445,
+            "y": 0
+          },
+          "size": {
+            "width": 475,
+            "height": 85
+          },
+          "voice_commands": [
+            "Click on Interactive Vignettes"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Interactive Vignettes"
         }
       ]
     },
@@ -614,6 +714,46 @@
           ],
           "action": "click",
           "description": "Engagement Orchestration"
+        },
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
+        },
+        {
+          "id": "navbar_close",
+          "name": "navbar_close",
+          "coordinates": {
+            "x": 1850,
+            "y": 20
+          },
+          "size": {
+            "width": 50,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Close"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Close"
         }
       ]
     },
@@ -644,6 +784,146 @@
           ],
           "action": "click",
           "description": "Load Saved State"
+        },
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
+        },
+        {
+          "id": "navbar_engagement_orchestration",
+          "name": "navbar_engagement_orchestration",
+          "coordinates": {
+            "x": 711,
+            "y": 19
+          },
+          "size": {
+            "width": 429,
+            "height": 54
+          },
+          "voice_commands": [
+            "Click on the navbar's Engagement Orchestrations"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Engagement Orchestration"
+        },
+        {
+          "id": "navbar_dca",
+          "name": "navbar_dca",
+          "coordinates": {
+            "x": 479,
+            "y": 18
+          },
+          "size": {
+            "width": 115,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's DCA"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar DCA"
+        },
+        {
+          "id": "navbar_mission_plan",
+          "name": "navbar_mission_plan",
+          "coordinates": {
+            "x": 102,
+            "y": 19
+          },
+          "size": {
+            "width": 255,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Plan"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Plan"
+        },
+        {
+          "id": "navbar_mission_execution",
+          "name": "navbar_mission_execution",
+          "coordinates": {
+            "x": 1250,
+            "y": 15
+          },
+          "size": {
+            "width": 310,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Execution"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Execution"
+        },
+        {
+          "id": "navbar_debrief",
+          "name": "navbar_debrief",
+          "coordinates": {
+            "x": 1680,
+            "y": 15
+          },
+          "size": {
+            "width": 165,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Debrief"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Debrief"
+        },
+        {
+          "id": "navbar_close",
+          "name": "navbar_close",
+          "coordinates": {
+            "x": 1850,
+            "y": 20
+          },
+          "size": {
+            "width": 50,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Close"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Close"
         }
       ]
     },
@@ -674,6 +954,146 @@
           ],
           "action": "click",
           "description": "Start Mission"
+        },
+        {
+          "id": "navbar_engagement_orchestration",
+          "name": "navbar_engagement_orchestration",
+          "coordinates": {
+            "x": 711,
+            "y": 19
+          },
+          "size": {
+            "width": 429,
+            "height": 54
+          },
+          "voice_commands": [
+            "Click on the navbar's Engagement Orchestrations"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Engagement Orchestration"
+        },
+        {
+          "id": "navbar_dca",
+          "name": "navbar_dca",
+          "coordinates": {
+            "x": 479,
+            "y": 18
+          },
+          "size": {
+            "width": 115,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's DCA"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar DCA"
+        },
+        {
+          "id": "navbar_mission_plan",
+          "name": "navbar_mission_plan",
+          "coordinates": {
+            "x": 102,
+            "y": 19
+          },
+          "size": {
+            "width": 255,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Plan"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Plan"
+        },
+        {
+          "id": "navbar_mission_execution",
+          "name": "navbar_mission_execution",
+          "coordinates": {
+            "x": 1250,
+            "y": 15
+          },
+          "size": {
+            "width": 310,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Execution"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Execution"
+        },
+        {
+          "id": "navbar_debrief",
+          "name": "navbar_debrief",
+          "coordinates": {
+            "x": 1680,
+            "y": 15
+          },
+          "size": {
+            "width": 165,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Debrief"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Debrief"
+        },
+        {
+          "id": "navbar_close",
+          "name": "navbar_close",
+          "coordinates": {
+            "x": 1850,
+            "y": 20
+          },
+          "size": {
+            "width": 50,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Close"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Close"
+        },
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
         }
       ]
     },
@@ -704,6 +1124,146 @@
           ],
           "action": "click",
           "description": "Create Engagements"
+        },
+        {
+          "id": "navbar_engagement_orchestration",
+          "name": "navbar_engagement_orchestration",
+          "coordinates": {
+            "x": 711,
+            "y": 19
+          },
+          "size": {
+            "width": 429,
+            "height": 54
+          },
+          "voice_commands": [
+            "Click on the navbar's Engagement Orchestrations"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Engagement Orchestration"
+        },
+        {
+          "id": "navbar_dca",
+          "name": "navbar_dca",
+          "coordinates": {
+            "x": 479,
+            "y": 18
+          },
+          "size": {
+            "width": 115,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's DCA"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar DCA"
+        },
+        {
+          "id": "navbar_mission_plan",
+          "name": "navbar_mission_plan",
+          "coordinates": {
+            "x": 102,
+            "y": 19
+          },
+          "size": {
+            "width": 255,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Plan"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Plan"
+        },
+        {
+          "id": "navbar_mission_execution",
+          "name": "navbar_mission_execution",
+          "coordinates": {
+            "x": 1250,
+            "y": 15
+          },
+          "size": {
+            "width": 310,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Execution"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Execution"
+        },
+        {
+          "id": "navbar_debrief",
+          "name": "navbar_debrief",
+          "coordinates": {
+            "x": 1680,
+            "y": 15
+          },
+          "size": {
+            "width": 165,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Debrief"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Debrief"
+        },
+        {
+          "id": "navbar_close",
+          "name": "navbar_close",
+          "coordinates": {
+            "x": 1850,
+            "y": 20
+          },
+          "size": {
+            "width": 50,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Close"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Close"
+        },
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
         }
       ]
     },
@@ -734,6 +1294,146 @@
           ],
           "action": "click",
           "description": "Mission Execution"
+        },
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
+        },
+        {
+          "id": "navbar_engagement_orchestration",
+          "name": "navbar_engagement_orchestration",
+          "coordinates": {
+            "x": 711,
+            "y": 19
+          },
+          "size": {
+            "width": 429,
+            "height": 54
+          },
+          "voice_commands": [
+            "Click on the navbar's Engagement Orchestrations"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Engagement Orchestration"
+        },
+        {
+          "id": "navbar_dca",
+          "name": "navbar_dca",
+          "coordinates": {
+            "x": 479,
+            "y": 18
+          },
+          "size": {
+            "width": 115,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's DCA"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar DCA"
+        },
+        {
+          "id": "navbar_mission_plan",
+          "name": "navbar_mission_plan",
+          "coordinates": {
+            "x": 102,
+            "y": 19
+          },
+          "size": {
+            "width": 255,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Plan"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Plan"
+        },
+        {
+          "id": "navbar_mission_execution",
+          "name": "navbar_mission_execution",
+          "coordinates": {
+            "x": 1250,
+            "y": 15
+          },
+          "size": {
+            "width": 310,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Execution"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Execution"
+        },
+        {
+          "id": "navbar_debrief",
+          "name": "navbar_debrief",
+          "coordinates": {
+            "x": 1680,
+            "y": 15
+          },
+          "size": {
+            "width": 165,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Debrief"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Debrief"
+        },
+        {
+          "id": "navbar_close",
+          "name": "navbar_close",
+          "coordinates": {
+            "x": 1850,
+            "y": 20
+          },
+          "size": {
+            "width": 50,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Close"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Close"
         }
       ]
     },
@@ -764,6 +1464,146 @@
           ],
           "action": "click",
           "description": "Generate Report"
+        },
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
+        },
+        {
+          "id": "navbar_engagement_orchestration",
+          "name": "navbar_engagement_orchestration",
+          "coordinates": {
+            "x": 711,
+            "y": 19
+          },
+          "size": {
+            "width": 429,
+            "height": 54
+          },
+          "voice_commands": [
+            "Click on the navbar's Engagement Orchestrations"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Engagement Orchestration"
+        },
+        {
+          "id": "navbar_dca",
+          "name": "navbar_dca",
+          "coordinates": {
+            "x": 479,
+            "y": 18
+          },
+          "size": {
+            "width": 115,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's DCA"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar DCA"
+        },
+        {
+          "id": "navbar_mission_plan",
+          "name": "navbar_mission_plan",
+          "coordinates": {
+            "x": 102,
+            "y": 19
+          },
+          "size": {
+            "width": 255,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Plan"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Plan"
+        },
+        {
+          "id": "navbar_mission_execution",
+          "name": "navbar_mission_execution",
+          "coordinates": {
+            "x": 1250,
+            "y": 15
+          },
+          "size": {
+            "width": 310,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Execution"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Execution"
+        },
+        {
+          "id": "navbar_debrief",
+          "name": "navbar_debrief",
+          "coordinates": {
+            "x": 1680,
+            "y": 15
+          },
+          "size": {
+            "width": 165,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Debrief"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Debrief"
+        },
+        {
+          "id": "navbar_close",
+          "name": "navbar_close",
+          "coordinates": {
+            "x": 1850,
+            "y": 20
+          },
+          "size": {
+            "width": 50,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Close"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Close"
         }
       ]
     },
@@ -774,7 +1614,148 @@
         "title_text": "CCA_report",
         "elements": []
       },
-      "elements": []
+      "elements": [
+        {
+          "id": "general_atomics_icon",
+          "name": "general_atomics_icon",
+          "coordinates": {
+            "x": 7,
+            "y": 0
+          },
+          "size": {
+            "width": 95,
+            "height": 95
+          },
+          "voice_commands": [
+            "Click on the General Atomics Icon"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "General Atomics Icon"
+        },
+        {
+          "id": "navbar_engagement_orchestration",
+          "name": "navbar_engagement_orchestration",
+          "coordinates": {
+            "x": 711,
+            "y": 19
+          },
+          "size": {
+            "width": 429,
+            "height": 54
+          },
+          "voice_commands": [
+            "Click on the navbar's Engagement Orchestrations"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Engagement Orchestration"
+        },
+        {
+          "id": "navbar_dca",
+          "name": "navbar_dca",
+          "coordinates": {
+            "x": 479,
+            "y": 18
+          },
+          "size": {
+            "width": 115,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's DCA"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar DCA"
+        },
+        {
+          "id": "navbar_mission_plan",
+          "name": "navbar_mission_plan",
+          "coordinates": {
+            "x": 102,
+            "y": 19
+          },
+          "size": {
+            "width": 255,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Plan"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Plan"
+        },
+        {
+          "id": "navbar_mission_execution",
+          "name": "navbar_mission_execution",
+          "coordinates": {
+            "x": 1250,
+            "y": 15
+          },
+          "size": {
+            "width": 310,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Mission Execution"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Mission Execution"
+        },
+        {
+          "id": "navbar_debrief",
+          "name": "navbar_debrief",
+          "coordinates": {
+            "x": 1680,
+            "y": 15
+          },
+          "size": {
+            "width": 165,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Debrief"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Debrief"
+        },
+        {
+          "id": "navbar_close",
+          "name": "navbar_close",
+          "coordinates": {
+            "x": 1850,
+            "y": 20
+          },
+          "size": {
+            "width": 50,
+            "height": 50
+          },
+          "voice_commands": [
+            "Click on the navbar's Close"
+          ],
+          "conditions": [
+            "always_visible"
+          ],
+          "action": "click",
+          "description": "Navbar Close"
+        }
+      ]
     }
   },
   "global_commands": {

@@ -1,37 +1,19 @@
 {
   "vignettes": [
     {
-      "name": "save-test",
-      "safe_name": "save-test",
-      "created": "2025-12-29T17:59:59.457Z",
-      "modified": "2025-12-29T18:00:14.858Z",
-      "screenshot_count": 2,
-      "annotation_count": 1,
-      "directory": "config/vignettes/save-test"
-    },
-    {
       "name": "My Vignette",
       "safe_name": "My_Vignette",
       "created": "2026-01-03T16:25:18.937Z",
       "modified": "2026-01-03T16:28:48.581Z",
-      "screenshot_count": 8,
+      "screenshot_count": 10,
       "annotation_count": 8,
       "directory": "config/vignettes/My_Vignette"
-    },
-    {
-      "name": "test3",
-      "safe_name": "test3",
-      "created": "2025-12-29T20:57:20.628Z",
-      "modified": "2026-01-01T05:15:05.766Z",
-      "screenshot_count": 3,
-      "annotation_count": 3,
-      "directory": "config/vignettes/test3"
     },
     {
       "name": "CCA Vignette",
       "safe_name": "CCA_Vignette",
       "created": "2026-01-03T16:25:18.937Z",
-      "modified": "2026-01-04T22:56:01.510Z",
+      "modified": "2026-01-05T01:51:44.203Z",
       "screenshot_count": 8,
       "annotation_count": 8,
       "directory": "config/vignettes/CCA_Vignette"

@@ -71,12 +71,12 @@ class ChatProcessor:
         try:
             logger.info(f"[TIMING-{processing_id}] Processing started for message: '{message[:50]}...'")
             
-            # AGGRESSIVE TIMEOUT: Use asyncio.wait_for with 2.5s limit
+            # TIMEOUT: Use asyncio.wait_for with 15s limit (enough for complex commands with LLM processing)
+            # Create the task so we can properly cancel it on timeout
+            processing_task = asyncio.create_task(self._process_message_internal(message, context))
+            
             try:
-                result = await asyncio.wait_for(
-                    self._process_message_internal(message, context),
-                    timeout=2.5  # Reduced to 2.5s to ensure we can respond within 3s
-                )
+                result = await asyncio.wait_for(processing_task, timeout=15.0)  # Increased to 15s for complex commands
                 
                 # Add timing metrics to result
                 actual_time = time.time() - start_time
@@ -90,6 +90,16 @@ class ChatProcessor:
                 return result
                 
             except asyncio.TimeoutError:
+                # PROPERLY CANCEL THE TASK to prevent background completion
+                if not processing_task.done():
+                    processing_task.cancel()
+                    try:
+                        await processing_task
+                    except asyncio.CancelledError:
+                        pass  # Expected when cancelling
+                    except Exception:
+                        pass  # Ignore other exceptions during cancellation
+                
                 return self._handle_timeout(message, start_time, processing_id)
                 
         except Exception as e:
@@ -204,14 +214,19 @@ class ChatProcessor:
         """Create a helpful fallback response when processing times out."""
         message_lower = message.lower().strip()
         
-        if any(word in message_lower for word in ["screenshot", "capture", "screen"]):
-            response_text = "I'll take a screenshot for you. Processing took too long, but the screenshot should still work."
-            action_type = "screenshot"
+        # For timeout fallbacks, DO NOT return executable actions to avoid false positives
+        # The user should retry their command if they want it executed
+        if "click" in message_lower:
+            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Your command '{message[:50]}...' was not completed. Please try again."
+            action_type = "timeout"
+        elif any(word in message_lower for word in ["screenshot", "capture", "screen"]):
+            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Screenshot command was not completed. Please try again."
+            action_type = "timeout"
         elif any(word in message_lower for word in ["help", "what", "how", "can"]):
-            response_text = "🎤 **Available Commands**\\n\\n• 'Take screenshot' - Capture screen\\n• 'Click [element name]' - Click interface elements\\n• 'Open settings' - Open settings panel\\n• 'Help' - Show this help message\\n\\nProcessing took too long, but here are your options!"
+            response_text = "🎤 **Available Commands**\\n\\n• 'Take screenshot' - Capture screen\\n• 'Click [element name]' - Click interface elements\\n• 'Open settings' - Open settings panel\\n• 'Help' - Show this help message\\n\\n⚠️ Your original request timed out, but here's help!"
             action_type = "help"
         else:
-            response_text = f"I received your message '{message[:50]}...' but processing took too long ({timeout_duration:.1f}s). Please try a simpler command like 'help' or 'take screenshot'."
+            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Command '{message[:50]}...' was not completed. Please try again."
             action_type = "timeout"
             
         return {

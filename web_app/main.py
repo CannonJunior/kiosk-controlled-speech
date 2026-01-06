@@ -827,12 +827,12 @@ class SpeechWebBridge:
         try:
             logger.info(f"[TIMING-{processing_id}] Processing started for message: '{message[:50]}...' at {datetime.now().isoformat()}")
             
-            # AGGRESSIVE TIMEOUT: Use asyncio.wait_for with 2.5s limit
+            # TIMEOUT: Use asyncio.wait_for with 15s limit (enough for complex commands with LLM processing)
+            # Create the task so we can properly cancel it on timeout
+            processing_task = asyncio.create_task(self._process_message_internal(message, context))
+            
             try:
-                result = await asyncio.wait_for(
-                    self._process_message_internal(message, context),
-                    timeout=2.5  # Reduced to 2.5s to ensure we can respond within 3s
-                )
+                result = await asyncio.wait_for(processing_task, timeout=15.0)  # Increased to 15s for complex commands
                 
                 # Add timing metrics to result
                 actual_time = time.time() - start_time
@@ -863,11 +863,20 @@ class SpeechWebBridge:
                 return result
                 
             except asyncio.TimeoutError:
-                # FORCE TIMEOUT - Return control to user immediately
+                # PROPERLY CANCEL THE TASK to prevent background completion
+                if not processing_task.done():
+                    processing_task.cancel()
+                    try:
+                        await processing_task
+                    except asyncio.CancelledError:
+                        pass  # Expected when cancelling
+                    except Exception:
+                        pass  # Ignore other exceptions during cancellation
+                
                 actual_time = time.time() - start_time
                 self.processing_metrics["timed_out_requests"] += 1
                 self._track_processing_time(actual_time)
-                logger.error(f"[FORCE-TIMEOUT-{processing_id}] Processing force-cancelled after {actual_time:.2f}s")
+                logger.error(f"[FORCE-TIMEOUT-{processing_id}] Processing task cancelled after {actual_time:.2f}s")
                 
                 # Return a helpful fallback response
                 fallback_response = self._create_fallback_response(message, actual_time, processing_id)
@@ -888,14 +897,19 @@ class SpeechWebBridge:
         # Try to provide a reasonable response based on message content
         message_lower = message.lower().strip()
         
-        if any(word in message_lower for word in ["screenshot", "capture", "screen"]):
-            response_text = "I'll take a screenshot for you. Processing took too long, but the screenshot should still work."
-            action_type = "screenshot"
+        # For timeout fallbacks, DO NOT return executable actions to avoid false positives
+        # The user should retry their command if they want it executed
+        if "click" in message_lower:
+            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Your command '{message[:50]}...' was not completed. Please try again."
+            action_type = "timeout"
+        elif any(word in message_lower for word in ["screenshot", "capture", "screen"]):
+            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Screenshot command was not completed. Please try again."
+            action_type = "timeout"
         elif any(word in message_lower for word in ["help", "what", "how", "can"]):
-            response_text = "🎤 **Available Commands**\n\n• 'Take screenshot' - Capture screen\n• 'Click [element name]' - Click interface elements\n• 'Open settings' - Open settings panel\n• 'Help' - Show this help message\n\nProcessing took too long, but here are your options!"
+            response_text = "🎤 **Available Commands**\n\n• 'Take screenshot' - Capture screen\n• 'Click [element name]' - Click interface elements\n• 'Open settings' - Open settings panel\n• 'Help' - Show this help message\n\n⚠️ Your original request timed out, but here's help!"
             action_type = "help"
         else:
-            response_text = f"I received your message '{message[:50]}...' but processing took too long ({timeout_duration:.1f}s). Please try a simpler command like 'help' or 'take screenshot'."
+            response_text = f"⚠️ Processing timed out after {timeout_duration:.1f}s. Command '{message[:50]}...' was not completed. Please try again."
             action_type = "timeout"
             
         return {
@@ -1554,6 +1568,51 @@ async def get_performance_metrics():
         "metrics": speech_bridge.get_performance_metrics(),
         "timestamp": datetime.now().isoformat()
     }
+
+@app.get("/api/ollama/models")
+async def get_ollama_models():
+    """Get list of available Ollama models"""
+    try:
+        # Use the ollama_agent MCP tool to get available models
+        tool_request = {
+            "name": "ollama_agent_check_ollama_health",
+            "arguments": {}
+        }
+        
+        result = await mcp_client_manager.call_tool(tool_request)
+        
+        if result.get("success") and result.get("response", {}).get("ollama_available"):
+            # If Ollama is available, make another call to list models
+            models_request = {
+                "name": "ollama_agent_configure_model", 
+                "arguments": {"list_available": True}
+            }
+            
+            models_result = await mcp_client_manager.call_tool(models_request)
+            
+            if models_result.get("success"):
+                available_models = models_result.get("response", {}).get("available_models", [])
+                return {
+                    "success": True,
+                    "models": available_models,
+                    "current_model": result.get("response", {}).get("model_name", "unknown")
+                }
+        
+        # Fallback if MCP tools don't work - return some common models
+        return {
+            "success": True,
+            "models": ["qwen:0.5b", "qwen2.5:1.5b", "llama3.1:8b", "llama3.1:70b"],
+            "current_model": "qwen:0.5b"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting Ollama models: {e}")
+        # Return default models as fallback
+        return {
+            "success": True,
+            "models": ["qwen:0.5b", "qwen2.5:1.5b", "llama3.1:8b", "llama3.1:70b"],
+            "current_model": "qwen:0.5b"
+        }
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):

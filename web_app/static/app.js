@@ -282,6 +282,15 @@ class KioskSpeechChat {
             annotationElementsTableBody: document.getElementById('annotationElementsTableBody'),
             annotationAddElementBtn: document.getElementById('annotationAddElementBtn'),
             
+            // Add From Existing elements
+            addFromExistingBtn: document.getElementById('addFromExistingBtn'),
+            addFromExistingSection: document.getElementById('addFromExistingSection'),
+            existingScreenSelect: document.getElementById('existingScreenSelect'),
+            existingElementsContainer: document.getElementById('existingElementsContainer'),
+            existingElementsTableBody: document.getElementById('existingElementsTableBody'),
+            selectAllExistingBtn: document.getElementById('selectAllExistingBtn'),
+            addToScreenBtn: document.getElementById('addToScreenBtn'),
+            
             connectionStatus: document.getElementById('connectionStatus'),
             chatMessages: document.getElementById('chatMessages'),
             messageInput: document.getElementById('messageInput'),
@@ -304,6 +313,7 @@ class KioskSpeechChat {
             sidebarToggle: document.getElementById('sidebarToggle'),
             dictationButton: document.getElementById('dictationButton'),
             microphoneSelect: document.getElementById('microphoneSelect'),
+            ollamaModelSelect: document.getElementById('ollamaModelSelect'),
             autoSendVoice: document.getElementById('autoSendVoice'),
             voiceThreshold: document.getElementById('voiceThreshold'),
             vadEnabled: document.getElementById('vadEnabled'),
@@ -1814,6 +1824,34 @@ class KioskSpeechChat {
                 }
             });
         }
+        
+        // Add From Existing button
+        if (this.elements.addFromExistingBtn) {
+            this.elements.addFromExistingBtn.addEventListener('click', () => {
+                this.toggleAddFromExistingSection();
+            });
+        }
+        
+        // Existing screen selection dropdown
+        if (this.elements.existingScreenSelect) {
+            this.elements.existingScreenSelect.addEventListener('change', () => {
+                this.handleExistingScreenSelection();
+            });
+        }
+        
+        // Select All button for existing elements
+        if (this.elements.selectAllExistingBtn) {
+            this.elements.selectAllExistingBtn.addEventListener('click', () => {
+                this.toggleSelectAllExistingElements();
+            });
+        }
+        
+        // Add to Screen button
+        if (this.elements.addToScreenBtn) {
+            this.elements.addToScreenBtn.addEventListener('click', () => {
+                this.addSelectedExistingElements();
+            });
+        }
 
         // Elements panel controls
         if (this.elements.elementsPanelClose) {
@@ -1961,6 +1999,10 @@ class KioskSpeechChat {
             this.settings.selectedMicrophone = this.elements.microphoneSelect.value;
             this.saveSettings();
             this.initializeAudio();
+        });
+        
+        this.elements.ollamaModelSelect.addEventListener('change', () => {
+            this.changeOllamaModel(this.elements.ollamaModelSelect.value);
         });
         
         // VAD settings
@@ -2286,9 +2328,93 @@ class KioskSpeechChat {
             
             console.log('Audio initialized, microphones found:', microphones.length);
             
+            // Initialize Ollama models after audio
+            this.initializeOllamaModels();
+            
         } catch (error) {
             console.error('Error initializing audio:', error);
             this.addMessage('system', '⚠️ Microphone access may be restricted. Click the microphone button to test permissions.');
+        }
+    }
+
+    async initializeOllamaModels() {
+        try {
+            // Fetch available Ollama models
+            const response = await fetch('/api/ollama/models');
+            const data = await response.json();
+            
+            if (data.success && data.models) {
+                // Clear existing options
+                this.elements.ollamaModelSelect.innerHTML = '';
+                
+                // Add models to dropdown
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    
+                    // Select current model if it matches
+                    if (model === data.current_model) {
+                        option.selected = true;
+                    }
+                    
+                    this.elements.ollamaModelSelect.appendChild(option);
+                });
+                
+                console.log(`Loaded ${data.models.length} Ollama models, current: ${data.current_model}`);
+                
+            } else {
+                // If failed to load, show error
+                this.elements.ollamaModelSelect.innerHTML = '<option value="">Failed to load models</option>';
+            }
+            
+        } catch (error) {
+            console.error('Error loading Ollama models:', error);
+            this.elements.ollamaModelSelect.innerHTML = '<option value="">Error loading models</option>';
+        }
+    }
+
+    async changeOllamaModel(modelName) {
+        if (!modelName) return;
+        
+        try {
+            this.addMessage('system', `🔄 Switching to model: ${modelName}...`);
+            
+            // Use the ollama_agent MCP tool to change the model
+            const tool_request = {
+                "name": "ollama_agent_configure_model",
+                "arguments": {
+                    "model_name": modelName
+                }
+            };
+            
+            const response = await fetch('/api/mcp-tool', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(tool_request)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.addMessage('system', `✅ Successfully switched to model: ${modelName}`);
+                console.log(`Model changed to: ${modelName}`);
+            } else {
+                this.addMessage('system', `❌ Failed to switch model: ${result.error || 'Unknown error'}`);
+                console.error('Model change failed:', result);
+                
+                // Revert dropdown to current model
+                this.initializeOllamaModels();
+            }
+            
+        } catch (error) {
+            console.error('Error changing Ollama model:', error);
+            this.addMessage('system', `❌ Error changing model: ${error.message}`);
+            
+            // Revert dropdown to current model
+            this.initializeOllamaModels();
         }
     }
     
@@ -4369,6 +4495,193 @@ class KioskSpeechChat {
             this.addMessage('system', `❌ Error saving configuration: ${error.message}`);
         }
     }
+
+    // Add From Existing functionality
+    toggleAddFromExistingSection() {
+        const section = this.elements.addFromExistingSection;
+        const dropdown = this.elements.existingScreenSelect;
+        
+        if (section.style.display === 'none' || !section.style.display) {
+            // Show section and populate dropdown
+            section.style.display = 'block';
+            
+            // Clear and populate the existing screen dropdown
+            dropdown.innerHTML = '<option value="">Select a screen...</option>';
+            
+            // Get all available screens from kioskData
+            const screens = this.kioskData.screens;
+            for (const [screenId, screenData] of Object.entries(screens)) {
+                const option = document.createElement('option');
+                option.value = screenId;
+                option.textContent = screenData.name || screenId;
+                dropdown.appendChild(option);
+            }
+            
+            // Reset other elements
+            this.elements.existingElementsContainer.style.display = 'none';
+            this.elements.addToScreenBtn.disabled = true;
+            
+        } else {
+            // Hide section
+            section.style.display = 'none';
+        }
+    }
+
+    handleExistingScreenSelection() {
+        const selectedScreenId = this.elements.existingScreenSelect.value;
+        const container = this.elements.existingElementsContainer;
+        const tableBody = this.elements.existingElementsTableBody;
+        
+        if (!selectedScreenId) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        // Get screen data
+        const screenData = this.kioskData.screens[selectedScreenId];
+        if (!screenData || !screenData.elements) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        // Clear table
+        tableBody.innerHTML = '';
+        
+        // Populate table with elements
+        screenData.elements.forEach(element => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>
+                    <input type="checkbox" 
+                           class="existing-element-checkbox" 
+                           data-element-id="${element.id}"
+                           data-screen-id="${selectedScreenId}">
+                </td>
+                <td>${element.id}</td>
+                <td>${element.name}</td>
+                <td>${element.coordinates.x}, ${element.coordinates.y}</td>
+                <td>${element.size.width} x ${element.size.height}</td>
+                <td>${(element.voice_commands || []).join(', ')}</td>
+            `;
+            tableBody.appendChild(row);
+            
+            // Add event listener to checkbox
+            const checkbox = row.querySelector('.existing-element-checkbox');
+            checkbox.addEventListener('change', () => {
+                this.updateAddToScreenButton();
+            });
+        });
+        
+        // Show container
+        container.style.display = 'block';
+        
+        // Update button state
+        this.updateAddToScreenButton();
+    }
+
+    toggleSelectAllExistingElements() {
+        const checkboxes = this.elements.existingElementsTableBody.querySelectorAll('.existing-element-checkbox');
+        const selectAllBtn = this.elements.selectAllExistingBtn;
+        
+        // Check if all are currently selected
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        
+        // Toggle all checkboxes
+        checkboxes.forEach(cb => {
+            cb.checked = !allChecked;
+        });
+        
+        // Update button text
+        selectAllBtn.textContent = allChecked ? 'Select All' : 'Select None';
+        
+        // Update Add to Screen button
+        this.updateAddToScreenButton();
+    }
+
+    updateAddToScreenButton() {
+        const checkboxes = this.elements.existingElementsTableBody.querySelectorAll('.existing-element-checkbox');
+        const hasSelection = Array.from(checkboxes).some(cb => cb.checked);
+        
+        this.elements.addToScreenBtn.disabled = !hasSelection;
+        
+        // Update select all button text
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        this.elements.selectAllExistingBtn.textContent = allChecked ? 'Select None' : 'Select All';
+    }
+
+    async addSelectedExistingElements() {
+        const checkboxes = this.elements.existingElementsTableBody.querySelectorAll('.existing-element-checkbox:checked');
+        const currentScreen = this.elements.annotationScreen.value;
+        
+        if (!currentScreen || checkboxes.length === 0) {
+            return;
+        }
+        
+        // Get current screen data
+        let screenData = this.kioskData.screens[currentScreen];
+        if (!screenData) {
+            screenData = {
+                name: currentScreen,
+                description: `Screen: ${currentScreen}`,
+                detection_criteria: {
+                    title_text: currentScreen,
+                    elements: []
+                },
+                elements: []
+            };
+            this.kioskData.screens[currentScreen] = screenData;
+        }
+        
+        let addedCount = 0;
+        
+        // Process each selected element
+        checkboxes.forEach(checkbox => {
+            const elementId = checkbox.getAttribute('data-element-id');
+            const sourceScreenId = checkbox.getAttribute('data-screen-id');
+            const sourceScreen = this.kioskData.screens[sourceScreenId];
+            
+            if (sourceScreen && sourceScreen.elements) {
+                const sourceElement = sourceScreen.elements.find(e => e.id === elementId);
+                if (sourceElement) {
+                    // Check if element already exists in target screen
+                    const existsAlready = screenData.elements.some(e => e.id === elementId);
+                    if (!existsAlready) {
+                        // Create a copy of the element
+                        const elementCopy = JSON.parse(JSON.stringify(sourceElement));
+                        screenData.elements.push(elementCopy);
+                        addedCount++;
+                    }
+                }
+            }
+        });
+        
+        if (addedCount > 0) {
+            // Save changes
+            await this.saveKioskDataToServer();
+            
+            // Refresh the annotation elements table
+            if (this.annotationMode && this.annotationMode.populateAnnotationElementsTable) {
+                this.annotationMode.populateAnnotationElementsTable(currentScreen);
+            } else {
+                this.populateAnnotationElementsTable(currentScreen);
+            }
+            
+            // Update element dropdown  
+            this.updateElementDropdown(currentScreen);
+            
+            // Show success message
+            this.addMessage('system', 
+                `📋 Added ${addedCount} element${addedCount > 1 ? 's' : ''} to screen "${currentScreen}"`
+            );
+            
+            // Hide the Add From Existing section
+            this.elements.addFromExistingSection.style.display = 'none';
+        } else {
+            this.addMessage('system', 
+                '⚠️ No new elements were added (all selected elements already exist in the target screen)'
+            );
+        }
+    }
     
     showAddElementModal(element = null, screenId = null) {
         console.log('showAddElementModal called with:', { element, screenId });
@@ -5800,6 +6113,7 @@ class ScreenshotAnnotationMode {
             return;
         }
     }
+
     
     updateMousePosition(e) {
         const imageCoords = this.screenToImageCoordinates(e.clientX, e.clientY);

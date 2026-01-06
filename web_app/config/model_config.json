@@ -1,11 +1,11 @@
 {
   "models": {
     "default": {
-      "name": "qwen2.5:1.5b",
-      "description": "Fast lightweight model",
+      "name": "qwen:0.5b",
+      "description": "Fastest lightweight model",
       "temperature": 0.1,
       "max_tokens": 512,
-      "estimated_latency": "0.5-1.5s"
+      "estimated_latency": "0.2-0.8s"
     },
     "balanced": {
       "name": "llama3.1:8b",
