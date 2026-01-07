@@ -2268,9 +2268,23 @@ class KioskSpeechChat {
                     
                     this.addMessage('assistant', messageText);
                     
-                    // If action was executed, also show action feedback
+                    // If action was executed, also show action feedback with timing breakdown
                     if (actionResult && actionResult.action_executed) {
-                        this.addMessage('system', `🖱️ Action Executed\n${actionResult.message || 'Action completed successfully'}`);
+                        let actionMessage = `🖱️ Action Executed\n${actionResult.message || 'Action completed successfully'}`;
+                        
+                        // Add detailed latency breakdown if available
+                        if (data.response.timing_breakdown) {
+                            const timing = data.response.timing_breakdown;
+                            actionMessage += '\n\n📊 **Latency Breakdown:**';
+                            actionMessage += `\n• Cache Check: ${timing.cache_check_ms || '0.0ms'}`;
+                            actionMessage += `\n• Fast Path: ${timing.fast_path_ms || '0.0ms'}`;
+                            actionMessage += `\n• Context Loading: ${timing.context_loading_ms || '0.0ms'}`;
+                            actionMessage += `\n• LLM Processing: ${timing.llm_processing_ms || '0.0ms'}`;
+                            actionMessage += `\n• Action Execution: ${timing.action_execution_ms || '0.0ms'}`;
+                            actionMessage += `\n• **Total Duration: ${timing.total_duration_ms || '0.0ms'}**`;
+                        }
+                        
+                        this.addMessage('system', actionMessage);
                     }
                     
                     // Show confidence if available
@@ -2384,7 +2398,7 @@ class KioskSpeechChat {
             const tool_request = {
                 "name": "ollama_agent_configure_model",
                 "arguments": {
-                    "model_name": modelName
+                    "model": modelName
                 }
             };
             
@@ -2715,7 +2729,7 @@ class KioskSpeechChat {
             // Show appropriate message based on VAD status
             if (this.settings.vadEnabled && disableVAD !== false) {
                 const silenceTimeoutSeconds = (this.settings.silenceTimeout || 800) / 1000;
-                this.addMessage('system', `🎤 Recording started - speak naturally, auto-stop after ${silenceTimeoutSeconds}s silence`);
+                this.addMessage('system', `🎤 Recording started - speak naturally, auto-stop after ${silenceTimeoutSeconds}s silence or click voice button to stop`);
             } else if (disableVAD === false) {
                 this.addMessage('system', '🎤 Dictation mode - click the dictation button again to stop and process');
             }
@@ -3415,9 +3429,11 @@ class KioskSpeechChat {
     updateRecordingUI(recording) {
         if (recording) {
             this.elements.voiceButton.classList.add('recording');
+            this.elements.voiceButton.title = 'Click to stop recording';
             this.elements.recordingIndicator.style.display = 'flex';
         } else {
             this.elements.voiceButton.classList.remove('recording');
+            this.elements.voiceButton.title = 'Voice Input';
             this.elements.recordingIndicator.style.display = 'none';
         }
     }

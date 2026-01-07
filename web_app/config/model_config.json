@@ -7,6 +7,13 @@
       "max_tokens": 256,
       "estimated_latency": "0.1-0.5s"
     },
+    "qwen2.5": {
+      "name": "qwen2.5:1.5b",
+      "description": "Fast lightweight Qwen2.5 model",
+      "temperature": 0.05,
+      "max_tokens": 512,
+      "estimated_latency": "0.2-0.8s"
+    },
     "balanced": {
       "name": "llama3.1:8b",
       "description": "Balanced speed and accuracy",

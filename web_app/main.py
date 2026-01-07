@@ -30,6 +30,7 @@ from web_app.optimization import ModelConfigManager
 from web_app.path_resolver import path_resolver
 from web_app.websocket_error_handler import websocket_error_handler, WebSocketError, ErrorSeverity
 from web_app.text_reading_service import TextReadingService
+from web_app.domains.speech.services.audio_processor import AudioProcessor
 
 # Setup logging
 logging.basicConfig(
@@ -98,6 +99,7 @@ class WebSocketConnectionManager:
                 return False
         return False
 
+
 def parse_tool_result(result):
     """Parse FastMCP tool result"""
     if result.is_error:
@@ -112,6 +114,7 @@ def parse_tool_result(result):
     
     return {"success": False, "error": "No content in response"}
 
+
 class SpeechWebBridge:
     """Bridges web audio to existing MCP speech services"""
     
@@ -122,6 +125,7 @@ class SpeechWebBridge:
         self.temp_dir.mkdir(exist_ok=True)
         self.model_manager = ModelConfigManager()
         self.text_reading_service = None  # Will be initialized after MCP client is ready
+        self.audio_processor = None  # Will be initialized after MCP client is ready
         
         # Performance optimizations: caching
         self._kiosk_data_cache = None
@@ -221,6 +225,9 @@ class SpeechWebBridge:
             
             # Initialize text reading service
             self.text_reading_service = TextReadingService(self.mcp_client)
+            
+            # Initialize audio processor with detailed timing
+            self.audio_processor = AudioProcessor(self.mcp_client)
             
             logger.info("MCP services initialized successfully")
             
@@ -990,30 +997,55 @@ class SpeechWebBridge:
         }
     
     async def _process_message_internal(self, message: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Internal message processing logic without timeout handling"""
+        """Internal message processing logic with detailed timing breakdown"""
+        
+        # Initialize detailed timing breakdown
+        timing_breakdown = {
+            "stage_timings": {},
+            "total_start_time": time.time(),
+            "cache_check_duration_ms": 0,
+            "fast_path_duration_ms": 0,
+            "context_loading_duration_ms": 0,
+            "llm_processing_duration_ms": 0,
+            "action_execution_duration_ms": 0,
+            "total_duration_ms": 0
+        }
+        
         try:
             # Performance optimization: Check response cache for common queries
+            cache_start = time.time()
             if self._is_cacheable_query(message):
                 cache_key = self._get_cache_key(message)
                 if cache_key in self._response_cache:
                     cached_entry = self._response_cache[cache_key]
                     if time.time() - cached_entry["time"] < self._response_cache_duration:
+                        cache_end = time.time()
+                        timing_breakdown["cache_check_duration_ms"] = (cache_end - cache_start) * 1000
                         logger.debug(f"Returning cached response for: {message}")
                         cached_response = cached_entry["response"].copy()
                         cached_response["from_cache"] = True
+                        cached_response["timing_breakdown"] = timing_breakdown
                         return cached_response
                     else:
                         # Remove expired cache entry
                         del self._response_cache[cache_key]
+            cache_end = time.time()
+            timing_breakdown["cache_check_duration_ms"] = (cache_end - cache_start) * 1000
             
             # FAST-PATH: Check for simple direct commands first
+            fast_path_start = time.time()
             fast_path_result = self._try_fast_path_processing(message)
+            fast_path_end = time.time()
+            timing_breakdown["fast_path_duration_ms"] = (fast_path_end - fast_path_start) * 1000
+            
             if fast_path_result:
                 logger.debug(f"Fast-path processing for: {message}")
                 fast_path_result["fast_path"] = True
+                fast_path_result["timing_breakdown"] = timing_breakdown
                 return fast_path_result
             
             # Load screen context for standard processing
+            context_start = time.time()
             current_screen = await self._load_kiosk_data_for_context()
             if not current_screen:
                 # Fallback to basic screen data if kiosk data unavailable
@@ -1034,6 +1066,8 @@ class SpeechWebBridge:
                         }
                     ]
                 }
+            context_end = time.time()
+            timing_breakdown["context_loading_duration_ms"] = (context_end - context_start) * 1000
             
             # Fast-path processing for simple commands (avoid LLM completely)
             fast_response = await self._try_fast_path_response(message, current_screen)
@@ -1099,6 +1133,7 @@ class SpeechWebBridge:
             model_config = self.model_manager._config.get("models", {}).get(optimal_model, {})
             
             # Process through Ollama agent using FastMCP with error recovery
+            llm_start = time.time()
             async def call_ollama_service():
                 request_context = context or {}
                 request_context["model_preference"] = optimal_model
@@ -1116,20 +1151,37 @@ class SpeechWebBridge:
             result = await error_recovery.execute_with_resilience(
                 "ollama_agent", call_ollama_service
             )
+            llm_end = time.time()
+            timing_breakdown["llm_processing_duration_ms"] = (llm_end - llm_start) * 1000
             
             if result.get("success"):
                 ollama_response = result.get("data", {})
                 
                 # Execute suggested action if applicable
+                action_start = time.time()
                 action_result = await self._execute_suggested_action(ollama_response, current_screen)
+                action_end = time.time()
+                timing_breakdown["action_execution_duration_ms"] = (action_end - action_start) * 1000
+                
+                # Calculate total timing
+                total_end = time.time()
+                timing_breakdown["total_duration_ms"] = (total_end - timing_breakdown["total_start_time"]) * 1000
                 
                 response = {
                     "success": True,
                     "response": ollama_response,
                     "action_result": action_result,
-                    "processing_time": model_config.get("estimated_latency", "< 1s"),
+                    "processing_time": f"{timing_breakdown['total_duration_ms']:.1f}ms",
                     "model_used": optimal_model,
-                    "query_complexity": self.model_manager._analyze_query_complexity(message)
+                    "query_complexity": self.model_manager._analyze_query_complexity(message),
+                    "timing_breakdown": {
+                        "cache_check_ms": f"{timing_breakdown['cache_check_duration_ms']:.1f}ms",
+                        "fast_path_ms": f"{timing_breakdown['fast_path_duration_ms']:.1f}ms", 
+                        "context_loading_ms": f"{timing_breakdown['context_loading_duration_ms']:.1f}ms",
+                        "llm_processing_ms": f"{timing_breakdown['llm_processing_duration_ms']:.1f}ms",
+                        "action_execution_ms": f"{timing_breakdown['action_execution_duration_ms']:.1f}ms",
+                        "total_duration_ms": f"{timing_breakdown['total_duration_ms']:.1f}ms"
+                    }
                 }
                 
                 # Cache successful responses for common queries
@@ -1143,16 +1195,26 @@ class SpeechWebBridge:
                 
                 return response
             else:
+                # Calculate total timing even for failures
+                total_end = time.time()
+                timing_breakdown["total_duration_ms"] = (total_end - timing_breakdown["total_start_time"]) * 1000
+                
                 return {
                     "success": False,
-                    "error": result.get("error", "Message processing failed")
+                    "error": result.get("error", "Message processing failed"),
+                    "timing_breakdown": timing_breakdown
                 }
                 
         except Exception as e:
-            logger.error(f"Internal processing error: {e}")
+            # Calculate total timing even for exceptions
+            total_end = time.time()
+            timing_breakdown["total_duration_ms"] = (total_end - timing_breakdown["total_start_time"]) * 1000
+            
+            logger.error(f"Internal processing error: {e}, Timing: {timing_breakdown}")
             return {
                 "success": False,
-                "error": f"Internal processing failed: {str(e)}"
+                "error": f"Internal processing failed: {str(e)}",
+                "timing_breakdown": timing_breakdown
             }
 
 # Global instances
