@@ -19,10 +19,10 @@ mcp = FastMCP("Ollama Agent Server")
 class OllamaConfig:
     host: str = "localhost"
     port: int = 11434
-    model: str = "qwen2.5:1.5b"
-    timeout: int = 30
-    temperature: float = 0.1
-    max_tokens: int = 512
+    model: str = "qwen:0.5b"
+    timeout: int = 15  # Reduced timeout for faster responses
+    temperature: float = 0.05  # Very low temperature for consistent output
+    max_tokens: int = 128  # Reduced tokens for faster generation
 
 
 # Initialize global instance
@@ -35,37 +35,17 @@ class OllamaAgentServer:
         self.base_url = f"http://{self.config.host}:{self.config.port}"
         self.client = httpx.AsyncClient(timeout=self.config.timeout)
         
-        # System prompt for kiosk voice commands
-        self.system_prompt = """You are a voice assistant for a Kiosk demonstration system. Your role is to convert natural language voice commands into specific mouse actions based on the current screen state and available elements.
+        # Optimized short system prompt for faster processing
+        self.system_prompt = """Convert voice commands to JSON actions.
 
-You have access to:
-- Current screen screenshot analysis
-- List of clickable elements with coordinates and IDs
-- Element names and voice command mappings
-- Screen transition rules
+Actions: click, help, error, clarify
+Required fields: action, element_id (for click), coordinates, confidence, message
 
-CRITICAL INSTRUCTIONS:
-1. ALWAYS respond with a valid JSON object containing an "action" field
-2. Available actions: "click", "navigate", "help", "error", "clarify"
-3. For click actions, ALWAYS include "element_id" and "coordinates" if available
-4. Be precise and direct - users expect immediate responses
-5. If unclear, ask for clarification but suggest the most likely option
-
-Response format:
-{
-  "action": "click|navigate|help|error|clarify",
-  "element_id": "string (required for click)",
-  "coordinates": {"x": number, "y": number},
-  "screen_transition": "target_screen_id",
-  "confidence": 0.0-1.0,
-  "message": "Brief explanation for user",
-  "alternatives": ["alternative interpretations if any"]
-}
+Format: {"action":"click","element_id":"id","coordinates":{"x":0,"y":0},"confidence":0.9,"message":"text"}
 
 Examples:
-- "click start" → {"action": "click", "element_id": "start_button", "coordinates": {"x": 400, "y": 300}, "confidence": 0.95, "message": "Clicking Start button"}
-- "go back" → {"action": "click", "element_id": "back_button", "coordinates": {"x": 50, "y": 50}, "confidence": 0.9, "message": "Going back"}
-- "what can I do" → {"action": "help", "message": "Available commands: start, menu, back, help"}"""
+- "click start" → {"action":"click","element_id":"start_button","coordinates":{"x":400,"y":300},"confidence":0.95,"message":"Clicking Start"}
+- "help" → {"action":"help","message":"Available commands"}"""
     
     async def get_tools(self) -> List[Tool]:
         return [
@@ -249,48 +229,29 @@ Examples:
     
     def _build_command_prompt(self, voice_text: str, current_screen: Dict[str, Any], 
                             context: Dict[str, Any]) -> str:
-        """Build context-aware prompt for command processing"""
-        # Extract screen information
-        screen_name = current_screen.get("name", "Unknown Screen")
+        """Build optimized prompt for fast processing"""
         elements = current_screen.get("elements", [])
         
-        # Build elements list
+        # Build minimal elements list (only first 5 elements for speed)
         elements_text = ""
-        for element in elements:
+        for i, element in enumerate(elements[:5]):  # Limit to 5 elements
             elem_id = element.get("id", "")
             elem_name = element.get("name", "")
             coords = element.get("coordinates", {})
-            voice_cmds = element.get("voice_commands", [])
             
-            elements_text += f"- {elem_name} (ID: {elem_id})\n"
-            elements_text += f"  Coordinates: ({coords.get('x', 0)}, {coords.get('y', 0)})\n"
-            elements_text += f"  Voice commands: {', '.join(voice_cmds)}\n"
+            elements_text += f"{elem_name}:{elem_id}:({coords.get('x', 0)},{coords.get('y', 0)}) "
         
-        # Build context
-        context_text = ""
-        if context.get("previous_screen"):
-            context_text += f"Previous screen: {context['previous_screen']}\n"
-        if context.get("last_action"):
-            context_text += f"Last action: {context['last_action']}\n"
-        
-        prompt = f"""Current Screen: {screen_name}
-
-Available Elements:
-{elements_text}
-
-Context:
-{context_text}
-
-User Voice Command: "{voice_text}"
-
-Convert this voice command to a specific action. Respond with ONLY a valid JSON object following the required format."""
+        # Minimal prompt for faster processing
+        prompt = f"""Elements: {elements_text}
+Command: "{voice_text}"
+JSON:"""
 
         return prompt
     
     async def _call_ollama(self, prompt: str) -> str:
         """Call Ollama API with the given prompt"""
         try:
-            # Prepare request
+            # Prepare optimized request for speed
             request_data = {
                 "model": self.config.model,
                 "prompt": f"{self.system_prompt}\n\n{prompt}",
@@ -298,7 +259,11 @@ Convert this voice command to a specific action. Respond with ONLY a valid JSON 
                 "keep_alive": "3600s",  # Keep model alive for 1 hour
                 "options": {
                     "temperature": self.config.temperature,
-                    "num_predict": self.config.max_tokens
+                    "num_predict": self.config.max_tokens,
+                    "top_k": 10,  # Reduced from default 40
+                    "top_p": 0.8,  # Reduced from default 0.9
+                    "repeat_penalty": 1.1,
+                    "stop": ["}"]  # Stop at end of JSON
                 }
             }
             
