@@ -268,35 +268,39 @@ class ModelConfigManager:
             self._config = self._get_default_config()
     
     def _get_default_config(self) -> Dict[str, Any]:
-        """Get default model configuration"""
-        return {
-            "models": {
-                "default": {
-                    "name": "qwen2.5:1.5b",
-                    "description": "Fast lightweight model",
-                    "temperature": 0.1,
-                    "max_tokens": 512,
-                    "estimated_latency": "0.5-1.5s"
+        """Get default model configuration from centralized manager"""
+        try:
+            from web_app.config.model_manager import get_model_manager
+            central_manager = get_model_manager()
+            
+            # Convert centralized config to our format
+            models_dict = {}
+            for key, model_config in central_manager.get_all_models().items():
+                models_dict[key] = model_config.to_dict()
+            
+            return {
+                "models": models_dict,
+                "current_model": "default",
+                "fallback_model": "default", 
+                "auto_fallback": True
+            }
+        except Exception as e:
+            logger.warning(f"Failed to load centralized config: {e}, using fallback")
+            # Minimal fallback if centralized config fails
+            return {
+                "models": {
+                    "default": {
+                        "name": "qwen:0.5b",
+                        "description": "Fallback model",
+                        "temperature": 0.1,
+                        "max_tokens": 512,
+                        "estimated_latency": "0.5-1.5s"
+                    }
                 },
-                "balanced": {
-                    "name": "llama3.1:8b",
-                    "description": "Balanced speed and accuracy",
-                    "temperature": 0.1,
-                    "max_tokens": 512,
-                    "estimated_latency": "1-3s"
-                },
-                "accurate": {
-                    "name": "llama3.1:70b",
-                    "description": "High accuracy, slower",
-                    "temperature": 0.1,
-                    "max_tokens": 512,
-                    "estimated_latency": "3-8s"
-                }
-            },
-            "current_model": "default",
-            "fallback_model": "default",
-            "auto_fallback": True
-        }
+                "current_model": "default",
+                "fallback_model": "default",
+                "auto_fallback": True
+            }
     
     def _save_config(self) -> None:
         """Save configuration to file"""

@@ -19,10 +19,30 @@ mcp = FastMCP("Ollama Agent Server")
 class OllamaConfig:
     host: str = "localhost"
     port: int = 11434
-    model: str = "qwen:0.5b"
+    model: str = "qwen:0.5b"  # Default, will be overridden by centralized config
     timeout: int = 15  # Reduced timeout for faster responses
     temperature: float = 0.05  # Very low temperature for consistent output
     max_tokens: int = 128  # Reduced tokens for faster generation
+    
+    def __post_init__(self):
+        """Load configuration from centralized model manager"""
+        try:
+            import sys
+            import os
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+            from web_app.config.model_manager import get_model_manager
+            
+            central_manager = get_model_manager()
+            current_model = central_manager.get_current_model()
+            current_config = central_manager.get_current_model_config()
+            
+            # Update with centralized values
+            self.model = current_model
+            self.temperature = current_config.temperature
+            self.max_tokens = min(current_config.max_tokens, 256)  # Cap for speed
+        except Exception:
+            # Keep defaults if centralized config fails
+            pass
 
 
 # Initialize global instance

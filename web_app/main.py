@@ -1638,32 +1638,31 @@ async def get_ollama_models():
                     "current_model": configured_model
                 }
         
-        # Fallback if MCP tools don't work - return models from config
-        model_manager = app.state.websocket_manager.model_manager
-        default_config = model_manager._config.get("models", {})
-        available_models = [model_data.get("name", "qwen:0.5b") for model_data in default_config.values()]
-        current_model_key = model_manager._config.get("current_model", "default")
-        current_model = default_config.get(current_model_key, {}).get("name", "qwen:0.5b")
+        # Fallback if MCP tools don't work - return models from centralized config
+        from web_app.config.model_manager import get_model_manager
+        
+        central_model_manager = get_model_manager()
+        available_models = central_model_manager.get_fallback_models()
+        current_model = central_model_manager.get_current_model()
         
         return {
             "success": True,
-            "models": available_models if available_models else ["qwen:0.5b"],
+            "models": available_models,
             "current_model": current_model
         }
         
     except Exception as e:
         logger.error(f"Error getting Ollama models: {e}")
-        # Return default models from config as fallback
+        # Return default models from centralized config as fallback
         try:
-            model_manager = app.state.websocket_manager.model_manager
-            default_config = model_manager._config.get("models", {})
-            available_models = [model_data.get("name", "qwen:0.5b") for model_data in default_config.values()]
-            current_model_key = model_manager._config.get("current_model", "default")
-            current_model = default_config.get(current_model_key, {}).get("name", "qwen:0.5b")
+            from web_app.config.model_manager import get_model_manager
+            central_model_manager = get_model_manager()
+            available_models = central_model_manager.get_fallback_models()
+            current_model = central_model_manager.get_current_model()
             
             return {
                 "success": True,
-                "models": available_models if available_models else ["qwen:0.5b"],
+                "models": available_models,
                 "current_model": current_model
             }
         except:
@@ -1889,39 +1888,10 @@ async def call_mcp_tool(request: Request):
 
 def get_optimization_presets():
     """Get the optimization presets configuration"""
-    # Get default model from config
-    default_model = "qwen:0.5b"
-    try:
-        if hasattr(app.state, 'websocket_manager'):
-            model_manager = app.state.websocket_manager.model_manager
-            current_model_key = model_manager._config.get("current_model", "default")
-            default_model = model_manager._config.get("models", {}).get(current_model_key, {}).get("name", "qwen:0.5b")
-    except:
-        pass
-        
-    return {
-        "speed": {
-            "model": default_model,
-            "temperature": 0.3,
-            "max_tokens": 256,
-            "name": "Speed",
-            "description": "Fast responses with higher temperature for quick interactions"
-        },
-        "balanced": {
-            "model": default_model, 
-            "temperature": 0.1,
-            "max_tokens": 512,
-            "name": "Balanced",
-            "description": "Good balance of speed and accuracy for general use"
-        },
-        "accuracy": {
-            "model": default_model,
-            "temperature": 0.0,
-            "max_tokens": 768,
-            "name": "Accuracy",
-            "description": "Most accurate responses with lower temperature for complex tasks"
-        }
-    }
+    from web_app.config.model_manager import get_model_manager
+    
+    model_manager = get_model_manager()
+    return model_manager.get_optimization_presets()
 
 @app.get("/api/optimization/presets")
 async def get_optimization_presets_api():
@@ -1991,6 +1961,9 @@ async def set_optimization_preset(preset: str):
 @app.get("/api/optimization/current")
 async def get_current_optimization():
     """Get current optimization settings"""
+    from web_app.config.model_manager import get_model_manager
+    central_model_manager = get_model_manager()
+    
     try:
         # Use the speech bridge MCP client to get current ollama config
         if not speech_bridge.mcp_client:
@@ -2002,14 +1975,8 @@ async def get_current_optimization():
         
         if result.get("success"):
             config_data = result.get("data", {})
-            # Get default model from model config
-            default_model = "qwen:0.5b"
-            try:
-                model_manager = app.state.websocket_manager.model_manager
-                current_model_key = model_manager._config.get("current_model", "default")
-                default_model = model_manager._config.get("models", {}).get(current_model_key, {}).get("name", "qwen:0.5b")
-            except:
-                pass
+            # Get default model from centralized config
+            default_model = central_model_manager.get_current_model()
             current_model = config_data.get("configured_model", default_model)
             
             # Determine which preset this matches
@@ -2034,7 +2001,7 @@ async def get_current_optimization():
                 "success": False,
                 "error": result.get("error", "Unable to get current configuration"),
                 "current_preset": "balanced",
-                "model": {"model_id": "qwen:0.5b", "available": False, "status": "unknown"}
+                "model": {"model_id": central_model_manager.get_current_model(), "available": False, "status": "unknown"}
             }
             
     except Exception as e:
@@ -2043,7 +2010,7 @@ async def get_current_optimization():
             "success": False,
             "error": str(e),
             "current_preset": "balanced",
-            "model": {"model_id": "qwen:0.5b", "available": False, "status": "error"}
+            "model": {"model_id": central_model_manager.get_current_model(), "available": False, "status": "error"}
         }
 
 @app.get("/api/optimization/stats")

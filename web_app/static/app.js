@@ -2396,8 +2396,8 @@ class KioskSpeechChat {
             
             // Use the ollama_agent MCP tool to change the model
             const tool_request = {
-                "name": "ollama_agent_configure_model",
-                "arguments": {
+                "tool": "ollama_agent_configure_model",
+                "parameters": {
                     "model": modelName
                 }
             };

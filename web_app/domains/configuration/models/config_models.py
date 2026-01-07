@@ -181,57 +181,36 @@ class ApplicationConfiguration:
     
     @classmethod
     def create_default(cls) -> 'ApplicationConfiguration':
-        """Create default application configuration"""
-        default_models = {
-            "default": ModelConfiguration(
-                name="qwen2.5:1.5b",
-                description="Fast lightweight model",
-                temperature=0.1,
-                max_tokens=512,
-                estimated_latency="0.5-1.5s"
-            ),
-            "balanced": ModelConfiguration(
-                name="llama3.1:8b", 
-                description="Balanced speed and accuracy",
-                temperature=0.1,
-                max_tokens=512,
-                estimated_latency="1-3s"
-            ),
-            "accurate": ModelConfiguration(
-                name="llama3.1:70b",
-                description="High accuracy, slower",
-                temperature=0.1,
-                max_tokens=512,
-                estimated_latency="3-8s"
-            )
-        }
+        """Create default application configuration using centralized model manager"""
+        from web_app.config.model_manager import get_model_manager
         
-        default_presets = {
-            "speed": OptimizationPreset(
-                name="speed",
-                model="qwen2.5:1.5b",
-                temperature=0.3,
-                max_tokens=256,
-                cache_settings=CacheConfiguration(max_size=50, ttl_seconds=300),
-                description="Optimized for fastest response times"
-            ),
-            "balanced": OptimizationPreset(
-                name="balanced",
-                model="llama3.1:8b",
-                temperature=0.1,
-                max_tokens=512,
-                cache_settings=CacheConfiguration(max_size=100, ttl_seconds=600),
-                description="Balanced performance and accuracy"
-            ),
-            "accuracy": OptimizationPreset(
-                name="accuracy", 
-                model="llama3.1:70b",
-                temperature=0.05,
-                max_tokens=1024,
-                cache_settings=CacheConfiguration(max_size=200, ttl_seconds=900),
-                description="Optimized for highest accuracy"
+        model_manager = get_model_manager()
+        centralized_models = model_manager.get_all_models()
+        
+        # Convert to our format
+        default_models = {}
+        for key, model_config in centralized_models.items():
+            default_models[key] = ModelConfiguration(
+                name=model_config.name,
+                description=model_config.description,
+                temperature=model_config.temperature,
+                max_tokens=model_config.max_tokens,
+                estimated_latency=model_config.estimated_latency,
+                complexity_threshold=model_config.complexity_threshold
             )
-        }
+        
+        # Get optimization presets from centralized manager
+        centralized_presets = model_manager.get_optimization_presets()
+        default_presets = {}
+        for preset_name, preset_config in centralized_presets.items():
+            default_presets[preset_name] = OptimizationPreset(
+                name=preset_config["name"],
+                model=preset_config["model"],
+                temperature=preset_config["temperature"],
+                max_tokens=preset_config["max_tokens"],
+                cache_settings=CacheConfiguration(max_size=100, ttl_seconds=600),
+                description=preset_config["description"]
+            )
         
         return cls(
             vad_config=VADConfiguration(),
