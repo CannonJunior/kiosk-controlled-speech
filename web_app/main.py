@@ -1617,46 +1617,61 @@ async def get_performance_metrics():
 async def get_ollama_models():
     """Get list of available Ollama models"""
     try:
+        # Check if MCP services are initialized
+        if not speech_bridge.mcp_client:
+            raise HTTPException(status_code=503, detail="MCP services not initialized")
+        
         # Use the ollama_agent MCP tool to get available models
-        tool_request = {
-            "name": "ollama_agent_check_ollama_health",
-            "arguments": {}
-        }
+        result_raw = await speech_bridge.mcp_client.call_tool("ollama_agent_check_ollama_health", {})
+        result = parse_tool_result(result_raw)
         
-        result = await mcp_client_manager.call_tool(tool_request)
-        
-        if result.get("success") and result.get("response", {}).get("ollama_available"):
-            # If Ollama is available, make another call to list models
-            models_request = {
-                "name": "ollama_agent_configure_model", 
-                "arguments": {"list_available": True}
-            }
+        if result.get("success"):
+            # Extract models directly from health check response
+            response_data = result.get("data", {})
+            available_models = response_data.get("available_models", [])
+            configured_model = response_data.get("configured_model", "qwen:0.5b")
             
-            models_result = await mcp_client_manager.call_tool(models_request)
-            
-            if models_result.get("success"):
-                available_models = models_result.get("response", {}).get("available_models", [])
+            if available_models:
                 return {
                     "success": True,
                     "models": available_models,
-                    "current_model": result.get("response", {}).get("model_name", "unknown")
+                    "current_model": configured_model
                 }
         
-        # Fallback if MCP tools don't work - return some common models
+        # Fallback if MCP tools don't work - return models from config
+        model_manager = app.state.websocket_manager.model_manager
+        default_config = model_manager._config.get("models", {})
+        available_models = [model_data.get("name", "qwen:0.5b") for model_data in default_config.values()]
+        current_model_key = model_manager._config.get("current_model", "default")
+        current_model = default_config.get(current_model_key, {}).get("name", "qwen:0.5b")
+        
         return {
             "success": True,
-            "models": ["qwen:0.5b", "qwen2.5:1.5b", "llama3.1:8b", "llama3.1:70b"],
-            "current_model": "qwen:0.5b"
+            "models": available_models if available_models else ["qwen:0.5b"],
+            "current_model": current_model
         }
         
     except Exception as e:
         logger.error(f"Error getting Ollama models: {e}")
-        # Return default models as fallback
-        return {
-            "success": True,
-            "models": ["qwen:0.5b", "qwen2.5:1.5b", "llama3.1:8b", "llama3.1:70b"],
-            "current_model": "qwen:0.5b"
-        }
+        # Return default models from config as fallback
+        try:
+            model_manager = app.state.websocket_manager.model_manager
+            default_config = model_manager._config.get("models", {})
+            available_models = [model_data.get("name", "qwen:0.5b") for model_data in default_config.values()]
+            current_model_key = model_manager._config.get("current_model", "default")
+            current_model = default_config.get(current_model_key, {}).get("name", "qwen:0.5b")
+            
+            return {
+                "success": True,
+                "models": available_models if available_models else ["qwen:0.5b"],
+                "current_model": current_model
+            }
+        except:
+            return {
+                "success": True,
+                "models": ["qwen:0.5b"],
+                "current_model": "qwen:0.5b"
+            }
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
@@ -1874,23 +1889,33 @@ async def call_mcp_tool(request: Request):
 
 def get_optimization_presets():
     """Get the optimization presets configuration"""
+    # Get default model from config
+    default_model = "qwen:0.5b"
+    try:
+        if hasattr(app.state, 'websocket_manager'):
+            model_manager = app.state.websocket_manager.model_manager
+            current_model_key = model_manager._config.get("current_model", "default")
+            default_model = model_manager._config.get("models", {}).get(current_model_key, {}).get("name", "qwen:0.5b")
+    except:
+        pass
+        
     return {
         "speed": {
-            "model": "qwen2.5:1.5b",
+            "model": default_model,
             "temperature": 0.3,
             "max_tokens": 256,
             "name": "Speed",
             "description": "Fast responses with higher temperature for quick interactions"
         },
         "balanced": {
-            "model": "qwen2.5:1.5b", 
+            "model": default_model, 
             "temperature": 0.1,
             "max_tokens": 512,
             "name": "Balanced",
             "description": "Good balance of speed and accuracy for general use"
         },
         "accuracy": {
-            "model": "qwen2.5:1.5b",
+            "model": default_model,
             "temperature": 0.0,
             "max_tokens": 768,
             "name": "Accuracy",
@@ -1977,7 +2002,15 @@ async def get_current_optimization():
         
         if result.get("success"):
             config_data = result.get("data", {})
-            current_model = config_data.get("configured_model", "qwen2.5:1.5b")
+            # Get default model from model config
+            default_model = "qwen:0.5b"
+            try:
+                model_manager = app.state.websocket_manager.model_manager
+                current_model_key = model_manager._config.get("current_model", "default")
+                default_model = model_manager._config.get("models", {}).get(current_model_key, {}).get("name", "qwen:0.5b")
+            except:
+                pass
+            current_model = config_data.get("configured_model", default_model)
             
             # Determine which preset this matches
             preset = "balanced"  # default
@@ -2001,7 +2034,7 @@ async def get_current_optimization():
                 "success": False,
                 "error": result.get("error", "Unable to get current configuration"),
                 "current_preset": "balanced",
-                "model": {"model_id": "qwen2.5:1.5b", "available": False, "status": "unknown"}
+                "model": {"model_id": "qwen:0.5b", "available": False, "status": "unknown"}
             }
             
     except Exception as e:
@@ -2010,7 +2043,7 @@ async def get_current_optimization():
             "success": False,
             "error": str(e),
             "current_preset": "balanced",
-            "model": {"model_id": "qwen2.5:1.5b", "available": False, "status": "error"}
+            "model": {"model_id": "qwen:0.5b", "available": False, "status": "error"}
         }
 
 @app.get("/api/optimization/stats")

@@ -5402,9 +5402,9 @@ class KioskSpeechChat {
             this.updateActivePreset('balanced');
             this.updateCurrentModel({
                 name: 'Balanced Mode',
-                description: 'Model: qwen2.5:1.5b',
+                description: 'Model: qwen:0.5b',
                 parameters: 'Temperature: 0.1, Max Tokens: 512',
-                estimated_latency: '< 2s'
+                estimated_latency: '< 1s'
             });
         }
     }
