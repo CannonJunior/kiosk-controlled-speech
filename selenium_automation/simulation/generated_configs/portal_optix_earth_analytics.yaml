@@ -1,0 +1,22 @@
+page_info:
+  name: Analytics Dashboard
+  url_pattern: https://portal.optix.earth/analytics
+  description: Auto-generated configuration for Analytics Dashboard
+  framework: unknown
+  primary_function: analytics
+  automation_complexity: low
+  generated_timestamp: '2026-01-09T20:22:01.474465'
+selectors:
+  analytics_widgets:
+    css: .analytics-widget, .metric-card
+    description: Interactive analytics widgets
+    interaction_type: metric_interaction
+    required: false
+  drill_down_controls:
+    css: .drill-down, .detail-view-trigger
+    description: Drill-down navigation for detailed analytics
+    interaction_type: drill_down
+    required: false
+workflows: {}
+test_scenarios: []
+automation_recommendations: []

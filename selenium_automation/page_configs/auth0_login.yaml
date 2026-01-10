@@ -1,0 +1,153 @@
+page_info:
+  name: "Optix Auth0 Login"
+  url_pattern: "https://optix-emd.us.auth0.com/authorize*"
+  description: "Auth0 authentication page for Optix portal"
+  wait_for: ".auth0-lock-widget"
+  framework: "auth0-lock"
+
+selectors:
+  # Primary form container
+  login_widget:
+    css: ".auth0-lock-widget"
+    description: "Main Auth0 login widget"
+    wait_timeout: 10
+
+  # Input fields
+  email_field:
+    css: "input[name='email'], .auth0-lock-input input[type='email']"
+    xpath: "//input[@type='email' or @name='email']"
+    description: "Email input field"
+    required: true
+
+  password_field:
+    css: "input[name='password'], .auth0-lock-input input[type='password']"
+    xpath: "//input[@type='password' or @name='password']" 
+    description: "Password input field"
+    required: true
+
+  # Action buttons
+  login_button:
+    css: "button[type='submit'], .auth0-lock-submit"
+    xpath: "//button[@type='submit'] | //button[contains(@class, 'submit')]"
+    description: "Login submit button"
+    action_type: "click"
+
+  signup_toggle:
+    css: ".auth0-lock-tabs a, .auth0-lock-alternative-link"
+    description: "Switch to signup mode"
+    action_type: "click"
+
+  # Additional signup fields (if in signup mode)
+  first_name_field:
+    css: "input[name='given_name'], input[name='firstName']"
+    description: "First name field for signup"
+    required_for: "signup"
+
+  last_name_field:
+    css: "input[name='family_name'], input[name='lastName']"
+    description: "Last name field for signup" 
+    required_for: "signup"
+
+  country_dropdown:
+    css: "select[name='country'], .auth0-lock-select"
+    description: "Country selection dropdown"
+    required_for: "signup"
+
+  terms_checkbox:
+    css: "input[type='checkbox'], .auth0-lock-checkbox"
+    description: "Terms of service agreement"
+    required_for: "signup"
+
+  # Error and status elements
+  error_message:
+    css: ".auth0-lock-error, .error-message"
+    description: "Error message display"
+    wait_for_visibility: false
+
+  loading_spinner:
+    css: ".auth0-lock-loading, .loading"
+    description: "Loading indicator"
+    wait_for_invisibility: true
+
+# Automation workflows
+workflows:
+  login:
+    description: "Standard login flow"
+    steps:
+      - action: "wait_for_element"
+        element: "login_widget"
+      - action: "input_text"
+        element: "email_field"
+        data_key: "email"
+      - action: "input_text"
+        element: "password_field"
+        data_key: "password"
+      - action: "click"
+        element: "login_button"
+      - action: "wait_for_redirect"
+        expected_url_contains: "portal.optix.earth"
+
+  signup:
+    description: "New user signup flow"
+    steps:
+      - action: "wait_for_element"
+        element: "login_widget"
+      - action: "click"
+        element: "signup_toggle"
+      - action: "input_text"
+        element: "first_name_field"
+        data_key: "first_name"
+      - action: "input_text"
+        element: "last_name_field"
+        data_key: "last_name"
+      - action: "input_text"
+        element: "email_field"
+        data_key: "email"
+      - action: "input_text"
+        element: "password_field"
+        data_key: "password"
+      - action: "select_option"
+        element: "country_dropdown"
+        data_key: "country"
+      - action: "click"
+        element: "terms_checkbox"
+      - action: "click"
+        element: "login_button"
+      - action: "wait_for_confirmation"
+
+# Dynamic detection rules
+dynamic_detection:
+  framework_indicators:
+    - "window.Auth0Lock"
+    - ".auth0-lock-widget"
+    - "auth0-js"
+
+  state_detection:
+    login_mode: ".auth0-lock-tabs .auth0-lock-tabs-active[data-mode='log-in']"
+    signup_mode: ".auth0-lock-tabs .auth0-lock-tabs-active[data-mode='sign-up']"
+
+# Test scenarios
+test_scenarios:
+  - name: "valid_login"
+    workflow: "login"
+    test_data:
+      email: "test@example.com"
+      password: "testpass123"
+    expected_outcome: "redirect_to_portal"
+
+  - name: "invalid_credentials"
+    workflow: "login" 
+    test_data:
+      email: "invalid@example.com"
+      password: "wrongpass"
+    expected_outcome: "error_message_shown"
+
+  - name: "signup_flow"
+    workflow: "signup"
+    test_data:
+      first_name: "Test"
+      last_name: "User"
+      email: "newuser@example.com"
+      password: "newpass123"
+      country: "United States"
+    expected_outcome: "verification_email_sent"

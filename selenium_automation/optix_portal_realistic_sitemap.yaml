@@ -1,0 +1,87 @@
+optix_portal_realistic_sitemap:
+  metadata:
+    discovery_method: HTTP requests without authentication
+    discovery_timestamp: '2026-01-09T21:41:44.655625'
+    limitations:
+    - Cannot access authenticated areas
+    - Limited to publicly accessible endpoints
+    - Cannot perform interactive discovery
+    confidence_level: Medium - based on indirect discovery
+  verified_information:
+    base_url: https://portal.optix.earth
+    authentication:
+      provider: Auth0
+      auth_url: https://optix-emd.us.auth0.com/login?state=hKFo2SBIdXUyZGtJTDJZUGlzUlUwOFdtZDkwQTd4RkN5cmxYaaFupWxvZ2luo3RpZNkgbDVSdjFXRWYxQ19GY0Z2dGlVRE5zZFVRajdWZTBucDejY2lk2SBId0dGQWQyejdqVWtaSlQ0RDlsU2h6dGVmMThEbDZ6ZA&client=HwGFAd2z7jUkZJT4D9lShztef18Dl6zd&protocol=oauth2&redirect_uri=https%3A%2F%2Fportal.optix.earth%2Foauth2%2Fidpresponse&response_type=code&scope=openid
+      oauth2_flow: Confirmed via redirect analysis
+      forms_discovered: 0
+  discovered_endpoints:
+  - endpoint: /api
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /api/v1
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /api/health
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /api/status
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /status
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /health
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /.well-known/openapi
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /swagger.json
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /api-docs
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /robots.txt
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  - endpoint: /sitemap.xml
+    status_code: 200
+    content_type: text/html; charset=utf-8
+    content_length: 14597
+  robots_sitemap_urls: []
+  inference_based_structure:
+    note: Based on common enterprise portal patterns and discovered endpoints
+    likely_authenticated_areas:
+    - /dashboard
+    - /profile
+    - /settings
+    - /logout
+    possible_admin_areas: []
+    api_areas:
+    - /api
+    - /api/v1
+    - /api/health
+    - /api/status
+    - /status
+    - /health
+    - /.well-known/openapi
+    - /swagger.json
+    - /api-docs
+    - /robots.txt
+    - /sitemap.xml
+  next_steps_for_complete_mapping:
+  - Implement authenticated browser session
+  - Use provided credentials for login
+  - Perform systematic link crawling within authenticated session
+  - Document actual discovered navigation and pages

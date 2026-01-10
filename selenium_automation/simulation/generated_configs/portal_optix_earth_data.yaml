@@ -1,0 +1,45 @@
+page_info:
+  name: Data Management
+  url_pattern: https://portal.optix.earth/data
+  description: Auto-generated configuration for Data Management
+  framework: unknown
+  primary_function: data_management
+  automation_complexity: medium
+  generated_timestamp: '2026-01-09T20:22:01.471462'
+selectors:
+  data_upload:
+    css: input[type="file"], .upload-area
+    description: Data file upload interface
+    interaction_type: file_upload
+    required: false
+  data_table_advanced:
+    css: .advanced-table, .data-grid
+    description: Advanced data table with editing
+    interaction_type: complex_data_interaction
+    required: false
+  bulk_actions:
+    css: .bulk-actions, .mass-operations
+    description: Bulk data operations toolbar
+    interaction_type: bulk_operations
+    required: false
+workflows:
+  data_exploration:
+    description: Explore and interact with data
+    steps:
+    - action: wait_for_page_load
+    - action: scan_data_tables
+    - action: test_search_functionality
+    - action: test_filter_controls
+    - action: extract_sample_data
+test_scenarios:
+- name: data_interaction_test
+  workflow: data_exploration
+  test_data:
+    search_term: test data
+    filter_option: recent
+  expected_outcome: data_results_displayed
+automation_recommendations:
+- type: data_automation
+  priority: high
+  description: Implement automated data extraction for 1 data sources
+  business_value: Enable automated reporting and data analysis

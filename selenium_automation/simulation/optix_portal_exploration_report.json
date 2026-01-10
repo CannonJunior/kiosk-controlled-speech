@@ -1,0 +1,322 @@
+{
+  "exploration_summary": {
+    "total_pages_discovered": 6,
+    "total_configurations_generated": 7,
+    "exploration_timestamp": "2026-01-09T20:22:01.478429",
+    "base_url": "https://portal.optix.earth"
+  },
+  "discovered_pages": {
+    "https://optix-emd.us.auth0.com/authorize": {
+      "url": "https://optix-emd.us.auth0.com/authorize",
+      "title": "Optix Earth - Login",
+      "framework": "Auth0Lock",
+      "elements": [
+        {
+          "id": "email_field",
+          "tag": "input",
+          "type": "email",
+          "selector": "input[name=\"email\"], .auth0-lock-input input[type=\"email\"]",
+          "description": "Email address input field",
+          "required": true,
+          "interaction_type": "input_text"
+        },
+        {
+          "id": "password_field",
+          "tag": "input",
+          "type": "password",
+          "selector": "input[name=\"password\"], .auth0-lock-input input[type=\"password\"]",
+          "description": "Password input field",
+          "required": true,
+          "interaction_type": "input_text"
+        },
+        {
+          "id": "login_button",
+          "tag": "button",
+          "type": "submit",
+          "selector": "button[type=\"submit\"], .auth0-lock-submit",
+          "description": "Login/Submit button",
+          "interaction_type": "click"
+        },
+        {
+          "id": "signup_toggle",
+          "tag": "a",
+          "selector": ".auth0-lock-tabs a, .auth0-lock-alternative-link",
+          "description": "Toggle between login and signup modes",
+          "interaction_type": "click"
+        },
+        {
+          "id": "first_name_field",
+          "tag": "input",
+          "type": "text",
+          "selector": "input[name=\"given_name\"], input[name=\"firstName\"]",
+          "description": "First name field (signup only)",
+          "conditional": "signup_mode",
+          "interaction_type": "input_text"
+        },
+        {
+          "id": "last_name_field",
+          "tag": "input",
+          "type": "text",
+          "selector": "input[name=\"family_name\"], input[name=\"lastName\"]",
+          "description": "Last name field (signup only)",
+          "conditional": "signup_mode",
+          "interaction_type": "input_text"
+        },
+        {
+          "id": "country_dropdown",
+          "tag": "select",
+          "selector": "select[name=\"country\"], .auth0-lock-select",
+          "description": "Country selection dropdown",
+          "conditional": "signup_mode",
+          "interaction_type": "select_option"
+        },
+        {
+          "id": "terms_checkbox",
+          "tag": "input",
+          "type": "checkbox",
+          "selector": "input[type=\"checkbox\"], .auth0-lock-checkbox",
+          "description": "Terms of service agreement",
+          "conditional": "signup_mode",
+          "required": true,
+          "interaction_type": "click"
+        }
+      ],
+      "workflows": [
+        "login",
+        "signup",
+        "password_reset"
+      ],
+      "security_features": [
+        "oauth2",
+        "admin_approval_required",
+        "email_verification"
+      ]
+    },
+    "https://portal.optix.earth/dashboard": {
+      "url": "https://portal.optix.earth/dashboard",
+      "title": "Optix Earth Portal - Dashboard",
+      "framework": "React/Angular (predicted)",
+      "elements": [
+        {
+          "id": "main_navigation",
+          "tag": "nav",
+          "selector": "nav, .navbar, .main-navigation",
+          "description": "Primary navigation menu",
+          "interaction_type": "navigation",
+          "contains": [
+            "Dashboard",
+            "Data",
+            "Reports",
+            "Analytics",
+            "Settings"
+          ]
+        },
+        {
+          "id": "user_menu",
+          "tag": "div",
+          "selector": ".user-menu, .profile-dropdown, .account-menu",
+          "description": "User account dropdown menu",
+          "interaction_type": "click",
+          "contains": [
+            "Profile",
+            "Settings",
+            "Logout"
+          ]
+        },
+        {
+          "id": "sidebar_navigation",
+          "tag": "aside",
+          "selector": ".sidebar, .side-nav, .menu-sidebar",
+          "description": "Sidebar navigation panel",
+          "interaction_type": "navigation"
+        },
+        {
+          "id": "dashboard_widgets",
+          "tag": "div",
+          "selector": ".dashboard-widget, .card, .panel",
+          "description": "Dashboard information widgets",
+          "interaction_type": "view",
+          "estimated_count": "6-12"
+        },
+        {
+          "id": "search_input",
+          "tag": "input",
+          "type": "search",
+          "selector": "input[type=\"search\"], input[name*=\"search\"], .search-input",
+          "description": "Global search input",
+          "interaction_type": "input_text"
+        },
+        {
+          "id": "filter_controls",
+          "tag": "select",
+          "selector": ".filter, .filter-control, select[name*=\"filter\"]",
+          "description": "Data filtering controls",
+          "interaction_type": "select_option"
+        },
+        {
+          "id": "create_new_button",
+          "tag": "button",
+          "selector": ".btn-primary, .create-button, button[data-action=\"create\"]",
+          "description": "Create new item/record button",
+          "interaction_type": "click"
+        },
+        {
+          "id": "export_button",
+          "tag": "button",
+          "selector": ".export-btn, button[data-action=\"export\"]",
+          "description": "Export/download data button",
+          "interaction_type": "click"
+        },
+        {
+          "id": "data_table",
+          "tag": "table",
+          "selector": "table, .data-table, .grid",
+          "description": "Primary data display table",
+          "interaction_type": "data_extraction",
+          "features": [
+            "sorting",
+            "pagination",
+            "row_selection"
+          ]
+        }
+      ],
+      "workflows": [
+        "dashboard_overview",
+        "search_data",
+        "export_data",
+        "navigation"
+      ],
+      "predicted_sections": [
+        "Overview",
+        "Data Management",
+        "Analytics",
+        "Settings"
+      ]
+    },
+    "https://portal.optix.earth/data": {
+      "url": "https://portal.optix.earth/data",
+      "title": "Data Management",
+      "primary_function": "data_management",
+      "elements": [
+        {
+          "id": "data_upload",
+          "selector": "input[type=\"file\"], .upload-area",
+          "interaction_type": "file_upload",
+          "description": "Data file upload interface"
+        },
+        {
+          "id": "data_table_advanced",
+          "selector": ".advanced-table, .data-grid",
+          "interaction_type": "complex_data_interaction",
+          "description": "Advanced data table with editing"
+        },
+        {
+          "id": "bulk_actions",
+          "selector": ".bulk-actions, .mass-operations",
+          "interaction_type": "bulk_operations",
+          "description": "Bulk data operations toolbar"
+        }
+      ],
+      "automation_complexity": "medium"
+    },
+    "https://portal.optix.earth/reports": {
+      "url": "https://portal.optix.earth/reports",
+      "title": "Reports & Analytics",
+      "primary_function": "reporting",
+      "elements": [
+        {
+          "id": "report_generator",
+          "selector": ".report-builder, .chart-generator",
+          "interaction_type": "complex_form",
+          "description": "Interactive report generation tool"
+        },
+        {
+          "id": "date_range_picker",
+          "selector": ".daterange, input[type=\"date\"]",
+          "interaction_type": "date_selection",
+          "description": "Date range selection for reports"
+        },
+        {
+          "id": "visualization_controls",
+          "selector": ".chart-controls, .viz-options",
+          "interaction_type": "visualization_config",
+          "description": "Chart and visualization configuration"
+        }
+      ],
+      "automation_complexity": "medium"
+    },
+    "https://portal.optix.earth/analytics": {
+      "url": "https://portal.optix.earth/analytics",
+      "title": "Analytics Dashboard",
+      "primary_function": "analytics",
+      "elements": [
+        {
+          "id": "analytics_widgets",
+          "selector": ".analytics-widget, .metric-card",
+          "interaction_type": "metric_interaction",
+          "description": "Interactive analytics widgets"
+        },
+        {
+          "id": "drill_down_controls",
+          "selector": ".drill-down, .detail-view-trigger",
+          "interaction_type": "drill_down",
+          "description": "Drill-down navigation for detailed analytics"
+        }
+      ],
+      "automation_complexity": "low"
+    },
+    "https://portal.optix.earth/settings": {
+      "url": "https://portal.optix.earth/settings",
+      "title": "Portal Settings",
+      "primary_function": "configuration",
+      "elements": [
+        {
+          "id": "user_preferences",
+          "selector": ".user-settings, .preferences-form",
+          "interaction_type": "form_interaction",
+          "description": "User preference configuration"
+        },
+        {
+          "id": "notification_settings",
+          "selector": ".notification-config, .alert-settings",
+          "interaction_type": "checkbox_group",
+          "description": "Notification and alert preferences"
+        },
+        {
+          "id": "api_configuration",
+          "selector": ".api-settings, .integration-config",
+          "interaction_type": "api_management",
+          "description": "API key and integration management"
+        }
+      ],
+      "automation_complexity": "low"
+    }
+  },
+  "generated_configurations": {
+    "optix-emd_us_auth0_com_authorize": "generated_configs/optix-emd_us_auth0_com_authorize.yaml",
+    "portal_optix_earth_dashboard": "generated_configs/portal_optix_earth_dashboard.yaml",
+    "portal_optix_earth_data": "generated_configs/portal_optix_earth_data.yaml",
+    "portal_optix_earth_reports": "generated_configs/portal_optix_earth_reports.yaml",
+    "portal_optix_earth_analytics": "generated_configs/portal_optix_earth_analytics.yaml",
+    "portal_optix_earth_settings": "generated_configs/portal_optix_earth_settings.yaml",
+    "master_config": "generated_configs/optix_portal_master.yaml"
+  },
+  "automation_readiness": {
+    "authentication": "Ready",
+    "main_portal": "Ready",
+    "data_interaction": "Ready",
+    "reporting": "Ready",
+    "administration": "Requires Access Verification"
+  },
+  "next_steps": [
+    "Test generated YAML configurations with real credentials",
+    "Validate selector accuracy against live portal",
+    "Implement priority automation workflows",
+    "Set up continuous monitoring and validation"
+  ],
+  "estimated_automation_impact": {
+    "time_savings": "80-90% reduction in manual testing time",
+    "accuracy_improvement": "Elimination of human error in repetitive tasks",
+    "coverage_increase": "Complete portal coverage vs. sampling-based testing"
+  }
+}

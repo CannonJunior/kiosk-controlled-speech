@@ -1,0 +1,31 @@
+page_info:
+  name: Portal Settings
+  url_pattern: https://portal.optix.earth/settings
+  description: Auto-generated configuration for Portal Settings
+  framework: unknown
+  primary_function: configuration
+  automation_complexity: low
+  generated_timestamp: '2026-01-09T20:22:01.475218'
+selectors:
+  user_preferences:
+    css: .user-settings, .preferences-form
+    description: User preference configuration
+    interaction_type: form_interaction
+    required: false
+  notification_settings:
+    css: .notification-config, .alert-settings
+    description: Notification and alert preferences
+    interaction_type: checkbox_group
+    required: false
+  api_configuration:
+    css: .api-settings, .integration-config
+    description: API key and integration management
+    interaction_type: api_management
+    required: false
+workflows: {}
+test_scenarios: []
+automation_recommendations:
+- type: form_automation
+  priority: medium
+  description: Automate 1 form interactions for efficiency
+  estimated_time_savings: 2 minutes per form completion

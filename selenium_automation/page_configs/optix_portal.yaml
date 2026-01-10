@@ -1,0 +1,195 @@
+page_info:
+  name: "Optix Portal Dashboard"
+  url_pattern: "https://portal.optix.earth/*"
+  description: "Main Optix Earth portal interface"
+  wait_for: "nav, .dashboard, .portal-content"
+  requires_auth: true
+
+selectors:
+  # Navigation elements
+  main_nav:
+    css: "nav, .navbar, .main-navigation"
+    description: "Primary navigation menu"
+
+  user_menu:
+    css: ".user-menu, .profile-dropdown, .account-menu"
+    description: "User account menu"
+    action_type: "click"
+
+  logout_button:
+    css: "a[href*='logout'], button:contains('Logout'), .logout"
+    xpath: "//a[contains(@href, 'logout')] | //button[contains(text(), 'Logout')]"
+    description: "Logout button"
+
+  # Dashboard elements
+  dashboard_container:
+    css: ".dashboard, .portal-content, main"
+    description: "Main dashboard container"
+
+  sidebar:
+    css: ".sidebar, .side-nav, .menu-sidebar"
+    description: "Sidebar navigation"
+
+  # Common interactive elements
+  buttons:
+    css: "button, .btn, input[type='button'], input[type='submit']"
+    description: "All clickable buttons"
+    scan_for_text: true
+
+  links:
+    css: "a[href]"
+    description: "All navigation links"
+    exclude_hrefs: ["#", "javascript:", "mailto:"]
+
+  form_inputs:
+    css: "input, textarea, select"
+    description: "Form input elements"
+
+  # Data/Content areas
+  data_tables:
+    css: "table, .data-table, .grid"
+    description: "Data display tables"
+
+  cards:
+    css: ".card, .panel, .widget"
+    description: "Information cards/widgets"
+
+  modals:
+    css: ".modal, .dialog, .popup"
+    description: "Modal dialogs"
+
+  # Search and filters
+  search_input:
+    css: "input[type='search'], input[name*='search'], .search-input"
+    description: "Search input field"
+
+  filter_controls:
+    css: ".filter, .filter-control, select[name*='filter']"
+    description: "Filter dropdown controls"
+
+# Page-specific element discovery patterns
+discovery_patterns:
+  # Dynamic content detection
+  dynamic_content:
+    - css: "[data-*]"
+      description: "Elements with data attributes"
+    - css: "[id^='react'], [id^='vue'], [id^='ng']"
+      description: "Framework-generated elements"
+    - css: ".js-*, [data-js*]"
+      description: "JavaScript-enhanced elements"
+
+  # Interactive zones
+  interactive_zones:
+    - css: "[onclick], [onsubmit]"
+      description: "Elements with inline event handlers"
+    - css: "[role='button'], [role='link'], [role='menuitem']"
+      description: "ARIA interactive elements"
+    - css: "[tabindex]:not([tabindex='-1'])"
+      description: "Keyboard-accessible elements"
+
+  # Content areas
+  content_areas:
+    - css: "[contenteditable]"
+      description: "Editable content areas"
+    - css: ".wysiwyg, .editor"
+      description: "Rich text editors"
+
+# Automation workflows
+workflows:
+  portal_exploration:
+    description: "Systematic exploration of portal features"
+    steps:
+      - action: "wait_for_page_load"
+      - action: "scan_navigation"
+      - action: "catalog_interactive_elements"
+      - action: "identify_data_sources"
+      - action: "map_user_flows"
+
+  navigation_mapping:
+    description: "Map all navigation paths"
+    steps:
+      - action: "extract_menu_items"
+        element: "main_nav"
+      - action: "extract_sidebar_items"
+        element: "sidebar"
+      - action: "catalog_links"
+        element: "links"
+      - action: "identify_breadcrumbs"
+
+  data_extraction:
+    description: "Extract structured data from portal"
+    steps:
+      - action: "identify_tables"
+        element: "data_tables"
+      - action: "extract_table_headers"
+      - action: "sample_table_data"
+      - action: "identify_pagination"
+
+# Intelligent automation rules
+automation_rules:
+  # Form filling strategies
+  form_strategies:
+    text_inputs:
+      - strategy: "smart_defaults"
+        conditions: "input[name*='name']"
+        action: "use_test_name"
+      - strategy: "email_detection"
+        conditions: "input[type='email']"
+        action: "use_test_email"
+      - strategy: "date_detection"
+        conditions: "input[type='date'], input[name*='date']"
+        action: "use_current_date"
+
+  # Navigation strategies  
+  navigation_strategies:
+    - strategy: "breadth_first"
+      description: "Explore all top-level navigation first"
+    - strategy: "depth_first"
+      description: "Follow one path completely before switching"
+    - strategy: "priority_based"
+      description: "Focus on high-value areas first"
+
+  # Error handling
+  error_recovery:
+    - condition: "page_load_timeout"
+      action: "refresh_and_retry"
+      max_attempts: 3
+    - condition: "element_not_found"
+      action: "wait_and_retry"
+      wait_time: 5
+    - condition: "authentication_expired"
+      action: "re_authenticate"
+
+# Framework detection
+framework_detection:
+  react:
+    indicators:
+      - "window.React"
+      - "[data-reactroot]"
+      - "._react"
+  
+  vue:
+    indicators:
+      - "window.Vue"
+      - "[data-v-*]"
+      - "__vue__"
+  
+  angular:
+    indicators:
+      - "window.angular"
+      - "[ng-*]"
+      - "ng-version"
+
+# Test scenarios for portal
+test_scenarios:
+  - name: "full_navigation_scan"
+    workflow: "portal_exploration"
+    expected_outcome: "complete_site_map"
+  
+  - name: "user_workflow_discovery"
+    workflow: "navigation_mapping"
+    expected_outcome: "user_journey_map"
+    
+  - name: "data_availability_check"
+    workflow: "data_extraction"
+    expected_outcome: "data_inventory"

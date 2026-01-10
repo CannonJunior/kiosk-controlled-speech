@@ -1,0 +1,121 @@
+page_info:
+  name: Optix Earth - Login
+  url_pattern: https://optix-emd.us.auth0.com/authorize
+  description: Auto-generated configuration for Optix Earth - Login
+  framework: Auth0Lock
+  primary_function: general
+  automation_complexity: medium
+  generated_timestamp: '2026-01-09T20:22:01.465420'
+selectors:
+  email_field:
+    css: input[name="email"], .auth0-lock-input input[type="email"]
+    description: Email address input field
+    interaction_type: input_text
+    required: true
+    input_type: email
+  password_field:
+    css: input[name="password"], .auth0-lock-input input[type="password"]
+    description: Password input field
+    interaction_type: input_text
+    required: true
+    input_type: password
+  login_button:
+    css: button[type="submit"], .auth0-lock-submit
+    description: Login/Submit button
+    interaction_type: click
+    required: false
+    input_type: submit
+  signup_toggle:
+    css: .auth0-lock-tabs a, .auth0-lock-alternative-link
+    description: Toggle between login and signup modes
+    interaction_type: click
+    required: false
+  first_name_field:
+    css: input[name="given_name"], input[name="firstName"]
+    description: First name field (signup only)
+    interaction_type: input_text
+    required: false
+    conditional: signup_mode
+    input_type: text
+  last_name_field:
+    css: input[name="family_name"], input[name="lastName"]
+    description: Last name field (signup only)
+    interaction_type: input_text
+    required: false
+    conditional: signup_mode
+    input_type: text
+  country_dropdown:
+    css: select[name="country"], .auth0-lock-select
+    description: Country selection dropdown
+    interaction_type: select_option
+    required: false
+    conditional: signup_mode
+  terms_checkbox:
+    css: input[type="checkbox"], .auth0-lock-checkbox
+    description: Terms of service agreement
+    interaction_type: click
+    required: true
+    conditional: signup_mode
+    input_type: checkbox
+workflows:
+  login:
+    description: Standard login workflow
+    steps:
+    - action: wait_for_element
+      element: email_field
+    - action: input_text
+      element: email_field
+      data_key: email
+    - action: input_text
+      element: password_field
+      data_key: password
+    - action: click
+      element: login_button
+    - action: wait_for_redirect
+      expected_url_contains: portal.optix.earth
+  signup:
+    description: New user registration workflow
+    steps:
+    - action: wait_for_element
+      element: signup_toggle
+    - action: click
+      element: signup_toggle
+    - action: input_text
+      element: first_name_field
+      data_key: first_name
+    - action: input_text
+      element: last_name_field
+      data_key: last_name
+    - action: input_text
+      element: email_field
+      data_key: email
+    - action: input_text
+      element: password_field
+      data_key: password
+    - action: select_option
+      element: country_dropdown
+      data_key: country
+    - action: click
+      element: terms_checkbox
+    - action: click
+      element: login_button
+    - action: wait_for_confirmation
+test_scenarios:
+- name: valid_login_test
+  workflow: login
+  test_data:
+    email: test@example.com
+    password: validpassword123
+  expected_outcome: successful_authentication
+- name: invalid_credentials_test
+  workflow: login
+  test_data:
+    email: invalid@example.com
+    password: wrongpassword
+  expected_outcome: authentication_error
+automation_recommendations: []
+auth_config:
+  authentication_required: true
+  auth_method: oauth2
+  provider: auth0
+  redirect_after_auth: https://portal.optix.earth/dashboard

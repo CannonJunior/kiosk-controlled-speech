@@ -1,0 +1,59 @@
+master_config:
+  project_name: Optix Portal Automation
+  version: '1.0'
+  description: Comprehensive automation configuration for Optix Earth Portal
+  generated_timestamp: '2026-01-09T20:22:01.476178'
+  total_configurations: 5
+  base_url: https://portal.optix.earth
+page_configurations:
+  optix-emd_us_auth0_com_authorize:
+    config_file: generated_configs/optix-emd_us_auth0_com_authorize.yaml
+    description: Configuration for Optix-Emd Us Auth0 Com Authorize
+  portal_optix_earth_dashboard:
+    config_file: generated_configs/portal_optix_earth_dashboard.yaml
+    description: Configuration for Portal Optix Earth Dashboard
+  portal_optix_earth_data:
+    config_file: generated_configs/portal_optix_earth_data.yaml
+    description: Configuration for Portal Optix Earth Data
+  portal_optix_earth_reports:
+    config_file: generated_configs/portal_optix_earth_reports.yaml
+    description: Configuration for Portal Optix Earth Reports
+  portal_optix_earth_analytics:
+    config_file: generated_configs/portal_optix_earth_analytics.yaml
+    description: Configuration for Portal Optix Earth Analytics
+  portal_optix_earth_settings:
+    config_file: generated_configs/portal_optix_earth_settings.yaml
+    description: Configuration for Portal Optix Earth Settings
+global_settings:
+  default_timeout: 30
+  implicit_wait: 10
+  screenshot_on_failure: true
+  retry_attempts: 3
+  headless_mode: false
+automation_workflows:
+  full_portal_exploration:
+    description: Complete portal exploration workflow
+    pages:
+    - optix-emd_us_auth0_com_authorize
+    - portal_optix_earth_dashboard
+    - portal_optix_earth_data
+    - portal_optix_earth_reports
+    - portal_optix_earth_analytics
+    estimated_duration: 15-30 minutes
+  authentication_test_suite:
+    description: Complete authentication testing
+    focus_pages:
+    - auth0_login
+    test_scenarios:
+    - valid_login
+    - invalid_login
+    - signup_flow
+  data_extraction_suite:
+    description: Automated data extraction workflows
+    focus_pages:
+    - portal_data
+    - portal_reports
+    output_formats:
+    - csv
+    - json
+    - xlsx

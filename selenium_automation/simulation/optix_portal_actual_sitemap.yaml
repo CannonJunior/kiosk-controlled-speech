@@ -1,0 +1,63 @@
+# Optix Portal - ACTUAL Discovered Sitemap
+# Based ONLY on verified exploration results - NO assumptions
+
+discovered_info:
+  exploration_method: "WebFetch analysis + Auth0 redirect discovery"
+  limitation: "Cannot access authenticated portal areas without valid credentials"
+  timestamp: "2026-01-09"
+
+# VERIFIED URLs - Actually discovered
+verified_urls:
+  entry_point:
+    url: "https://portal.optix.earth/?wid=b266670b86fc72c90004f1"
+    status: "redirects_to_auth"
+    access: "public"
+    
+  authentication:
+    url: "https://optix-emd.us.auth0.com/authorize"
+    provider: "Auth0"
+    framework: "Auth0Lock"
+    access: "public"
+    verified_elements:
+      - "email input field"
+      - "password input field" 
+      - "login/signup toggle"
+      - "submit button"
+    auth_flow: "OAuth2 authorization code grant"
+
+# INFERRED URLs - Based on Auth0 redirect pattern only
+likely_post_auth:
+  dashboard_probable:
+    url: "https://portal.optix.earth/dashboard"
+    confidence: "high"
+    basis: "Standard OAuth2 redirect pattern after authentication"
+    status: "unverified - requires authentication"
+
+# UNKNOWN - Cannot discover without credentials
+unknown_areas:
+  note: "All portal functionality behind authentication wall"
+  limitation: "WebFetch cannot bypass Auth0 authentication"
+  requires: "Valid user credentials to map actual portal structure"
+
+# What we DON'T know (being honest about limitations)
+limitations:
+  - "Cannot determine actual navigation structure"
+  - "Cannot discover real page URLs"
+  - "Cannot identify actual features or functionality"
+  - "Cannot map user roles or permissions"
+  - "Cannot determine API endpoints"
+  - "Cannot verify any portal features exist"
+
+# Recommendation for real sitemap creation
+real_sitemap_requirements:
+  needs:
+    - "Valid Optix portal user credentials"
+    - "Authenticated browser session"
+    - "Selenium automation with login capability"
+    - "Systematic link crawling within authenticated session"
+  approach:
+    - "Login with real credentials"
+    - "Programmatically follow all discoverable links"
+    - "Document actual URLs, not assumptions"
+    - "Map real navigation structure"
+    - "Verify actual page content and features"

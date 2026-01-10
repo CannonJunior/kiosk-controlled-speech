@@ -1,0 +1,76 @@
+page_info:
+  name: Optix Earth Portal - Dashboard
+  url_pattern: https://portal.optix.earth/dashboard
+  description: Auto-generated configuration for Optix Earth Portal - Dashboard
+  framework: React/Angular (predicted)
+  primary_function: general
+  automation_complexity: medium
+  generated_timestamp: '2026-01-09T20:22:01.469119'
+selectors:
+  main_navigation:
+    css: nav, .navbar, .main-navigation
+    description: Primary navigation menu
+    interaction_type: navigation
+    required: false
+  user_menu:
+    css: .user-menu, .profile-dropdown, .account-menu
+    description: User account dropdown menu
+    interaction_type: click
+    required: false
+  sidebar_navigation:
+    css: .sidebar, .side-nav, .menu-sidebar
+    description: Sidebar navigation panel
+    interaction_type: navigation
+    required: false
+  dashboard_widgets:
+    css: .dashboard-widget, .card, .panel
+    description: Dashboard information widgets
+    interaction_type: view
+    required: false
+  search_input:
+    css: input[type="search"], input[name*="search"], .search-input
+    description: Global search input
+    interaction_type: input_text
+    required: false
+    input_type: search
+  filter_controls:
+    css: .filter, .filter-control, select[name*="filter"]
+    description: Data filtering controls
+    interaction_type: select_option
+    required: false
+  create_new_button:
+    css: .btn-primary, .create-button, button[data-action="create"]
+    description: Create new item/record button
+    interaction_type: click
+    required: false
+  export_button:
+    css: .export-btn, button[data-action="export"]
+    description: Export/download data button
+    interaction_type: click
+    required: false
+  data_table:
+    css: table, .data-table, .grid
+    description: Primary data display table
+    interaction_type: data_extraction
+    required: false
+workflows:
+  data_exploration:
+    description: Explore and interact with data
+    steps:
+    - action: wait_for_page_load
+    - action: scan_data_tables
+    - action: test_search_functionality
+    - action: test_filter_controls
+    - action: extract_sample_data
+test_scenarios:
+- name: data_interaction_test
+  workflow: data_exploration
+  test_data:
+    search_term: test data
+    filter_option: recent
+  expected_outcome: data_results_displayed
+automation_recommendations:
+- type: data_automation
+  priority: high
+  description: Implement automated data extraction for 1 data sources
+  business_value: Enable automated reporting and data analysis

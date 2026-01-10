@@ -1,0 +1,31 @@
+page_info:
+  name: Reports & Analytics
+  url_pattern: https://portal.optix.earth/reports
+  description: Auto-generated configuration for Reports & Analytics
+  framework: unknown
+  primary_function: reporting
+  automation_complexity: medium
+  generated_timestamp: '2026-01-09T20:22:01.472906'
+selectors:
+  report_generator:
+    css: .report-builder, .chart-generator
+    description: Interactive report generation tool
+    interaction_type: complex_form
+    required: false
+  date_range_picker:
+    css: .daterange, input[type="date"]
+    description: Date range selection for reports
+    interaction_type: date_selection
+    required: false
+  visualization_controls:
+    css: .chart-controls, .viz-options
+    description: Chart and visualization configuration
+    interaction_type: visualization_config
+    required: false
+workflows: {}
+test_scenarios: []
+automation_recommendations:
+- type: form_automation
+  priority: medium
+  description: Automate 1 form interactions for efficiency
+  estimated_time_savings: 2 minutes per form completion

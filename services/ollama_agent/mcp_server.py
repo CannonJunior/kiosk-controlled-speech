@@ -214,11 +214,82 @@ Examples:
             return create_tool_response(False, error=str(e))
     
     async def _process_voice_command(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        """Process voice command and return structured action"""
+        """Process voice command using fast character matching with LLM fallback"""
         voice_text = arguments["voice_text"]
         current_screen = arguments["current_screen"]
         context = arguments.get("context", {})
         
+        # Get current screen ID from context
+        current_screen_id = current_screen.get("id") or context.get("current_screen_id")
+        
+        try:
+            # FAST PATH: Use character matching algorithm first
+            fast_result = await self._fast_character_matching(voice_text, current_screen_id)
+            print(f"[DEBUG] Fast character matching result for '{voice_text}': success={fast_result.get('success')}, error={fast_result.get('error')}")
+            if fast_result["success"]:
+                # Add processing metadata
+                fast_result["data"]["original_text"] = voice_text
+                fast_result["data"]["processor"] = "fast_character_matching"
+                return fast_result
+            
+            # FALLBACK 1: Try traditional simple matching
+            fallback_result = await self._fallback_command_parsing(voice_text, current_screen)
+            if fallback_result["success"]:
+                fallback_data = fallback_result["data"]
+                fallback_data["original_text"] = voice_text
+                fallback_data["processor"] = "simple_fallback"
+                return fallback_result
+            
+            # FALLBACK 2: Use LLM for complex commands (last resort)
+            return await self._llm_processing(voice_text, current_screen, context)
+                
+        except Exception as e:
+            return create_tool_response(False, error=f"Failed to process command: {e}")
+    
+    async def _fast_character_matching(self, voice_text: str, current_screen_id: str) -> Dict[str, Any]:
+        """Use fast character matching processor"""
+        try:
+            # Import and use the fast processor
+            import sys
+            import os
+            sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+            from web_app.voice_to_action_processor import get_voice_processor
+            
+            # Load kiosk data
+            kiosk_data = await self._load_kiosk_data()
+            if not kiosk_data:
+                return {"success": False, "error": "No kiosk data available"}
+            
+            # Process with fast algorithm
+            processor = get_voice_processor()
+            result = await processor.process_voice_command(voice_text, kiosk_data, current_screen_id)
+            
+            return result
+            
+        except ImportError as e:
+            return {"success": False, "error": f"Fast processor not available: {e}"}
+        except Exception as e:
+            return {"success": False, "error": f"Fast processing failed: {e}"}
+    
+    async def _load_kiosk_data(self) -> Dict[str, Any]:
+        """Load kiosk annotation data"""
+        try:
+            import json
+            import os
+            
+            # Try to load from standard location
+            config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config', 'kiosk_data.json')
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    return json.load(f)
+            
+            return {}
+        except Exception as e:
+            logger.error(f"Failed to load kiosk data: {e}")
+            return {}
+    
+    async def _llm_processing(self, voice_text: str, current_screen: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Original LLM-based processing as last resort"""
         # Build context-aware prompt
         prompt = self._build_command_prompt(voice_text, current_screen, context)
         
@@ -236,16 +307,17 @@ Examples:
                 
                 # Add metadata
                 action_data["original_text"] = voice_text
-                action_data["processing_time"] = "< 1s"  # Placeholder
+                action_data["processor"] = "llm_ollama"
+                action_data["processing_time"] = "< 2s"
                 
                 return create_tool_response(True, action_data)
                 
             except json.JSONDecodeError:
-                # Fallback parsing if response isn't valid JSON
-                return await self._fallback_command_parsing(voice_text, current_screen)
+                # Complete failure - no valid action found
+                return create_tool_response(False, error="Could not parse LLM response")
                 
         except Exception as e:
-            return create_tool_response(False, error=f"Failed to process command: {e}")
+            return create_tool_response(False, error=f"LLM processing failed: {e}")
     
     def _build_command_prompt(self, voice_text: str, current_screen: Dict[str, Any], 
                             context: Dict[str, Any]) -> str:

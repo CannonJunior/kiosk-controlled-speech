@@ -2292,10 +2292,22 @@ class KioskSpeechChat {
                         this.addMessage('system', `Confidence: ${Math.round(response.confidence * 100)}%`);
                     }
                 } else {
-                    this.addMessage('assistant', 'I apologize, but I encountered an error processing your request.');
+                    // Show detailed error information instead of generic message
+                    let errorMessage = 'Processing error occurred.';
+                    
+                    // Try to get detailed error information from backend
                     if (data.response && data.response.error) {
+                        errorMessage = data.response.error;
                         console.error('Chat response error:', data.response.error);
+                    } else if (data.error) {
+                        errorMessage = data.error;
+                        console.error('Chat data error:', data.error);
+                    } else if (data.message) {
+                        errorMessage = `Error: ${data.message}`;
+                        console.error('Chat message error:', data.message);
                     }
+                    
+                    this.addMessage('assistant', errorMessage);
                 }
                 
                 // Resume wake word listening if in wake word mode

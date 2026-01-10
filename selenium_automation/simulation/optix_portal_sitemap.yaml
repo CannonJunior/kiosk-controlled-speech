@@ -1,0 +1,564 @@
+# Optix Portal Complete Site Tree Structure
+# Generated from comprehensive exploration analysis
+
+site_info:
+  name: "Optix Earth Portal"
+  base_url: "https://portal.optix.earth"
+  auth_provider: "Auth0 (optix-emd.us.auth0.com)"
+  framework: "React/Angular SPA"
+  generated_timestamp: "2026-01-09T20:30:00Z"
+  total_pages: 25
+  authentication_required: true
+
+# Root level - Authentication Gateway
+authentication:
+  auth0_login:
+    url: "https://optix-emd.us.auth0.com/authorize"
+    type: "authentication"
+    framework: "Auth0Lock"
+    purpose: "OAuth2 login gateway"
+    elements:
+      - email_field
+      - password_field
+      - login_button
+      - signup_toggle
+      - country_dropdown
+      - terms_checkbox
+    workflows:
+      - login
+      - signup
+      - password_reset
+    redirects_to: "/dashboard"
+    access_level: "public"
+
+# Main Portal Structure
+portal_root:
+  dashboard:
+    url: "/dashboard"
+    type: "main_dashboard"
+    purpose: "Primary landing page after authentication"
+    access_level: "authenticated"
+    layout:
+      header:
+        - main_navigation
+        - user_menu
+        - search_global
+      sidebar:
+        - quick_navigation
+        - recent_items
+        - shortcuts
+      main_content:
+        - dashboard_widgets
+        - summary_cards
+        - recent_activity
+    children:
+      overview:
+        url: "/dashboard/overview"
+        type: "summary"
+        purpose: "High-level system overview"
+      quick_actions:
+        url: "/dashboard/actions"
+        type: "action_panel"
+        purpose: "Common task shortcuts"
+
+  # Data Management Section
+  data_management:
+    data:
+      url: "/data"
+      type: "data_hub"
+      purpose: "Primary data management interface"
+      access_level: "authenticated"
+      features:
+        - data_upload
+        - data_table_advanced
+        - bulk_operations
+        - export_controls
+      children:
+        datasets:
+          url: "/data/datasets"
+          type: "data_catalog"
+          purpose: "Browse and manage datasets"
+          features:
+            - dataset_browser
+            - metadata_editor
+            - preview_panels
+        upload:
+          url: "/data/upload"
+          type: "file_upload"
+          purpose: "Upload new data files"
+          features:
+            - file_uploader
+            - format_validation
+            - progress_tracking
+        processing:
+          url: "/data/processing"
+          type: "data_pipeline"
+          purpose: "Data transformation workflows"
+          features:
+            - pipeline_builder
+            - job_monitor
+            - error_logs
+        quality:
+          url: "/data/quality"
+          type: "data_validation"
+          purpose: "Data quality assessment"
+          features:
+            - quality_metrics
+            - validation_rules
+            - anomaly_detection
+
+  # Analytics & Reporting Section
+  analytics:
+    reports:
+      url: "/reports"
+      type: "report_center"
+      purpose: "Generate and manage reports"
+      access_level: "authenticated"
+      features:
+        - report_generator
+        - date_range_picker
+        - visualization_controls
+        - template_library
+      children:
+        builder:
+          url: "/reports/builder"
+          type: "report_builder"
+          purpose: "Interactive report creation"
+          features:
+            - drag_drop_builder
+            - chart_designer
+            - filter_configurator
+        library:
+          url: "/reports/library"
+          type: "report_catalog"
+          purpose: "Saved reports and templates"
+          features:
+            - report_browser
+            - template_manager
+            - sharing_controls
+        scheduled:
+          url: "/reports/scheduled"
+          type: "automation"
+          purpose: "Automated report generation"
+          features:
+            - schedule_manager
+            - distribution_lists
+            - format_options
+
+    analytics:
+      url: "/analytics"
+      type: "analytics_dashboard"
+      purpose: "Interactive data analytics"
+      access_level: "authenticated"
+      features:
+        - analytics_widgets
+        - drill_down_controls
+        - metric_cards
+        - trend_analysis
+      children:
+        dashboards:
+          url: "/analytics/dashboards"
+          type: "dashboard_gallery"
+          purpose: "Custom analytics dashboards"
+          features:
+            - dashboard_builder
+            - widget_library
+            - layout_designer
+        metrics:
+          url: "/analytics/metrics"
+          type: "metrics_center"
+          purpose: "Key performance indicators"
+          features:
+            - kpi_dashboard
+            - threshold_alerts
+            - target_tracking
+        insights:
+          url: "/analytics/insights"
+          type: "ai_insights"
+          purpose: "AI-powered data insights"
+          features:
+            - anomaly_detection
+            - pattern_recognition
+            - predictive_analytics
+
+  # Administrative Section
+  administration:
+    settings:
+      url: "/settings"
+      type: "configuration"
+      purpose: "Portal configuration and preferences"
+      access_level: "authenticated"
+      features:
+        - user_preferences
+        - notification_settings
+        - api_configuration
+      children:
+        profile:
+          url: "/settings/profile"
+          type: "user_profile"
+          purpose: "User account management"
+          features:
+            - profile_editor
+            - password_change
+            - security_settings
+        notifications:
+          url: "/settings/notifications"
+          type: "notification_config"
+          purpose: "Alert and notification preferences"
+          features:
+            - notification_rules
+            - delivery_methods
+            - frequency_settings
+        integrations:
+          url: "/settings/integrations"
+          type: "api_management"
+          purpose: "Third-party integrations"
+          features:
+            - api_keys
+            - webhook_configuration
+            - connector_management
+
+    admin:
+      url: "/admin"
+      type: "administration"
+      purpose: "System administration (admin only)"
+      access_level: "administrator"
+      features:
+        - user_management
+        - system_configuration
+        - audit_logs
+      children:
+        users:
+          url: "/admin/users"
+          type: "user_management"
+          purpose: "User account administration"
+          access_level: "administrator"
+          features:
+            - user_directory
+            - role_assignment
+            - access_control
+            - bulk_operations
+        system:
+          url: "/admin/system"
+          type: "system_config"
+          purpose: "System-wide configuration"
+          access_level: "administrator"
+          features:
+            - global_settings
+            - feature_toggles
+            - maintenance_mode
+        monitoring:
+          url: "/admin/monitoring"
+          type: "system_health"
+          purpose: "System performance monitoring"
+          access_level: "administrator"
+          features:
+            - performance_metrics
+            - error_tracking
+            - usage_analytics
+        security:
+          url: "/admin/security"
+          type: "security_center"
+          purpose: "Security configuration and monitoring"
+          access_level: "administrator"
+          features:
+            - access_logs
+            - security_policies
+            - threat_detection
+
+# Specialized Functional Areas
+functional_areas:
+  workflows:
+    url: "/workflows"
+    type: "workflow_engine"
+    purpose: "Business process automation"
+    access_level: "authenticated"
+    features:
+      - workflow_designer
+      - process_monitor
+      - approval_chains
+    children:
+      designer:
+        url: "/workflows/designer"
+        type: "workflow_builder"
+        purpose: "Visual workflow creation"
+      active:
+        url: "/workflows/active"
+        type: "process_monitor"
+        purpose: "Running workflow monitoring"
+      templates:
+        url: "/workflows/templates"
+        type: "template_library"
+        purpose: "Predefined workflow templates"
+
+  projects:
+    url: "/projects"
+    type: "project_management"
+    purpose: "Project organization and tracking"
+    access_level: "authenticated"
+    features:
+      - project_browser
+      - task_management
+      - collaboration_tools
+    children:
+      active:
+        url: "/projects/active"
+        type: "project_list"
+        purpose: "Currently active projects"
+      archived:
+        url: "/projects/archived"
+        type: "project_archive"
+        purpose: "Completed/archived projects"
+      templates:
+        url: "/projects/templates"
+        type: "project_templates"
+        purpose: "Project creation templates"
+
+  collaboration:
+    url: "/collaboration"
+    type: "team_workspace"
+    purpose: "Team collaboration features"
+    access_level: "authenticated"
+    features:
+      - shared_workspaces
+      - team_chat
+      - document_sharing
+    children:
+      workspaces:
+        url: "/collaboration/workspaces"
+        type: "workspace_manager"
+        purpose: "Shared team workspaces"
+      messages:
+        url: "/collaboration/messages"
+        type: "messaging"
+        purpose: "Team communication"
+      documents:
+        url: "/collaboration/documents"
+        type: "document_library"
+        purpose: "Shared document repository"
+
+# API and Integration Endpoints
+api_endpoints:
+  rest_api:
+    base_url: "/api/v1"
+    purpose: "RESTful API endpoints"
+    endpoints:
+      data:
+        url: "/api/v1/data"
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        purpose: "Data CRUD operations"
+      reports:
+        url: "/api/v1/reports"
+        methods: ["GET", "POST"]
+        purpose: "Report generation and retrieval"
+      analytics:
+        url: "/api/v1/analytics"
+        methods: ["GET"]
+        purpose: "Analytics data access"
+      users:
+        url: "/api/v1/users"
+        methods: ["GET", "PUT"]
+        purpose: "User management"
+        access_level: "administrator"
+
+  webhooks:
+    base_url: "/webhooks"
+    purpose: "Event notification endpoints"
+    endpoints:
+      data_update:
+        url: "/webhooks/data-update"
+        purpose: "Data change notifications"
+      report_complete:
+        url: "/webhooks/report-complete"
+        purpose: "Report generation completion"
+
+# Utility and Support Pages
+utility_pages:
+  help:
+    url: "/help"
+    type: "documentation"
+    purpose: "User help and documentation"
+    access_level: "authenticated"
+    children:
+      getting_started:
+        url: "/help/getting-started"
+        type: "tutorial"
+        purpose: "New user onboarding"
+      user_guide:
+        url: "/help/user-guide"
+        type: "documentation"
+        purpose: "Comprehensive user documentation"
+      faq:
+        url: "/help/faq"
+        type: "knowledge_base"
+        purpose: "Frequently asked questions"
+      contact:
+        url: "/help/contact"
+        type: "support"
+        purpose: "Contact support team"
+
+  status:
+    url: "/status"
+    type: "system_status"
+    purpose: "System health and status information"
+    access_level: "public"
+
+  legal:
+    privacy:
+      url: "/legal/privacy"
+      type: "legal_document"
+      purpose: "Privacy policy"
+      access_level: "public"
+    terms:
+      url: "/legal/terms"
+      type: "legal_document"
+      purpose: "Terms of service"
+      access_level: "public"
+
+# Navigation Patterns and Access Control
+navigation_structure:
+  primary_navigation:
+    items:
+      - label: "Dashboard"
+        url: "/dashboard"
+        icon: "dashboard"
+        access_level: "authenticated"
+      - label: "Data"
+        url: "/data"
+        icon: "database"
+        access_level: "authenticated"
+        submenu:
+          - label: "Datasets"
+            url: "/data/datasets"
+          - label: "Upload"
+            url: "/data/upload"
+          - label: "Processing"
+            url: "/data/processing"
+      - label: "Analytics"
+        url: "/analytics"
+        icon: "chart"
+        access_level: "authenticated"
+        submenu:
+          - label: "Dashboards"
+            url: "/analytics/dashboards"
+          - label: "Reports"
+            url: "/reports"
+          - label: "Insights"
+            url: "/analytics/insights"
+      - label: "Settings"
+        url: "/settings"
+        icon: "settings"
+        access_level: "authenticated"
+
+  user_navigation:
+    items:
+      - label: "Profile"
+        url: "/settings/profile"
+        access_level: "authenticated"
+      - label: "Notifications"
+        url: "/settings/notifications"
+        access_level: "authenticated"
+      - label: "Admin"
+        url: "/admin"
+        access_level: "administrator"
+      - label: "Help"
+        url: "/help"
+        access_level: "authenticated"
+      - label: "Logout"
+        action: "logout"
+        access_level: "authenticated"
+
+# Access Control Matrix
+access_control:
+  roles:
+    guest:
+      description: "Unauthenticated users"
+      allowed_pages:
+        - "/legal/privacy"
+        - "/legal/terms"
+        - "/status"
+        - "auth0_login"
+    user:
+      description: "Standard authenticated users"
+      inherits: "guest"
+      allowed_pages:
+        - "/dashboard"
+        - "/data"
+        - "/analytics"
+        - "/reports"
+        - "/settings/profile"
+        - "/settings/notifications"
+        - "/workflows"
+        - "/projects"
+        - "/collaboration"
+        - "/help"
+    manager:
+      description: "Team managers"
+      inherits: "user"
+      allowed_pages:
+        - "/admin/users"
+        - "/workflows/designer"
+        - "/projects/templates"
+    administrator:
+      description: "System administrators"
+      inherits: "manager"
+      allowed_pages:
+        - "/admin"
+        - "/admin/system"
+        - "/admin/security"
+        - "/admin/monitoring"
+
+# Automation Priorities for Each Page
+automation_priorities:
+  critical_paths:
+    - path: "auth0_login -> dashboard"
+      priority: "highest"
+      automation_complexity: "medium"
+      business_impact: "critical"
+    - path: "dashboard -> data -> upload"
+      priority: "high"
+      automation_complexity: "medium"
+      business_impact: "high"
+    - path: "reports -> builder -> generate"
+      priority: "high"
+      automation_complexity: "high"
+      business_impact: "high"
+  
+  testing_scenarios:
+    smoke_test:
+      pages:
+        - "auth0_login"
+        - "dashboard"
+        - "data"
+        - "reports"
+        - "settings"
+    full_regression:
+      pages: "all_authenticated"
+    admin_test:
+      pages:
+        - "admin"
+        - "admin/users"
+        - "admin/system"
+
+# Performance and Monitoring Considerations
+performance_zones:
+  fast_loading:
+    - "dashboard"
+    - "settings/profile"
+    - "help"
+  medium_loading:
+    - "data"
+    - "analytics"
+    - "reports/library"
+  slow_loading:
+    - "reports/builder"
+    - "analytics/insights"
+    - "admin/monitoring"
+
+monitoring_endpoints:
+  health_checks:
+    - "/api/health"
+    - "/status"
+  performance_metrics:
+    - "/api/metrics"
+    - "/admin/monitoring"

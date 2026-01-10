@@ -1,0 +1,28 @@
+# Selenium Automation Framework Requirements
+
+# Core Selenium
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+
+# Configuration and Data
+PyYAML>=6.0.1
+pydantic>=2.4.0
+
+# Utilities
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Data Processing
+pandas>=2.1.0
+beautifulsoup4>=4.12.0
+
+# Logging and Monitoring
+structlog>=23.2.0
+
+# Testing Framework
+pytest>=7.4.0
+pytest-selenium>=4.0.0
+
+# Development Tools
+black>=23.9.0
+flake8>=6.1.0

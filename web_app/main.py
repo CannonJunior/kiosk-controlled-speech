@@ -101,18 +101,44 @@ class WebSocketConnectionManager:
 
 
 def parse_tool_result(result):
-    """Parse FastMCP tool result"""
+    """Parse FastMCP tool result with detailed error information"""
     if result.is_error:
-        return {"success": False, "error": "Tool call failed"}
+        error_detail = "Unknown tool error"
+        if hasattr(result, 'error') and result.error:
+            error_detail = str(result.error)
+        elif hasattr(result, 'content') and result.content:
+            # Try to extract error from content
+            try:
+                error_content = result.content[0].text if result.content else "No error details"
+                error_detail = error_content
+            except:
+                error_detail = "Error occurred but details unavailable"
+        
+        return {
+            "success": False, 
+            "error": f"🔧 **Tool Call Failed**\n\n**Error Type:** MCP Tool Execution Error\n**Details:** {error_detail}\n**Component:** FastMCP Tool Bridge\n**Timestamp:** {datetime.now().isoformat()}"
+        }
     
     if result.content and len(result.content) > 0:
         text_content = result.content[0].text
         try:
-            return json.loads(text_content)
-        except json.JSONDecodeError:
-            return {"success": True, "data": {"raw_text": text_content}}
+            parsed_result = json.loads(text_content)
+            # Add parsing success info for debugging
+            if not parsed_result.get("success", True):
+                # Enhance error with context
+                error_msg = parsed_result.get("error", "Unknown error")
+                parsed_result["error"] = f"🚨 **Service Error**\n\n**Component:** {parsed_result.get('component', 'Unknown Service')}\n**Error:** {error_msg}\n**Timestamp:** {datetime.now().isoformat()}"
+            return parsed_result
+        except json.JSONDecodeError as e:
+            return {
+                "success": False, 
+                "error": f"🔍 **JSON Parsing Failed**\n\n**Raw Response:** {text_content[:200]}{'...' if len(text_content) > 200 else ''}\n**Parse Error:** {str(e)}\n**Component:** Response Parser\n**Timestamp:** {datetime.now().isoformat()}"
+            }
     
-    return {"success": False, "error": "No content in response"}
+    return {
+        "success": False, 
+        "error": f"📭 **Empty Response**\n\n**Issue:** No content received from service\n**Expected:** JSON response with action data\n**Component:** MCP Tool Bridge\n**Timestamp:** {datetime.now().isoformat()}"
+    }
 
 
 class SpeechWebBridge:
@@ -267,23 +293,23 @@ class SpeechWebBridge:
                 "mcpServers": {
                     "speech_to_text": {
                         "command": "python3",
-                        "args": ["services/speech_to_text/mcp_server.py"]
+                        "args": ["../services/speech_to_text/mcp_server.py"]
                     },
                     "ollama_agent": {
                         "command": "python3", 
-                        "args": ["services/ollama_agent/mcp_server.py"]
+                        "args": ["../../services/ollama_agent/mcp_server.py"]
                     },
                     "mouse_control": {
                         "command": "python3",
-                        "args": ["services/mouse_control/mcp_server.py"]
+                        "args": ["../services/mouse_control/mcp_server.py"]
                     },
                     "screen_capture": {
                         "command": "python3",
-                        "args": ["services/screen_capture/mcp_server.py"]
+                        "args": ["../services/screen_capture/mcp_server.py"]
                     },
                     "screen_detector": {
                         "command": "python3",
-                        "args": ["services/screen_detector/mcp_server.py"]
+                        "args": ["../services/screen_detector/mcp_server.py"]
                     }
                 }
             }
@@ -317,8 +343,9 @@ class SpeechWebBridge:
                 # Create merged screen view for performance (avoid screen detection overhead)
                 all_screens = kiosk_data.get("screens", {})
                 merged_screen = {
-                    "name": "All Screens (Merged)",
+                    "name": "All Screens (Merged)", 
                     "description": "Merged view of all available screens",
+                    "id": "merged_all_screens",
                     "elements": []
                 }
                 
@@ -432,6 +459,14 @@ class SpeechWebBridge:
                             screen_name = config_element_info["screen"] if config_element_info else "unknown screen"
                             
                             logger.info(f"Successfully clicked {element_id} at {coordinates} using {method}")
+                            
+                            # Use enhanced message from voice processor if available, otherwise create default
+                            enhanced_message = ollama_response.get("message")
+                            if enhanced_message:
+                                display_message = enhanced_message
+                            else:
+                                display_message = f"🖱️ Successfully clicked \"{element_name}\" at coordinates ({coordinates['x']}, {coordinates['y']}) using {method}. Coordinates from config element '{element_id}' on screen '{screen_name}'."
+                            
                             return {
                                 "action_executed": True,
                                 "action_type": "click",
@@ -441,7 +476,11 @@ class SpeechWebBridge:
                                 "method": method,
                                 "mock": is_mock,
                                 "config_source": config_element_info,
-                                "message": f"🖱️ Successfully clicked \"{element_name}\" at coordinates ({coordinates['x']}, {coordinates['y']}) using {method}. Coordinates from config element '{element_id}' on screen '{screen_name}'."
+                                "processor": ollama_response.get("processor", "unknown"),
+                                "match_type": ollama_response.get("match_type", "unknown"),
+                                "confidence": ollama_response.get("confidence", 0.0),
+                                "processing_time_ms": ollama_response.get("processing_time_ms", 0),
+                                "message": display_message
                             }
                         else:
                             logger.error(f"Click failed: {click_result.get('error')}")
@@ -1138,6 +1177,7 @@ class SpeechWebBridge:
                 request_context = context or {}
                 request_context["model_preference"] = optimal_model
                 request_context["estimated_latency"] = model_config.get("estimated_latency", "unknown")
+                request_context["current_screen_id"] = current_screen.get("id", "web_app")  # Default to web_app screen
                 
                 result_raw = await self.mcp_client.call_tool(
                     "ollama_agent_process_voice_command", {
